@@ -1,0 +1,41 @@
+cmake_minimum_required (VERSION 3.18)
+project(NekoPhysics)
+
+set (CMAKE_CXX_STANDARD 20)
+set (CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+
+if (MSVC)
+    # warning level 4 and all warnings as errors
+    add_compile_options(/W4 /w14640)
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+else()
+    # lots of warnings and all warnings as errors
+    add_compile_options(-Wall -Wextra -Wshadow -Wnon-virtual-dtor)
+endif()
+
+file(GLOB_RECURSE SRC_FILES src/*.cpp include/*.h)
+add_library(NekoPhysics SHARED ${SRC_FILES} )
+target_include_directories(NekoPhysics PRIVATE include/)
+link_directories(${CMAKE_BINARY_DIR})
+set_target_properties(NekoPhysics PROPERTIES ENABLE_EXPORTS 1)
+install(TARGETS NekoPhysics FILE_SET HEADERS)
+
+find_package(SDL2 CONFIG REQUIRED)
+add_executable(Sample main/main.cpp)
+target_link_libraries(Sample PRIVATE NekoPhysics $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main> $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>)
+
+find_package(GTest CONFIG REQUIRED)
+file(GLOB_RECURSE TEST_FILES tests/*.cpp)
+enable_testing()
+include(GoogleTest)
+foreach(TEST_FILE ${TEST_FILES})
+    get_filename_component(TEST_NAME ${TEST_FILE} NAME_WE )
+    add_executable(${TEST_NAME} ${TEST_FILE})
+    target_link_libraries(${TEST_NAME} NekoPhysics GTest::gtest GTest::gtest_main)
+    target_include_directories(${TEST_NAME} PRIVATE include/)
+    set_target_properties (${TEST_NAME} PROPERTIES FOLDER Tests/)
+    gtest_discover_tests(${TEST_NAME})
+endforeach()

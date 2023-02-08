@@ -1,0 +1,8 @@
+{
+    "name": "neko-physics",
+    "version-string": "1.0",
+    "dependencies": [
+      "sdl2",
+      "gtest"
+    ]
+  }
