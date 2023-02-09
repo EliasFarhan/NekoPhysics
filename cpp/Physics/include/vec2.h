@@ -1,6 +1,7 @@
 #pragma once
 
 #include <type_traits>
+#include <cmath>
 
 namespace neko
 {
@@ -42,6 +43,14 @@ struct Vec2
         return v1.x * v2.x + v1.y * v2.y;
     }
     static constexpr Vec2 zero() { return {}; }
+    static constexpr Vec2 up() { return {0,1}; }
+
+    Vec2 Rotate(T angle) noexcept
+    {
+        const float sin = std::sin(angle);
+        const float cos = std::cos(angle);
+        return { (cos * x) - (sin * y) , (sin * x) + (cos * y) };
+    }
 };
 
 template<typename T>

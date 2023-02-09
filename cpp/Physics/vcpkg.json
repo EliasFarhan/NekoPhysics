@@ -3,6 +3,10 @@
     "version-string": "1.0",
     "dependencies": [
       "sdl2",
-      "gtest"
+      "gtest",
+      {
+        "name": "imgui",
+        "features": ["sdl2-binding", "opengl3-binding"]
+      }
     ]
   }
