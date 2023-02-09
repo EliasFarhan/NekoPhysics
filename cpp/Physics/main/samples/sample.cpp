@@ -3,12 +3,14 @@
 #include <imgui.h>
 
 #include "01_kinematic.h"
+#include "02_planets.h"
 
 namespace neko
 {
 SampleManager::SampleManager()
 {
     samples_.emplace_back("01 Kinematic", std::make_unique<KinematicSample>());
+    samples_.emplace_back("02 Planets", std::make_unique<PlanetSample>());
 }
 
 void SampleManager::Update(float dt)

@@ -28,7 +28,7 @@ public:
     void DrawImGui();
 private:
     std::vector<std::pair<std::string, std::unique_ptr<Sample>>> samples_;
-    static constexpr std::size_t INVALID_INDEX = -1;
+    static constexpr std::size_t INVALID_INDEX = std::numeric_limits<std::size_t>::max();
     std::size_t sampleIndex_ = INVALID_INDEX;
 };
 
