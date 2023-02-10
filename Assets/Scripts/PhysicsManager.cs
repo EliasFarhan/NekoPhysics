@@ -8,10 +8,12 @@ public class PhysicsManager : MonoBehaviour
 
     System.IntPtr world_;
 
+    public PhysicsManagerCpp physicsManagerPtr => physicsManager_;
     // Start is called before the first frame update
-    void Start()
+    void Awake()
     {
         physicsManager_ = new PhysicsManagerCpp();
-        
     }
+    
+    
 }
