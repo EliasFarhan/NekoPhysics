@@ -18,11 +18,19 @@ public class Body : MonoBehaviour
     }
 
     private PhysicsManager physicsManager_;
+
+    private Transform transform_;
     private void Start()
     {
         physicsManager_ = FindObjectOfType<PhysicsManager>();
         bodyCpp_ = physicsManager_.physicsManagerPtr.AddBody();
         bodyCpp_.Mass = 1.0f;
+        
+        transform_ = transform;
     }
 
+    private void Update()
+    {
+        transform_.position = new Vector3(Position.x, Position.y, 0.0f);
+    }
 }

@@ -53,3 +53,7 @@ EXPORT float GetMass(const neko::Body * instance)
 {
     return instance->mass;
 }
+EXPORT void Step(neko::PhysicsWorld* instance, float dt)
+{
+    instance->Step(dt);
+}

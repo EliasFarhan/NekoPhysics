@@ -25,3 +25,4 @@ extern "C" EXPORT Vector2f GetPosition(const neko::Body * instance);
 extern "C" EXPORT Vector2f GetVelocity(const neko::Body * instance);
 extern "C" EXPORT Vector2f GetForce(const neko::Body * instance);
 extern "C" EXPORT float GetMass(const neko::Body * instance);
+extern "C" EXPORT void Step(neko::PhysicsWorld * instance, float dt);

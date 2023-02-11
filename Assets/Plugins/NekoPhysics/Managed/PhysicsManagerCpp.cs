@@ -7,6 +7,9 @@ namespace Neko
 {
 	public class PhysicsManagerCpp
 	{
+		
+		[DllImport("NekoPhysics")]
+		private static extern void Step(System.IntPtr instance, float dt);
 		[DllImport("NekoPhysics")]
 		private static extern System.IntPtr CreateWorld();
 
@@ -33,6 +36,11 @@ namespace Neko
 			var body = new BodyCpp(world_, bodyIndex);
 			bodies_.Add(body);
 			return body;
+		}
+
+		public void Step(float dt)
+		{
+			Step(world_, dt);
 		}
 		~PhysicsManagerCpp()
 		{
