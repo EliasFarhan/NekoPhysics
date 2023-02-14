@@ -3,7 +3,6 @@
 #include <SDL_render.h>
 #include <imgui.h>
 #include <imgui_impl_sdl.h>
-#define IMGUI_IMPL_OPENGL_ES3
 #include <imgui_impl_opengl3.h>
 
 
@@ -17,9 +16,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 		printf("error initializing SDL: %s\n", SDL_GetError());
 	}
 
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
 
 	SDL_Window* window = SDL_CreateWindow("Neko Physics Sample",
 		SDL_WINDOWPOS_CENTERED,
@@ -37,9 +36,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
         }
         std::cout << "Driver Info "<< i + 1 <<": "<<info.name<<'\n';
 		std::string driverName = info.name;
-		if(driverName.find("opengles") != std::string::npos)
+		if(driverName.find("opengl") != std::string::npos && driverName.find("opengles") == std::string::npos)
 		{
-			std::cout << "Selected OpenGLES renderer\n";
+			std::cout << "Selected OpenGL renderer\n";
 			driverIndex = i;
 		}
     }
@@ -58,7 +57,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Keyboard Gamepad
     ImGui::StyleColorsClassic();
 	ImGui_ImplSDL2_InitForOpenGL(window, glRenderContext);
-	ImGui_ImplOpenGL3_Init("#version 300 es");
+	ImGui_ImplOpenGL3_Init("#version 330");
 
 	neko::SampleManager sampleManager;
 
