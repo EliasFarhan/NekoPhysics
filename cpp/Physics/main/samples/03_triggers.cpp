@@ -1,4 +1,4 @@
-#include "02_planets.h"
+#include "03_triggers.h"
 
 #include <numbers>
 #include <SDL_log.h>
@@ -8,47 +8,44 @@
 namespace neko
 {
 
-constexpr static float G = 10.0f;
-constexpr static float blackHoleMass = 10.0f;
+
 constexpr static std::size_t circleCount = 1'000;
 constexpr static std::size_t circleResolution = 10;
-constexpr static float circleRadius = 10.0f;
+constexpr static float maxSpeed = 4.0f;
+constexpr static float maxCircleRadius = 10.0f;
 constexpr static float pixelPerMeter = 100.0f;
 constexpr static auto pi = std::numbers::pi_v<float>;
-constexpr static float innerRadius = 1.0f;
-constexpr static float outerRadius = 6.0f;
-constexpr static float speedDisturbanceFactor = 2.0f;
-constexpr static Vec2f worldCenter = { 12.8f / 2.0f, 7.2f / 2.0f };
+constexpr static SDL_Color triggerColor{ 0,255,0,255 };
+constexpr static SDL_Color untriggerColor{ 255,0,0,255 };
 
-void PlanetSample::Begin()
+void TriggersSample::Begin()
 {
+    world_.SetContactListener(this);
     indices_.reserve(circleCount * (circleResolution * 3));
     vertices_.reserve(circleCount * (circleResolution + 1));
+    bodies_.resize(circleCount);
     for (std::size_t i = 0; i < circleCount; i++)
     {
         const auto index = world_.AddBody();
         Body& body = world_.body(index);
+        body.position = { RandomRange(0.0f, 12.8f), RandomRange(0.0f, 7.2f) };
+        body.velocity = Vec2f{ RandomRange(-1.0f, 1.0f), RandomRange(-1.0f, 1.0f) }*maxSpeed;
         body.mass = 1.0f;
-        body.position = worldCenter+(Vec2f::up()*RandomRange(innerRadius, outerRadius)).Rotate(RandomRange(0.0f, 2.0f*pi));
-        const auto delta = body.position - worldCenter;
-        const auto force = G * body.mass * blackHoleMass / delta.SquareLength();
-        const auto speed = std::sqrt(force / body.mass * delta.Length());
-        body.velocity = speed * delta.Perpendicular().Normalized();
-        body.velocity += RandomRange(-1.0f, 1.0f) * speedDisturbanceFactor * body.velocity.Perpendicular().Normalized();
+
+        auto& triggerBody = bodies_[i];
         
 
-        const SDL_Color color{
-            static_cast<Uint8>(RandomRange(100u,255u)),
-            static_cast<Uint8>(RandomRange(100u,255u)),
-            static_cast<Uint8>(RandomRange(100u,255u)),
-            255u
-        };
+        const auto circleRadius = RandomRange(0.0f, maxCircleRadius);
+        triggerBody.circleRadius = circleRadius;
+        triggerBody.index = world_.AddCircleCollider(index);
+        auto& circleCollider = world_.circle(triggerBody.index.shapeIndex);
+        circleCollider.radius = triggerBody.circleRadius;
 
         for (std::size_t j = 0; j < circleResolution + 1; j++)
         {
             auto pos = body.position * pixelPerMeter;
             SDL_Vertex vertex{};
-            vertex.color = color;
+            vertex.color = untriggerColor;
 
             if (j != 0)
             {
@@ -69,19 +66,24 @@ void PlanetSample::Begin()
     }
 }
 
-void PlanetSample::Update(float dt)
+void TriggersSample::Update(float dt)
 {
-    for(std::size_t i = 0; i < circleCount; i++)
-    {
-        auto& body = world_.body({ static_cast<int>(i) });
-        const auto delta = body.position - worldCenter;
-        const auto force = G * body.mass * blackHoleMass / delta.SquareLength();
-        body.force += force * (-delta).Normalized();
-    }
+
     world_.Step(dt);
     for (std::size_t i = 0; i < circleCount; i++)
     {
-        const auto& body = world_.body({ static_cast<int>(i) });
+        auto& body = world_.body({ static_cast<int>(i) });
+        if ((body.velocity.x > 0.0f && body.position.x > 12.8f) || (body.velocity.x < 0.0f && body.position.x < 0.0f))
+        {
+            body.velocity.x = -body.velocity.x;
+        }
+
+        if ((body.velocity.y > 0.0f && body.position.y > 7.2f) || (body.velocity.y < 0.0f && body.position.y < 0.0f))
+        {
+            body.velocity.y = -body.velocity.y;
+        }
+
+        const auto& triggerBody = bodies_[i];
 
         for (std::size_t j = 0; j < circleResolution + 1; j++)
         {
@@ -90,10 +92,11 @@ void PlanetSample::Update(float dt)
 
             if (j != 0)
             {
-                pos += (Vec2f::up() * circleRadius).Rotate(2.0f * pi * static_cast<float>(j - 1) / static_cast<float>(circleResolution));
+                pos += (Vec2f::up() * triggerBody.circleRadius).Rotate(2.0f * pi * static_cast<float>(j - 1) / static_cast<float>(circleResolution));
             }
             vertex.position.x = pos.x;
             vertex.position.y = pos.y;
+            vertex.color = triggerBody.count == 0 ? untriggerColor : triggerColor;
         }
 
         const auto firstIndex = i * (circleResolution + 1);
@@ -107,9 +110,8 @@ void PlanetSample::Update(float dt)
     }
 }
 
-void PlanetSample::Draw(SDL_Renderer* renderer)
+void TriggersSample::Draw(SDL_Renderer* renderer)
 {
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     if (SDL_RenderGeometry(renderer, nullptr,
         vertices_.data(), static_cast<int>(vertices_.size()),
         indices_.data(), static_cast<int>(indices_.size())))
@@ -118,10 +120,23 @@ void PlanetSample::Draw(SDL_Renderer* renderer)
     }
 }
 
-void PlanetSample::End()
+void TriggersSample::End()
 {
-    indices_.clear();
-    vertices_.clear();
     world_.Clear();
+    bodies_.clear();
+    vertices_.clear();
+    indices_.clear();
 }
-} // namespace neko
+
+void TriggersSample::OnTriggerEnter(const TriggerPair& p)
+{
+    bodies_[p.b1.index].count++;
+    bodies_[p.b2.index].count++;
+}
+
+void TriggersSample::OnTriggerExit(const TriggerPair& p)
+{
+    bodies_[p.b1.index].count--;
+    bodies_[p.b2.index].count--;
+}
+}

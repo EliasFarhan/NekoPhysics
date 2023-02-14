@@ -18,7 +18,7 @@ EXPORT int CreateBody(neko::PhysicsWorld * instance)
 
 EXPORT neko::Body * GetBody(neko::PhysicsWorld* instance, int index)
 {
-    return &instance->body({ static_cast<std::size_t>(index) });
+    return &instance->body({ index });
 }
 
 EXPORT void SetPosition(neko::Body * instance, Vector2f newPos)

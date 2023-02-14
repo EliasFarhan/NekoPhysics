@@ -8,7 +8,7 @@
 namespace neko
 {
 
-constexpr static std::size_t planetCount = 1'000;
+constexpr static std::size_t circleCount = 1'000;
 constexpr static std::size_t circleResolution = 10;
 constexpr static float maxSpeed = 10.0f;
 constexpr static float circleRadius = 10.0f;
@@ -17,9 +17,9 @@ constexpr static auto pi = std::numbers::pi_v<float>;
 
 void KinematicSample::Begin()
 {
-    indices_.reserve(planetCount * (circleResolution * 3));
-    vertices_.reserve(planetCount * (circleResolution + 1));
-    for(std::size_t i = 0; i < planetCount; i++)
+    indices_.reserve(circleCount * (circleResolution * 3));
+    vertices_.reserve(circleCount * (circleResolution + 1));
+    for(std::size_t i = 0; i < circleCount; i++)
     {
         const auto index = world_.AddBody();
         Body& body = world_.body(index);
@@ -62,9 +62,9 @@ void KinematicSample::Begin()
 void KinematicSample::Update(float dt)
 {
     world_.Step(dt);
-    for (std::size_t i = 0; i < planetCount; i++)
+    for (std::size_t i = 0; i < circleCount; i++)
     {
-        auto& body = world_.body({i});
+        auto& body = world_.body({static_cast<int>(i)});
         if((body.velocity.x > 0.0f && body.position.x > 12.8f) || (body.velocity.x < 0.0f && body.position.x < 0.0f))
         {
             body.velocity.x = -body.velocity.x;
