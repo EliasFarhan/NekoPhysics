@@ -1,9 +1,13 @@
 #pragma once
 
+#ifdef _MSC_VER
 #ifdef DLLPROJECT_EXPORTS
 #   define EXPORT __declspec(dllexport)
 #else
 #   define EXPORT __declspec(dllimport)
+#endif
+#else
+#define EXPORT
 #endif
 #include "physics.h"
 

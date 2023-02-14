@@ -1,5 +1,6 @@
 #include "physics.h"
 
+#include <ranges>
 
 namespace neko
 {
