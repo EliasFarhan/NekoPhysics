@@ -3,8 +3,7 @@
 
 #include "vec2.h"
 
-#include "aabb.h"
-#include "circle.h"
+#include "shape.h"
 
 #include "physics_type.h"
 
@@ -13,14 +12,11 @@
 #include <string>
 
 #include "contact_listener.h"
+#include "quadtree.h"
 
 namespace neko
 {
 
-using Scalar = float;
-using Vec2f = Vec2<Scalar>;
-using Aabbf = Aabb<Scalar>;
-using Circlef = Circle<Scalar>;
 
 enum class BodyType
 {
@@ -39,18 +35,24 @@ struct Body
     BodyType type = BodyType::DYNAMIC;
 };
 
-
-
-
 struct Collider
 {
     Vec2f offset{};
     BodyIndex bodyIndex{};
     ColliderIndex colliderIndex{};
+    ShapeIndex shapeIndex{};
+    ColliderType type = ColliderType::NONE;
 };
 
+struct CircleCollider
+{
+    Scalar radius = -1.0f;
+};
 
-
+struct AabbCollider
+{
+    Vec2f halfSize{ -1.0f, -1.0f };
+};
 
 class PhysicsWorld
 {
@@ -61,6 +63,7 @@ public:
     void RemoveBody(BodyIndex index);
     void Step(Scalar dt);
     void Clear();
+    void ResolveBroadphase();
     void ResolveTriggers();
 
     [[nodiscard]] Body& body(BodyIndex index) { return bodies_[index.index]; }
@@ -72,10 +75,10 @@ public:
     Collider& collider(ColliderIndex colliderIndex) { return colliders_[colliderIndex.index]; }
     const Collider& collider(ColliderIndex colliderIndex) const { return colliders_[colliderIndex.index]; }
 
-    Aabbf& aabb(ShapeIndex shapeIndex) { return aabbs_[shapeIndex.index]; }
-    const Aabbf& aabb(ShapeIndex shapeIndex) const { return aabbs_[shapeIndex.index]; }
-    Circlef& circle(ShapeIndex shapeIndex) { return circles_[shapeIndex.index]; }
-    const Circlef& circle(ShapeIndex shapeIndex) const { return circles_[shapeIndex.index]; }
+    AabbCollider& aabb(ShapeIndex shapeIndex) { return aabbs_[shapeIndex.index]; }
+    const AabbCollider& aabb(ShapeIndex shapeIndex) const { return aabbs_[shapeIndex.index]; }
+    CircleCollider& circle(ShapeIndex shapeIndex) { return circles_[shapeIndex.index]; }
+    const CircleCollider& circle(ShapeIndex shapeIndex) const { return circles_[shapeIndex.index]; }
     
     void RemoveAabbCollider(ColliderIndex index);
     void RemoveCircleCollider(ColliderIndex index);
@@ -83,10 +86,11 @@ public:
     void SetContactListener(ContactListener* contactListener) { contactListener_ = contactListener; }
 private:
     std::vector<Body> bodies_;
-    std::vector<Aabbf> aabbs_;
-    std::vector<Circlef> circles_;
+    std::vector<AabbCollider> aabbs_;
+    std::vector<CircleCollider> circles_;
     std::vector<Collider> colliders_;
     std::unordered_set<TriggerPair, TriggerHash> triggerPairs_;
+    QuadTree quadTree_;
     static constexpr Vec2f defaultGravity{0.0f, -9.81f};
     Vec2f gravity_;
     ContactListener* contactListener_ = nullptr;

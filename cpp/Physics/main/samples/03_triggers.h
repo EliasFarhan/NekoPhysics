@@ -13,7 +13,7 @@ public:
     void End() override;
     void OnTriggerEnter(const TriggerPair& p) override;
     void OnTriggerExit(const TriggerPair& p) override;
-
+    void FixedUpdate() override;
 private:
     struct TriggeredBody
     {

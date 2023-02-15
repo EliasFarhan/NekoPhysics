@@ -2,6 +2,9 @@
 
 #include <type_traits>
 #include <cmath>
+#include <algorithm>
+
+#include "physics_type.h"
 
 namespace neko
 {
@@ -35,7 +38,10 @@ struct Vec2
         y -= other.y;
         return *this;
     }
-
+    constexpr Vec2 operator*(Vec2 other) const
+    {
+        return { x * other.x, y * other.y };
+    }
     constexpr Vec2 operator*(T other) const
     {
         return { x * other, y * other };
@@ -88,6 +94,10 @@ struct Vec2
     {
         return *this / Length();
     }
+    [[nodiscard]] constexpr static Vec2 Clamp(Vec2 v, Vec2 minV, Vec2 maxV)
+    {
+        return { std::clamp(v.x, minV.x, maxV.x), std::clamp(v.y, minV.y, maxV.y) };
+    }
 };
 
 template<typename T>
@@ -97,4 +107,5 @@ constexpr Vec2<T> operator*(float f, Vec2<T> other)
 }
 
 
+using Vec2f = Vec2<Scalar>;
 } // namespace neko

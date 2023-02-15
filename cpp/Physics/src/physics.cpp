@@ -1,5 +1,9 @@
 #include "physics.h"
 
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#endif
+
 #include <ranges>
 
 namespace neko
@@ -34,11 +38,11 @@ void PhysicsWorld::RemoveBody(BodyIndex index)
         });
     while(it != colliders_.end())
     {
-        if(it->colliderIndex.type == ColliderType::AABB)
+        if(it->type == ColliderType::AABB)
         {
             RemoveAabbCollider(it->colliderIndex);
         }
-        else if(it->colliderIndex.type == ColliderType::CIRCLE)
+        else if(it->type == ColliderType::CIRCLE)
         {
             RemoveCircleCollider(it->colliderIndex);
         }
@@ -51,85 +55,90 @@ void PhysicsWorld::RemoveBody(BodyIndex index)
 
 void PhysicsWorld::ResolveTriggers()
 {
+#ifdef TRACY_ENABLE
+    ZoneScoped;
+#endif
     if(contactListener_ == nullptr)
     {
         return;
     }
-    for(std::size_t i = 0; i < colliders_.size(); i++)
+    const auto& pairs = quadTree_.GetPossiblePairs();
+    for(const auto& triggerPair : pairs)
     {
-        const auto& collider = colliders_[i];
-        if(collider.colliderIndex.type == ColliderType::NONE)
-            continue;
-        for(std::size_t j = i+1; j < colliders_.size(); j++)
+        const auto& collider = colliders_[triggerPair.c1.index];
+        const auto& otherCollider = colliders_[triggerPair.c2.index];
+        auto it = triggerPairs_.find(triggerPair);
+        bool doesIntersect = false;
+        switch (collider.type)
         {
-            const auto& otherCollider = colliders_[j];
-            if(otherCollider.colliderIndex.type == ColliderType::NONE)
-                continue;
-            
-            const TriggerPair triggerPair{
-                .b1 = collider.bodyIndex,
-                .c1 = collider.colliderIndex,
-                .b2 = otherCollider.bodyIndex,
-                .c2 = otherCollider.colliderIndex
-            };
-            auto it = triggerPairs_.find(triggerPair);
-            bool doesIntersect = false;
-            switch (collider.colliderIndex.type)
+        case ColliderType::AABB:
+            switch (otherCollider.type)
             {
             case ColliderType::AABB:
-                switch (otherCollider.colliderIndex.type)
-                {
-                case ColliderType::AABB: 
-                {
-                    const auto& body1 = bodies_[collider.bodyIndex.index];
-                    const auto& body2 = bodies_[otherCollider.bodyIndex.index];
-                    const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider.offset, aabbs_[collider.colliderIndex.index].GetHalfSize());
-                    const Aabbf aabb2 = Aabbf::FromCenter(body2.position + otherCollider.offset, aabbs_[otherCollider.colliderIndex.index].GetHalfSize());
-                    doesIntersect = Aabbf::Intersect(aabb1, aabb2);
-                    break;
-                }
-                case ColliderType::CIRCLE: break;
-                default: break;
-                }
+            {
+                const auto& body1 = bodies_[collider.bodyIndex.index];
+                const auto& body2 = bodies_[otherCollider.bodyIndex.index];
+                const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider.offset, aabbs_[collider.colliderIndex.index].halfSize);
+                const Aabbf aabb2 = Aabbf::FromCenter(body2.position + otherCollider.offset, aabbs_[otherCollider.colliderIndex.index].halfSize);
+                doesIntersect = Intersect(aabb1, aabb2);
                 break;
-            case ColliderType::CIRCLE: 
-                switch (otherCollider.colliderIndex.type)
-                {
-                case ColliderType::AABB: break;
-                case ColliderType::CIRCLE:
-                {
-                    const auto& body1 = bodies_[collider.bodyIndex.index];
-                    const auto& body2 = bodies_[otherCollider.bodyIndex.index];
-                    const Circlef c1 = { body1.position + collider.offset, circles_[collider.colliderIndex.index].radius };
-                    const Circlef c2 = { body2.position + otherCollider.offset, circles_[otherCollider.colliderIndex.index].radius };
-                    doesIntersect = Circlef::Intersect(c1, c2);
-                    break;
-                }
-                default: break;
-                }
+            }
+            case ColliderType::CIRCLE:
+            {
+                const auto& body1 = bodies_[collider.bodyIndex.index];
+                const auto& body2 = bodies_[otherCollider.bodyIndex.index];
+                const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider.offset, aabbs_[collider.colliderIndex.index].halfSize);
+                const Circle circle = Circle{ body2.position + otherCollider.offset, circles_[otherCollider.colliderIndex.index].radius };
+                doesIntersect = Intersect(aabb1, circle);
                 break;
+            }
             default: break;
             }
-
-            if(it != triggerPairs_.end())
+            break;
+        case ColliderType::CIRCLE:
+            switch (otherCollider.type)
             {
-                if(!doesIntersect)
-                {
-                    contactListener_->OnTriggerExit(triggerPair);
-                    //End Trigger
-                    triggerPairs_.erase(it);
-                }
-            }
-            else
+            case ColliderType::AABB:
             {
-                if(doesIntersect)
-                {
-                    //Begin Trigger
-                    contactListener_->OnTriggerEnter(triggerPair);
-                    triggerPairs_.insert(triggerPair);
-                }
+                const auto& body1 = bodies_[collider.bodyIndex.index];
+                const auto& body2 = bodies_[otherCollider.bodyIndex.index];
+                const Circlef c1 = { body1.position + collider.offset, circles_[collider.colliderIndex.index].radius };
+                const Aabbf aabb2 = Aabbf::FromCenter( body2.position + otherCollider.offset, aabbs_[otherCollider.colliderIndex.index].halfSize);
+                doesIntersect = Intersect(c1, aabb2);
+                break;
             }
+            case ColliderType::CIRCLE:
+            {
+                const auto& body1 = bodies_[collider.bodyIndex.index];
+                const auto& body2 = bodies_[otherCollider.bodyIndex.index];
+                const Circlef c1 = { body1.position + collider.offset, circles_[collider.colliderIndex.index].radius };
+                const Circlef c2 = { body2.position + otherCollider.offset, circles_[otherCollider.colliderIndex.index].radius };
+                doesIntersect = Intersect(c1, c2);
+                break;
+            }
+            default: break;
+            }
+            break;
+        default: break;
+        }
 
+        if (it != triggerPairs_.end())
+        {
+            if (!doesIntersect)
+            {
+                contactListener_->OnTriggerExit(triggerPair);
+                //End Trigger
+                triggerPairs_.erase(it);
+            }
+        }
+        else
+        {
+            if (doesIntersect)
+            {
+                //Begin Trigger
+                contactListener_->OnTriggerEnter(triggerPair);
+                triggerPairs_.insert(triggerPair);
+            }
         }
     }
 
@@ -139,12 +148,12 @@ ColliderIndex PhysicsWorld::AddCircleCollider(BodyIndex body)
 {
     const auto it = std::ranges::find_if(colliders_, [](const Collider& collider)
         {
-            return collider.colliderIndex.type == ColliderType::NONE;
+            return collider.type == ColliderType::NONE;
         });
     int index = -1;
     if (it != colliders_.end())
     {
-        it->colliderIndex.type = ColliderType::CIRCLE;
+        it->type = ColliderType::CIRCLE;
         index = static_cast<int>(std::distance(colliders_.begin(), it));
     }
     else
@@ -155,9 +164,9 @@ ColliderIndex PhysicsWorld::AddCircleCollider(BodyIndex body)
     auto& collider = colliders_[index];
     collider.bodyIndex = body;
     collider.colliderIndex.index = index;
-    collider.colliderIndex.type = ColliderType::CIRCLE;
+    collider.type = ColliderType::CIRCLE;
 
-    const auto circleIt = std::ranges::find_if(circles_, [](const Circlef& circle)
+    const auto circleIt = std::ranges::find_if(circles_, [](const auto& circle)
     {
         return circle.radius < 0.0f;
     });
@@ -172,7 +181,7 @@ ColliderIndex PhysicsWorld::AddCircleCollider(BodyIndex body)
         shapeIndex = static_cast<int>(circles_.size());
         circles_.push_back({});
     }
-    collider.colliderIndex.shapeIndex = { shapeIndex };
+    collider.shapeIndex = { shapeIndex };
     return collider.colliderIndex;
 }
 
@@ -180,12 +189,12 @@ ColliderIndex PhysicsWorld::AddAabbCollider(BodyIndex body)
 {
     const auto it = std::ranges::find_if(colliders_, [](const Collider& collider)
         {
-            return collider.colliderIndex.type == ColliderType::NONE;
+            return collider.type == ColliderType::NONE;
         });
     int index = -1;
     if (it != colliders_.end())
     {
-        it->colliderIndex.type = ColliderType::AABB;
+        it->type = ColliderType::AABB;
         index = static_cast<int>(std::distance(colliders_.begin(), it));
     }
     else
@@ -196,16 +205,16 @@ ColliderIndex PhysicsWorld::AddAabbCollider(BodyIndex body)
     auto& collider = colliders_[index];
     collider.bodyIndex = body;
     collider.colliderIndex.index = index;
-    collider.colliderIndex.type = ColliderType::AABB;
+    collider.type = ColliderType::AABB;
 
-    const auto aabbIt = std::ranges::find_if(aabbs_, [](const Aabbf& aabb)
+    const auto aabbIt = std::ranges::find_if(aabbs_, [](const auto& aabb)
         {
-            return aabb.maxBound.x < aabb.minBound.x;
+            return aabb.halfSize.x < -1.0f;
         });
     int shapeIndex;
     if (aabbIt != aabbs_.end())
     {
-        aabbIt->maxBound.x = aabbIt->minBound.x;
+        aabbIt->halfSize.x = 0.0f;
         shapeIndex = static_cast<int>(std::distance(aabbs_.begin(), aabbIt));
     }
     else
@@ -213,29 +222,34 @@ ColliderIndex PhysicsWorld::AddAabbCollider(BodyIndex body)
         shapeIndex = static_cast<int>(aabbs_.size());
         aabbs_.push_back({});
     }
-    collider.colliderIndex.shapeIndex = { shapeIndex };
+    collider.shapeIndex = { shapeIndex };
     return collider.colliderIndex;
 }
 
 void PhysicsWorld::RemoveAabbCollider(ColliderIndex index)
 {
-    auto& [minBound, maxBound] = aabbs_[index.shapeIndex.index];
-    maxBound.x = minBound.x;
+    auto& collider = colliders_[index.index];
+    auto& [halfSize] = aabbs_[collider.shapeIndex.index];
+    halfSize = {-1,-1};
 
-    colliders_[index.index].colliderIndex.type = ColliderType::NONE;
+    collider.type = ColliderType::NONE;
 }
 
 void PhysicsWorld::RemoveCircleCollider(ColliderIndex index)
 {
-    auto& circle = circles_[index.shapeIndex.index];
+    auto& collider = colliders_[index.index];
+    auto& circle = circles_[collider.shapeIndex.index];
     circle.radius = -1.0f;
 
-    colliders_[index.index].colliderIndex.type = ColliderType::NONE;
+    collider.type = ColliderType::NONE;
 }
 
 void PhysicsWorld::Step(Scalar dt)
 {
-
+#ifdef TRACY_ENABLE
+    ZoneScoped;
+#endif
+    ResolveBroadphase();
     ResolveTriggers();
 
     for (auto& body : bodies_)
@@ -268,5 +282,82 @@ void PhysicsWorld::Clear()
     bodies_.clear();
     aabbs_.clear();
     circles_.clear();
+}
+
+void PhysicsWorld::ResolveBroadphase()
+{
+#ifdef TRACY_ENABLE
+    ZoneScoped;
+#endif
+    if (contactListener_ == nullptr)
+    {
+        return;
+    }
+    quadTree_.Clear();
+
+    Aabbf worldBox{
+        {std::numeric_limits<Scalar>::max(), std::numeric_limits<Scalar>::max()},
+        {std::numeric_limits<Scalar>::lowest(), std::numeric_limits<Scalar>::lowest()} };
+    for(auto& collider: colliders_)
+    {
+        switch (collider.type)
+        {
+        case ColliderType::AABB:
+        case ColliderType::CIRCLE:
+        {
+            const auto center = body(collider.bodyIndex).position + collider.offset;
+            if (worldBox.minBound.x > center.x)
+            {
+                worldBox.minBound.x = center.x;
+            }
+            if (worldBox.maxBound.x < center.x)
+            {
+                worldBox.maxBound.x = center.x;
+            }
+            if (worldBox.minBound.y > center.y)
+            {
+                worldBox.minBound.y = center.y;
+            }
+            if (worldBox.maxBound.y < center.y)
+            {
+                worldBox.maxBound.y = center.y;
+            }
+            break;
+        }
+        case ColliderType::NONE: 
+            continue;
+        default: 
+            break;
+        }
+
+    }
+    quadTree_.SetWorldAabb(worldBox);
+
+    for(auto& collider : colliders_)
+    {
+        switch(collider.type)
+        {
+        case ColliderType::AABB:
+        {
+            const auto aabbCollider = Aabbf::FromCenter(
+                bodies_[collider.bodyIndex.index].position + collider.offset, 
+                aabbs_[collider.shapeIndex.index].halfSize);
+            quadTree_.Insert({ aabbCollider, collider.colliderIndex });
+            break;
+        }
+        case ColliderType::CIRCLE:
+        {
+            const auto circleCollider = Circlef{
+                bodies_[collider.bodyIndex.index].position+collider.offset,
+                circles_[collider.shapeIndex.index].radius};
+            quadTree_.Insert({ circleCollider.GetAabb(), collider.colliderIndex });
+            break;
+        }
+        default: 
+            break;
+        }
+    }
+    quadTree_.CalculatePairs();
+
 }
 } // namespace neko

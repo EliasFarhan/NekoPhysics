@@ -3,16 +3,22 @@
 #include <numbers>
 #include <SDL_log.h>
 
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#endif
+#include <iostream>
+
 #include "random_utils.h"
 
 namespace neko
 {
 
 
-constexpr static std::size_t circleCount = 1'000;
-constexpr static std::size_t circleResolution = 10;
+constexpr static std::size_t circleCount = 200;
+constexpr static std::size_t circleResolution = 30;
 constexpr static float maxSpeed = 4.0f;
-constexpr static float maxCircleRadius = 10.0f;
+constexpr static float maxCircleRadius = 0.2f;
+constexpr static float minCircleRadius = 0.1f;
 constexpr static float pixelPerMeter = 100.0f;
 constexpr static auto pi = std::numbers::pi_v<float>;
 constexpr static SDL_Color triggerColor{ 0,255,0,255 };
@@ -35,10 +41,11 @@ void TriggersSample::Begin()
         auto& triggerBody = bodies_[i];
         
 
-        const auto circleRadius = RandomRange(0.0f, maxCircleRadius);
+        const auto circleRadius = RandomRange(minCircleRadius, maxCircleRadius);
         triggerBody.circleRadius = circleRadius;
         triggerBody.index = world_.AddCircleCollider(index);
-        auto& circleCollider = world_.circle(triggerBody.index.shapeIndex);
+        const auto& triggerCollider = world_.collider({ triggerBody.index });
+        auto& circleCollider = world_.circle(triggerCollider.shapeIndex);
         circleCollider.radius = triggerBody.circleRadius;
 
         for (std::size_t j = 0; j < circleResolution + 1; j++)
@@ -49,7 +56,7 @@ void TriggersSample::Begin()
 
             if (j != 0)
             {
-                pos += (Vec2f::up() * circleRadius).Rotate(2.0f * pi * static_cast<float>(j - 1) / static_cast<float>(circleResolution));
+                pos += (Vec2f::up() * circleRadius).Rotate(2.0f * pi * static_cast<float>(j - 1) / static_cast<float>(circleResolution)) * pixelPerMeter;
             }
             vertex.position.x = pos.x;
             vertex.position.y = pos.y;
@@ -68,8 +75,9 @@ void TriggersSample::Begin()
 
 void TriggersSample::Update(float dt)
 {
-
-    world_.Step(dt);
+#ifdef TRACY_ENABLE
+    ZoneScoped;
+#endif
     for (std::size_t i = 0; i < circleCount; i++)
     {
         auto& body = world_.body({ static_cast<int>(i) });
@@ -92,7 +100,7 @@ void TriggersSample::Update(float dt)
 
             if (j != 0)
             {
-                pos += (Vec2f::up() * triggerBody.circleRadius).Rotate(2.0f * pi * static_cast<float>(j - 1) / static_cast<float>(circleResolution));
+                pos += (Vec2f::up() * triggerBody.circleRadius).Rotate(2.0f * pi * static_cast<float>(j - 1) / static_cast<float>(circleResolution))*pixelPerMeter;
             }
             vertex.position.x = pos.x;
             vertex.position.y = pos.y;
@@ -130,13 +138,26 @@ void TriggersSample::End()
 
 void TriggersSample::OnTriggerEnter(const TriggerPair& p)
 {
-    bodies_[p.b1.index].count++;
-    bodies_[p.b2.index].count++;
+    const auto& c1 = world_.collider(p.c1);
+    bodies_[c1.bodyIndex.index].count++;
+    const auto& c2 = world_.collider(p.c2);
+    bodies_[c2.bodyIndex.index].count++;
 }
 
 void TriggersSample::OnTriggerExit(const TriggerPair& p)
 {
-    bodies_[p.b1.index].count--;
-    bodies_[p.b2.index].count--;
+    const auto& c1 = world_.collider(p.c1);
+    bodies_[c1.bodyIndex.index].count--;
+    const auto& c2 = world_.collider(p.c2);
+    bodies_[c2.bodyIndex.index].count--;
+}
+
+void TriggersSample::FixedUpdate()
+{
+#ifdef TRACY_ENABLE
+    ZoneScoped;
+#endif
+    world_.Step(fixedDeltaTime);
+    
 }
 }

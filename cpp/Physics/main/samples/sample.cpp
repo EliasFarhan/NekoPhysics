@@ -18,10 +18,20 @@ SampleManager::SampleManager()
 
 void SampleManager::Update(float dt)
 {
+    fixedDt += dt;
+    while (fixedDt > Sample::fixedDeltaTime)
+    {
+        if (sampleIndex_ != INVALID_INDEX)
+        {
+            samples_[sampleIndex_].second->FixedUpdate();
+        }
+        fixedDt -= Sample::fixedDeltaTime;
+    }
     if (sampleIndex_ != INVALID_INDEX)
     {
         samples_[sampleIndex_].second->Update(dt);
     }
+
 }
 
 void SampleManager::Draw(SDL_Renderer* renderer)

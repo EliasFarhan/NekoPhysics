@@ -1,3 +1,5 @@
+#include "samples/sample.h"
+
 #include <SDL_main.h>
 #include <SDL.h>
 #include <SDL_render.h>
@@ -5,10 +7,13 @@
 #include <imgui_impl_sdl.h>
 #include <imgui_impl_opengl3.h>
 
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#include <tracy/TracyC.h>
+#endif
 
 #include <iostream>
 
-#include "samples/sample.h"
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 {
@@ -103,8 +108,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 		ImGui::Render();
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 		SDL_RenderPresent(renderer);
-
+#ifdef TRACY_ENABLE
+		FrameMark;
+#endif
 		lastTick = currentTick;
+
+
 	}
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplSDL2_Shutdown();

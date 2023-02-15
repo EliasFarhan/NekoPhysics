@@ -16,12 +16,22 @@ else()
     add_compile_options(-Wall -Wextra -Wshadow -Wnon-virtual-dtor)
 endif()
 
+option(USE_TRACY "Use Tracy Profiler" OFF)
+
+if(USE_TRACY)
+    add_subdirectory(externals/tracy)
+    set_target_properties (TracyClient PROPERTIES FOLDER Externals/)
+endif()
+
 file(GLOB_RECURSE SRC_FILES src/*.cpp include/*.h)
 add_library(NekoPhysics SHARED ${SRC_FILES} )
 target_include_directories(NekoPhysics PRIVATE include/)
 link_directories(${CMAKE_BINARY_DIR})
 set_target_properties(NekoPhysics PROPERTIES ENABLE_EXPORTS 1)
 target_compile_definitions(NekoPhysics PRIVATE DLLPROJECT_EXPORTS)
+if(USE_TRACY)
+    target_link_libraries(NekoPhysics PUBLIC TracyClient)
+endif()
 #install(TARGETS NekoPhysics FILE_SET HEADERS)
 
 find_package(OpenGL REQUIRED)

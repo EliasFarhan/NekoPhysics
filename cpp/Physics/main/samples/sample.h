@@ -14,9 +14,12 @@ public:
     virtual ~Sample() = default;
     virtual void Begin() = 0;
     virtual void Update(float dt) = 0;
+    virtual void FixedUpdate(){}
     virtual void Draw(SDL_Renderer* renderer) = 0;
     virtual void End() = 0;
     virtual void DrawImGui(){}
+
+    static constexpr float fixedDeltaTime = 1.0f / 120.0f;
 };
 
 class SampleManager
@@ -30,6 +33,7 @@ private:
     std::vector<std::pair<std::string, std::unique_ptr<Sample>>> samples_;
     static constexpr std::size_t INVALID_INDEX = std::numeric_limits<std::size_t>::max();
     std::size_t sampleIndex_ = INVALID_INDEX;
+    float fixedDt = 0.0f;
 };
 
 }

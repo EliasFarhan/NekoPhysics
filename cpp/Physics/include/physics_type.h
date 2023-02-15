@@ -5,15 +5,18 @@
 namespace neko
 {
 
+using Scalar = float;
+
 struct BodyIndex
 {
-    int index;
+    int index = -1;
     bool operator ==(const BodyIndex& rhs) const
     {
         return index == rhs.index;
     }
 };
 
+constexpr auto INVALID_BODY_INDEX = BodyIndex{ -1 };
 
 struct ShapeIndex
 {
@@ -24,6 +27,7 @@ struct ShapeIndex
     }
 };
 
+constexpr auto INVALID_SHAPE_INDEX = ShapeIndex{ -1 };
 
 enum class ColliderType
 {
@@ -35,23 +39,22 @@ enum class ColliderType
 struct ColliderIndex
 {
     int index = -1;
-    ShapeIndex shapeIndex{};
-    ColliderType type = ColliderType::NONE;
+   
     bool operator ==(const ColliderIndex& rhs) const
     {
-        return index == rhs.index && shapeIndex == rhs.shapeIndex && type == rhs.type;
+        return index == rhs.index;
     }
 };
 
+constexpr auto INVALID_COLLIDER_INDEX = ColliderIndex{ -1 };
+
 struct TriggerPair
 {
-    BodyIndex b1{};
     ColliderIndex c1{};
-    BodyIndex b2{};
     ColliderIndex c2{};
     bool operator ==(const TriggerPair& rhs) const
     {
-        return (b1 == rhs.b1) && (b2 == rhs.b2) && (c1 == rhs.c1) && (c2 == rhs.c2);
+        return (c1 == rhs.c1 && c2 == rhs.c2) || (c1 == rhs.c2 && c2 == rhs.c1);
     }
 };
 
@@ -61,7 +64,7 @@ struct TriggerHash
     {
         const auto h1 = std::hash<int>{}(p.c1.index);
         const auto h2 = std::hash<int>{}(p.c2.index);
-        return h1 + h2; // or use boost::hash_combine
+        return h1 + h2;
     }
 };
 }
