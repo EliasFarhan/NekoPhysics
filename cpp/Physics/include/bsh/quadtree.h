@@ -3,34 +3,27 @@
 #include <unordered_set>
 #include <vector>
 
-#include "physics_type.h"
-#include "shape.h"
+#include "bsh/bsh.h"
 
 namespace neko
 {
 
-struct ColliderAabb
-{
-    Aabbf aabb;
-    ColliderIndex colliderIndex = INVALID_COLLIDER_INDEX;
-};
-
 struct QuadNode
 {
-    Aabbf aabb;
+    Aabbf aabb{};
     std::array<QuadNode*, 4> nodes{};
-    std::vector<ColliderAabb> colliders;
+    std::vector<ColliderAabb> colliders{};
 };
 
-class QuadTree
+class QuadTree : public BoundingSurfaceHierarchy
 {
 public:
     QuadTree();
-    void Insert(const ColliderAabb& colliderAabb);
-    void CalculatePairs();
-    void Clear();
-    void SetWorldAabb(const Aabbf& worldAabb);
-    [[nodiscard]] const auto& GetPossiblePairs() const { return possiblePairs_; }
+    void Insert(const ColliderAabb& colliderAabb) override;
+    void CalculatePairs() override;
+    void Clear() override;
+    void SetWorldAabb(const Aabbf& worldAabb) override;
+    [[nodiscard]] const std::vector<TriggerPair>& GetPossiblePairs() const  override { return possiblePairs_; }
 private:
     void Insert(const ColliderAabb& colliderAabb, QuadNode* node);
     void GoDownTree(const QuadNode*);

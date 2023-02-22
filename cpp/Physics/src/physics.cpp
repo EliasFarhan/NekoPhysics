@@ -1,10 +1,11 @@
-#include "physics.h"
-
+#include "physics/physics.h"
+#include "math/vec2.h"
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
 #endif
 
 #include <ranges>
+
 
 namespace neko
 {

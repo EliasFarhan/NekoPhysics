@@ -1,6 +1,6 @@
 #pragma once
 
-#include "physics_type.h"
+#include "physics/physics_type.h"
 #include "vec2.h"
 
 namespace neko

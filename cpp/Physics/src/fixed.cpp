@@ -1,4 +1,3 @@
-#include "fixed.h"
 
 namespace neko
 {

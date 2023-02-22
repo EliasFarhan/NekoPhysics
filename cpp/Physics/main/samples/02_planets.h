@@ -1,5 +1,5 @@
 #pragma once
-#include "physics.h"
+#include "physics/physics.h"
 #include "sample.h"
 
 namespace neko

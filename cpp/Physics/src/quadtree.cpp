@@ -1,4 +1,4 @@
-#include "quadtree.h"
+#include "bsh/quadtree.h"
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
 #endif

@@ -1,7 +1,9 @@
 #include <numbers>
 
-#include "vec2.h"
+#include "math/vec2.h"
 #include <gtest/gtest.h>
+
+
 
 TEST(Vec2f, Const)
 {
@@ -33,6 +35,7 @@ TEST(Vec2f, Set)
     constexpr float newX = -1.1f;
     constexpr float y = -2.1f;
     constexpr float newY = 2.1f;
+
     neko::Vec2f v{ x, y };
     v.x = newX;
     v.y = newY;

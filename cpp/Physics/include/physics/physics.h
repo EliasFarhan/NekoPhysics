@@ -1,9 +1,9 @@
 #pragma once
 
 
-#include "vec2.h"
+#include "math/vec2.h"
 
-#include "shape.h"
+#include "math/shape.h"
 
 #include "physics_type.h"
 
@@ -12,7 +12,7 @@
 #include <string>
 
 #include "contact_listener.h"
-#include "quadtree.h"
+#include "bsh/quadtree.h"
 
 namespace neko
 {
