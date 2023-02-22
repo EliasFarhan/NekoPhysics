@@ -42,6 +42,12 @@ struct Vec2
     {
         return { x * other.x, y * other.y };
     }
+    constexpr Vec2& operator*=(T other)
+    {
+        x *= other;
+        y *= other;
+        return *this;
+    }
     constexpr Vec2 operator*(T other) const
     {
         return { x * other, y * other };
@@ -51,12 +57,7 @@ struct Vec2
     {
         return { x / other, y / other };
     }
-    constexpr Vec2& operator*=(T other)
-    {
-        x *= other;
-        y *= other;
-        return *this;
-    }
+
     static constexpr T Dot(Vec2 v1, Vec2 v2)
     {
         return v1.x * v2.x + v1.y * v2.y;
@@ -64,6 +65,9 @@ struct Vec2
     static constexpr Vec2 zero() { return {}; }
     static constexpr Vec2 up() { return {0,1}; }
 
+    /**
+     *  @brief Rotate the 2d vector of a radian angle
+     */
     [[nodiscard]] Vec2 Rotate(T angle) const noexcept
     {
         const float sin = std::sin(angle);
@@ -76,7 +80,7 @@ struct Vec2
         return { y, -x };
     }
 
-    [[nodiscard]] constexpr Vec2 perpendicular2() const
+    [[nodiscard]] constexpr Vec2 Perpendicular2() const
     {
         return { -y, x };
     }
