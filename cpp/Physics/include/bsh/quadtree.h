@@ -24,6 +24,10 @@ public:
     void Clear() override;
     void SetWorldAabb(const Aabbf& worldAabb) override;
     [[nodiscard]] const std::vector<TriggerPair>& GetPossiblePairs() const  override { return possiblePairs_; }
+
+
+    static constexpr std::size_t depth = 5;
+    static constexpr std::size_t maxSize = 32;
 private:
     void Insert(const ColliderAabb& colliderAabb, QuadNode* node);
     void GoDownTree(const QuadNode*);

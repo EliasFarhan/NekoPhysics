@@ -4,8 +4,6 @@
 #endif
 namespace neko
 {
-constexpr std::size_t depth = 5;
-constexpr std::size_t maxSize = 32;
 
 template<typename T>
 constexpr T pow(T base, T exponent)
