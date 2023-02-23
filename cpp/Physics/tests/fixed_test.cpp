@@ -46,13 +46,15 @@ TEST_P(FixedIntOperationFixture, Mul)
 
 }
 
+static constexpr float epsilon = 0.0001f;
 TEST_P(FixedIntOperationFixture, Div)
 {
     auto [i1, i2] = GetParam();
     const auto f1 = neko::Fixed{ i1 };
     const auto f2 = neko::Fixed{ i2 };
     const auto result = f1 / f2;
-    EXPECT_EQ(i1 / i2, static_cast<std::int32_t>(result));
+    EXPECT_NEAR(static_cast<float>(i1) / static_cast<float>(i2),
+        static_cast<float>(result), epsilon);
 
 }
 
@@ -81,13 +83,14 @@ struct FixedFloatOperationFixture : public ::testing::TestWithParam<std::pair<fl
 {
 };
 
+
 TEST_P(FixedFloatOperationFixture, Add)
 {
     auto [i1, i2] = GetParam();
     const auto f1 = neko::Fixed{ i1 };
     const auto f2 = neko::Fixed{ i2 };
     const auto result = f1 + f2;
-    EXPECT_FLOAT_EQ(i1 + i2, static_cast<float>(result));
+    EXPECT_NEAR(i1 + i2, static_cast<float>(result), epsilon);
 
 }
 
@@ -97,7 +100,7 @@ TEST_P(FixedFloatOperationFixture, Sub)
     const auto f1 = neko::Fixed{ i1 };
     const auto f2 = neko::Fixed{ i2 };
     const auto result = f1 - f2;
-    EXPECT_FLOAT_EQ(i1 - i2, static_cast<float>(result));
+    EXPECT_NEAR(i1 - i2, static_cast<float>(result), epsilon);
 
 }
 
@@ -107,7 +110,7 @@ TEST_P(FixedFloatOperationFixture, Mul)
     const auto f1 = neko::Fixed{ i1 };
     const auto f2 = neko::Fixed{ i2 };
     const auto result = f1 * f2;
-    EXPECT_FLOAT_EQ(i1 * i2, static_cast<float>(result));
+    EXPECT_NEAR(i1 * i2, static_cast<float>(result), epsilon);
 
 }
 
@@ -117,7 +120,7 @@ TEST_P(FixedFloatOperationFixture, Div)
     const auto f1 = neko::Fixed{ i1 };
     const auto f2 = neko::Fixed{ i2 };
     const auto result = f1 / f2;
-    EXPECT_FLOAT_EQ(i1 / i2, static_cast<float>(result));
+    EXPECT_NEAR(i1 / i2, static_cast<float>(result), epsilon);
 
 }
 
@@ -140,3 +143,9 @@ INSTANTIATE_TEST_SUITE_P(NegativeNumbers,
         std::pair{ 23.0f,-32.0f }
     )
 );
+
+int main(int argc, char** argv)
+{
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}

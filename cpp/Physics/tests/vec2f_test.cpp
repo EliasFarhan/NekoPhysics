@@ -14,6 +14,10 @@ TEST(Vec2f, Const)
     constexpr neko::Vec2f up = neko::Vec2f::up();
     EXPECT_FLOAT_EQ(up.x, 0.0f);
     EXPECT_FLOAT_EQ(up.y, 1.0f);
+
+    constexpr neko::Vec2f one = neko::Vec2f::one();
+    EXPECT_FLOAT_EQ(one.x, 1.0f);
+    EXPECT_FLOAT_EQ(one.y, 1.0f);
 }
 
 TEST(Vec2f, Get)
@@ -119,7 +123,7 @@ TEST(Vec2f, Dot)
     
 
     constexpr auto result = neko::Vec2f::Dot(v1, v2);
-    EXPECT_FLOAT_EQ(result, v1.x*v2.x+v1.y*v2.y);
+    EXPECT_FLOAT_EQ(result, v1.x * v2.x + v1.y * v2.y);
 }
 
 
@@ -184,4 +188,10 @@ TEST(Vec2f, Clamp)
 
     EXPECT_FLOAT_EQ(result3.x, maxV.x);
     EXPECT_FLOAT_EQ(result3.y, maxV.y);
+}
+
+int main(int argc, char** argv)
+{
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 }

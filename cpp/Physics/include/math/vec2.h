@@ -64,6 +64,7 @@ struct Vec2
     }
     static constexpr Vec2 zero() { return {}; }
     static constexpr Vec2 up() { return {0,1}; }
+    static constexpr Vec2 one() { return {1,1}; }
 
     /**
      *  @brief Rotate the 2d vector of a radian angle

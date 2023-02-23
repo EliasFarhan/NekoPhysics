@@ -59,11 +59,11 @@ void PhysicsWorld::ResolveTriggers()
 #ifdef TRACY_ENABLE
     ZoneScoped;
 #endif
-    if(contactListener_ == nullptr)
+    if(contactListener_ == nullptr || bsh_ == nullptr)
     {
         return;
     }
-    const auto& pairs = quadTree_.GetPossiblePairs();
+    const auto& pairs = bsh_->GetPossiblePairs();
     for(const auto& triggerPair : pairs)
     {
         const auto& collider = colliders_[triggerPair.c1.index];
@@ -290,11 +290,11 @@ void PhysicsWorld::ResolveBroadphase()
 #ifdef TRACY_ENABLE
     ZoneScoped;
 #endif
-    if (contactListener_ == nullptr)
+    if (contactListener_ == nullptr || bsh_ == nullptr)
     {
         return;
     }
-    quadTree_.Clear();
+    bsh_->Clear();
 
     Aabbf worldBox{
         {std::numeric_limits<Scalar>::max(), std::numeric_limits<Scalar>::max()},
@@ -332,9 +332,9 @@ void PhysicsWorld::ResolveBroadphase()
         }
 
     }
-    quadTree_.SetWorldAabb(worldBox);
+    bsh_->SetWorldAabb(worldBox);
 
-    for(auto& collider : colliders_)
+    for(const auto& collider : colliders_)
     {
         switch(collider.type)
         {
@@ -343,7 +343,7 @@ void PhysicsWorld::ResolveBroadphase()
             const auto aabbCollider = Aabbf::FromCenter(
                 bodies_[collider.bodyIndex.index].position + collider.offset, 
                 aabbs_[collider.shapeIndex.index].halfSize);
-            quadTree_.Insert({ aabbCollider, collider.colliderIndex });
+            bsh_->Insert({ aabbCollider, collider.colliderIndex });
             break;
         }
         case ColliderType::CIRCLE:
@@ -351,14 +351,14 @@ void PhysicsWorld::ResolveBroadphase()
             const auto circleCollider = Circlef{
                 bodies_[collider.bodyIndex.index].position+collider.offset,
                 circles_[collider.shapeIndex.index].radius};
-            quadTree_.Insert({ circleCollider.GetAabb(), collider.colliderIndex });
+            bsh_->Insert({ circleCollider.GetAabb(), collider.colliderIndex });
             break;
         }
         default: 
             break;
         }
     }
-    quadTree_.CalculatePairs();
+    bsh_->CalculatePairs();
 
 }
 } // namespace neko

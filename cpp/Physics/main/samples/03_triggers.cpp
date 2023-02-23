@@ -27,6 +27,7 @@ constexpr static SDL_Color untriggerColor{ 255,0,0,255 };
 void TriggersSample::Begin()
 {
     world_.SetContactListener(this);
+    world_.SetBSH(&quadTree_);
     indices_.reserve(circleCount * (circleResolution * 3));
     vertices_.reserve(circleCount * (circleResolution + 1));
     bodies_.resize(circleCount);
@@ -134,6 +135,7 @@ void TriggersSample::End()
     bodies_.clear();
     vertices_.clear();
     indices_.clear();
+    quadTree_.Clear();
 }
 
 void TriggersSample::OnTriggerEnter(const TriggerPair& p)

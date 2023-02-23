@@ -83,6 +83,7 @@ public:
     void RemoveAabbCollider(ColliderIndex index);
     void RemoveCircleCollider(ColliderIndex index);
 
+    void SetBSH(BoundingSurfaceHierarchy* boundingSurfaceHierarchy) { bsh_ = boundingSurfaceHierarchy; }
     void SetContactListener(ContactListener* contactListener) { contactListener_ = contactListener; }
 private:
     std::vector<Body> bodies_;
@@ -90,10 +91,11 @@ private:
     std::vector<CircleCollider> circles_;
     std::vector<Collider> colliders_;
     std::unordered_set<TriggerPair, TriggerHash> triggerPairs_;
-    QuadTree quadTree_;
     static constexpr Vec2f defaultGravity{0.0f, -9.81f};
-    Vec2f gravity_;
+
     ContactListener* contactListener_ = nullptr;
+    BoundingSurfaceHierarchy* bsh_;
+    Vec2f gravity_;
 
 };
 

@@ -4,7 +4,7 @@
 #include <SDL.h>
 #include <SDL_render.h>
 #include <imgui.h>
-#include <imgui_impl_sdl.h>
+#include <imgui_impl_sdl2.h>
 #include <imgui_impl_opengl3.h>
 
 #ifdef TRACY_ENABLE

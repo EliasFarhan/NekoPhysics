@@ -22,6 +22,7 @@ private:
         float circleRadius = 0.0f;
     };
     PhysicsWorld world_;
+    QuadTree quadTree_;
     std::vector<TriggeredBody> bodies_;
     std::vector<SDL_Vertex> vertices_;
     std::vector<int> indices_;
