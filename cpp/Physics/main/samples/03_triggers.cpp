@@ -1,12 +1,10 @@
 #include "03_triggers.h"
 
-#include <numbers>
 #include <SDL_log.h>
 
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
 #endif
-#include <iostream>
 
 #include "random_utils.h"
 
@@ -16,11 +14,10 @@ namespace neko
 
 constexpr static std::size_t circleCount = 200;
 constexpr static std::size_t circleResolution = 30;
-constexpr static float maxSpeed = 4.0f;
-constexpr static float maxCircleRadius = 0.2f;
-constexpr static float minCircleRadius = 0.1f;
-constexpr static float pixelPerMeter = 100.0f;
-constexpr static auto pi = std::numbers::pi_v<float>;
+constexpr static Scalar maxSpeed = Scalar{ 4 };
+constexpr static Scalar maxCircleRadius = Scalar{ 0.2f };
+constexpr static Scalar minCircleRadius = Scalar{ 0.1f };
+constexpr static Scalar pixelPerMeter = Scalar{ 100.0f };
 constexpr static SDL_Color triggerColor{ 0,255,0,255 };
 constexpr static SDL_Color untriggerColor{ 255,0,0,255 };
 
@@ -35,14 +32,14 @@ void TriggersSample::Begin()
     {
         const auto index = world_.AddBody();
         Body& body = world_.body(index);
-        body.position = { RandomRange(0.0f, 12.8f), RandomRange(0.0f, 7.2f) };
-        body.velocity = Vec2f{ RandomRange(-1.0f, 1.0f), RandomRange(-1.0f, 1.0f) }*maxSpeed;
-        body.mass = 1.0f;
+        body.position = { Scalar{RandomRange(0.0f, 12.8f)}, Scalar{RandomRange(0.0f, 7.2f)} };
+        body.velocity = Vec2f{ Scalar{RandomRange(-1.0f, 1.0f)}, Scalar{RandomRange(-1.0f, 1.0f)} } *maxSpeed;
+        body.mass = Scalar{ 1 };
 
         auto& triggerBody = bodies_[i];
         
 
-        const auto circleRadius = RandomRange(minCircleRadius, maxCircleRadius);
+        const auto circleRadius = Scalar{ RandomRange(float{minCircleRadius}, float{maxCircleRadius}) };
         triggerBody.circleRadius = circleRadius;
         triggerBody.index = world_.AddCircleCollider(index);
         const auto& triggerCollider = world_.collider({ triggerBody.index });
@@ -57,10 +54,10 @@ void TriggersSample::Begin()
 
             if (j != 0)
             {
-                pos += (Vec2f::up() * circleRadius).Rotate(2.0f * pi * static_cast<float>(j - 1) / static_cast<float>(circleResolution)) * pixelPerMeter;
+                pos += (Vec2f::up() * circleRadius).Rotate(Scalar{ 2 } * pi * Scalar(j - 1) / Scalar (circleResolution)) * pixelPerMeter;
             }
-            vertex.position.x = pos.x;
-            vertex.position.y = pos.y;
+            vertex.position.x = float{pos.x};
+            vertex.position.y = float{ pos.y };
             vertices_.push_back(vertex);
         }
 
@@ -82,12 +79,12 @@ void TriggersSample::Update(float dt)
     for (std::size_t i = 0; i < circleCount; i++)
     {
         auto& body = world_.body({ static_cast<int>(i) });
-        if ((body.velocity.x > 0.0f && body.position.x > 12.8f) || (body.velocity.x < 0.0f && body.position.x < 0.0f))
+        if ((body.velocity.x > Scalar{0.0f}&& body.position.x > Scalar{12.8f}) || (body.velocity.x < Scalar{0.0f}&& body.position.x < Scalar{0.0f}))
         {
             body.velocity.x = -body.velocity.x;
         }
 
-        if ((body.velocity.y > 0.0f && body.position.y > 7.2f) || (body.velocity.y < 0.0f && body.position.y < 0.0f))
+        if ((body.velocity.y > Scalar{0.0f} && body.position.y > Scalar{7.2f}) || (body.velocity.y < Scalar{0.0f}&& body.position.y < Scalar{0.0f}))
         {
             body.velocity.y = -body.velocity.y;
         }
@@ -101,10 +98,10 @@ void TriggersSample::Update(float dt)
 
             if (j != 0)
             {
-                pos += (Vec2f::up() * triggerBody.circleRadius).Rotate(2.0f * pi * static_cast<float>(j - 1) / static_cast<float>(circleResolution))*pixelPerMeter;
+                pos += (Vec2f::up() * triggerBody.circleRadius).Rotate(Scalar{ 2 } * pi * Scalar(j - 1) / Scalar(circleResolution)) * pixelPerMeter;
             }
-            vertex.position.x = pos.x;
-            vertex.position.y = pos.y;
+            vertex.position.x = float{pos.x};
+            vertex.position.y = float{ pos.y };
             vertex.color = triggerBody.count == 0 ? untriggerColor : triggerColor;
         }
 

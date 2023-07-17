@@ -1,6 +1,5 @@
 #include "02_planets.h"
 
-#include <numbers>
 #include <SDL_log.h>
 
 #include "random_utils.h"
@@ -8,17 +7,16 @@
 namespace neko
 {
 
-constexpr static float G = 10.0f;
-constexpr static float blackHoleMass = 10.0f;
+constexpr static auto G = Scalar{ 10.0f };
+constexpr static auto blackHoleMass = Scalar{ 10.0f };
 constexpr static std::size_t circleCount = 1'000;
 constexpr static std::size_t circleResolution = 10;
-constexpr static float circleRadius = 10.0f;
-constexpr static float pixelPerMeter = 100.0f;
-constexpr static auto pi = std::numbers::pi_v<float>;
-constexpr static float innerRadius = 1.0f;
-constexpr static float outerRadius = 6.0f;
-constexpr static float speedDisturbanceFactor = 2.0f;
-constexpr static Vec2f worldCenter = { 12.8f / 2.0f, 7.2f / 2.0f };
+constexpr static auto circleRadius = Scalar{ 10.0f };
+constexpr static auto pixelPerMeter = Scalar{ 100.0f };
+constexpr static auto innerRadius =  1.0f ;
+constexpr static auto outerRadius =  6.0f ;
+constexpr static auto speedDisturbanceFactor = Scalar{ 2.0f };
+constexpr static Vec2f worldCenter = { Scalar{12.8f / 2.0f}, Scalar{7.2f / 2.0f} };
 
 void PlanetSample::Begin()
 {
@@ -28,13 +26,13 @@ void PlanetSample::Begin()
     {
         const auto index = world_.AddBody();
         Body& body = world_.body(index);
-        body.mass = 1.0f;
-        body.position = worldCenter+(Vec2f::up()*RandomRange(innerRadius, outerRadius)).Rotate(RandomRange(0.0f, 2.0f*pi));
+        body.mass = Scalar{ 1.0f };
+        body.position = worldCenter + (Vec2f::up() * Scalar { RandomRange(innerRadius, outerRadius) }).Rotate(Scalar{ RandomRange(0.0f, 2.0f * float{ pi }) });
         const auto delta = body.position - worldCenter;
         const auto force = G * body.mass * blackHoleMass / delta.SquareLength();
-        const auto speed = std::sqrt(force / body.mass * delta.Length());
+        const auto speed = Sqrt(force / body.mass * delta.Length());
         body.velocity = speed * delta.Perpendicular().Normalized();
-        body.velocity += RandomRange(-1.0f, 1.0f) * speedDisturbanceFactor * body.velocity.Perpendicular().Normalized();
+        body.velocity += Scalar{RandomRange(-1.0f, 1.0f)} *speedDisturbanceFactor* body.velocity.Perpendicular().Normalized();
         
 
         const SDL_Color color{
@@ -52,10 +50,10 @@ void PlanetSample::Begin()
 
             if (j != 0)
             {
-                pos += (Vec2f::up() * circleRadius).Rotate(2.0f * pi * static_cast<float>(j - 1) / static_cast<float>(circleResolution));
+                pos += (Vec2f::up() * circleRadius).Rotate(Scalar{ 2.0f } * pi * Scalar(j - 1) / Scalar(circleResolution));
             }
-            vertex.position.x = pos.x;
-            vertex.position.y = pos.y;
+            vertex.position.x = float{pos.x};
+            vertex.position.y = float{pos.y};
             vertices_.push_back(vertex);
         }
 
@@ -78,7 +76,7 @@ void PlanetSample::Update(float dt)
         const auto force = G * body.mass * blackHoleMass / delta.SquareLength();
         body.force += force * (-delta).Normalized();
     }
-    world_.Step(dt);
+    world_.Step(Scalar{ dt });
     for (std::size_t i = 0; i < circleCount; i++)
     {
         const auto& body = world_.body({ static_cast<int>(i) });
@@ -90,10 +88,10 @@ void PlanetSample::Update(float dt)
 
             if (j != 0)
             {
-                pos += (Vec2f::up() * circleRadius).Rotate(2.0f * pi * static_cast<float>(j - 1) / static_cast<float>(circleResolution));
+                pos += (Vec2f::up() * circleRadius).Rotate(Scalar{ 2 } * pi * Scalar(j - 1) / Scalar(circleResolution));
             }
-            vertex.position.x = pos.x;
-            vertex.position.y = pos.y;
+            vertex.position.x = float{pos.x};
+            vertex.position.y = float{pos.y};
         }
 
         const auto firstIndex = i * (circleResolution + 1);

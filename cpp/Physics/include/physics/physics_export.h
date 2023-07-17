@@ -13,8 +13,8 @@
 
 typedef struct _Vector2f
 {
-    float x;
-    float y;
+    neko::Scalar x;
+    neko::Scalar y;
 } Vector2f;
 
 extern "C" EXPORT neko::PhysicsWorld* CreateWorld();

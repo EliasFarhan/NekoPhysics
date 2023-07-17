@@ -19,13 +19,13 @@ SampleManager::SampleManager()
 void SampleManager::Update(float dt)
 {
     fixedDt += dt;
-    while (fixedDt > Sample::fixedDeltaTime)
+    while (fixedDt > float{ Sample::fixedDeltaTime })
     {
         if (sampleIndex_ != INVALID_INDEX)
         {
             samples_[sampleIndex_].second->FixedUpdate();
         }
-        fixedDt -= Sample::fixedDeltaTime;
+        fixedDt -= float{ Sample::fixedDeltaTime };
     }
     if (sampleIndex_ != INVALID_INDEX)
     {

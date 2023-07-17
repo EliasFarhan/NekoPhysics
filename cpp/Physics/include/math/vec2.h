@@ -9,7 +9,6 @@
 namespace neko
 {
 template<typename T>
-requires std::is_arithmetic_v<T>
 struct Vec2
 {
     T x{}, y{};
@@ -57,22 +56,30 @@ struct Vec2
     {
         return { x / other, y / other };
     }
-
+    constexpr Vec2& operator/=(T other)
+    {
+        x /= other;
+        y /= other;
+        return *this;
+    }
     static constexpr T Dot(Vec2 v1, Vec2 v2)
     {
         return v1.x * v2.x + v1.y * v2.y;
     }
     static constexpr Vec2 zero() { return {}; }
-    static constexpr Vec2 up() { return {0,1}; }
-    static constexpr Vec2 one() { return {1,1}; }
+    static constexpr Vec2 up() { return { Scalar{0},Scalar{1} }; }
+    static constexpr Vec2 down() { return { Scalar{0},Scalar{-1} }; }
+    static constexpr Vec2 left() { return { Scalar{-1},Scalar{0} }; }
+    static constexpr Vec2 right() { return { Scalar{1},Scalar{0} }; }
+    static constexpr Vec2 one() { return { Scalar{1},Scalar{1} }; }
 
     /**
      *  @brief Rotate the 2d vector of a radian angle
      */
     [[nodiscard]] Vec2 Rotate(T angle) const noexcept
     {
-        const float sin = std::sin(angle);
-        const float cos = std::cos(angle);
+        const auto sin = Sin(angle);
+        const auto cos = Cos(angle);
         return { (cos * x) - (sin * y) , (sin * x) + (cos * y) };
     }
 
@@ -93,7 +100,7 @@ struct Vec2
 
     [[nodiscard]] T Length() const
     {
-        return std::sqrt(SquareLength());
+        return Sqrt(SquareLength());
     }
     [[nodiscard]] Vec2 Normalized() const
     {
@@ -106,7 +113,7 @@ struct Vec2
 };
 
 template<typename T>
-constexpr Vec2<T> operator*(float f, Vec2<T> other)
+constexpr Vec2<T> operator*(Scalar f, Vec2<T> other)
 {
     return { f * other.x, f * other.y };
 }

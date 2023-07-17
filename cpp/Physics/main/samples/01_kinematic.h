@@ -14,7 +14,7 @@ public:
     void Draw(SDL_Renderer* renderer) override;
 
 private:
-    PhysicsWorld world_{{0.0f, 0.0f}};
+    PhysicsWorld world_{ {Scalar{0.0f}, Scalar{0.0f}} };
     std::vector<SDL_Vertex> vertices_;
     std::vector<int> indices_;
     

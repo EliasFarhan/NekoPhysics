@@ -59,7 +59,7 @@ void QuadTree::Clear()
     for(auto& node: nodes_)
     {
         node.colliders.clear();
-        std::ranges::fill(node.nodes, nullptr);
+        std::fill(node.nodes.begin(), node.nodes.end(), nullptr);
     }
 }
 
@@ -80,17 +80,17 @@ void QuadTree::Insert(const ColliderAabb& colliderAabb, QuadNode* node)
 #endif
            constexpr static std::array<Vec2f, 4> direction
            {
-               Vec2f{-1,-1},
-               Vec2f{-1,1},
-               Vec2f{1,-1},
-               Vec2f{1,1},
+               Vec2f{Scalar{-1}, Scalar{ -1 }},
+                   Vec2f{ Scalar{-1},Scalar{1} },
+                   Vec2f{ Scalar{1},Scalar{-1} },
+                   Vec2f{ Scalar{1},Scalar{1} },
            };
-           for(int i = 0; i < 4; i++)
+           for(std::size_t i = 0; i < direction.size(); i++)
            {
                node->nodes[i] = &nodes_[index_+i];
                node->nodes[i]->aabb = Aabbf::FromCenter(
-                   node->aabb.GetCenter() + direction[i] * node->aabb.GetHalfSize() / 2.0f, 
-                   node->aabb.GetHalfSize() / 2);
+                   node->aabb.GetCenter() + direction[i] * node->aabb.GetHalfSize() / Scalar{2},
+                   node->aabb.GetHalfSize() / Scalar{2});
            }
            std::array<ColliderAabb, maxSize> tmp;
            for(std::size_t i = 0; i < maxSize; ++i)

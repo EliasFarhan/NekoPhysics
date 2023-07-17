@@ -19,7 +19,7 @@ struct Aabb
         return { center - halfSize, center + halfSize };
     }
     [[nodiscard]] constexpr Vec2<T> GetCenter() const { return minBound + GetHalfSize(); }
-    [[nodiscard]] constexpr Vec2<T> GetHalfSize() const { return (maxBound - minBound)/2; }
+    [[nodiscard]] constexpr Vec2<T> GetHalfSize() const { return (maxBound - minBound) / T{2}; }
 };
 
 template<typename T>

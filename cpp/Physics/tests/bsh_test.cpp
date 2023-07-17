@@ -28,19 +28,26 @@ TEST(PhysicsWorld, TwoBodiesOneFrame)
     neko::PhysicsWorld world{neko::Vec2f::zero()};
 
     const auto b1 = world.AddBody();
+    {
+        auto& body1 = world.body(b1);
+        body1.mass = neko::Scalar{ 1 };
+    }
     const auto b2 = world.AddBody();
-
+    {
+        auto& body2 = world.body(b2);
+        body2.mass = neko::Scalar{ 1 };
+    }
     const auto c1 = world.AddAabbCollider(b1);
     {
         const auto& collider1 = world.collider(c1);
         auto& [halfSize] = world.aabb(collider1.shapeIndex);
-        halfSize = { 1.0f, 1.0f };
+        halfSize = {neko::Scalar{1}, neko::Scalar{1} };
     }
     const auto c2 = world.AddAabbCollider(b2);
     {
         const auto& collider2 = world.collider(c2);
         auto& [halfSize] = world.aabb(collider2.shapeIndex);
-        halfSize = { 1.0f, 1.0f };
+        halfSize = { neko::Scalar{1}, neko::Scalar{1} };
     }
 
     std::vector<neko::TriggerPair> pairs{ {c1, c2} };
@@ -72,7 +79,7 @@ TEST(PhysicsWorld, TwoBodiesOneFrame)
     world.SetContactListener(&contactListener);
 
     //Actual Action
-    world.Step(0.1f);
+    world.Step(neko::Scalar{ 0.1f });
 }
 
 int main(int argc, char** argv)
