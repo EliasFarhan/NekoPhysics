@@ -31,7 +31,7 @@ struct Body
     Vec2f position{};
     Vec2f velocity{};
     Vec2f force{};
-    Scalar mass{};
+    Scalar mass{1};
     BodyType type = BodyType::DYNAMIC;
 };
 
@@ -46,12 +46,12 @@ struct Collider
 
 struct CircleCollider
 {
-    Scalar radius = -1.0f;
+    Scalar radius{ -1 };
 };
 
 struct AabbCollider
 {
-    Vec2f halfSize{ -1.0f, -1.0f };
+    Vec2f halfSize{ Scalar {-1}, Scalar {-1} };
 };
 
 class PhysicsWorld
@@ -91,7 +91,7 @@ private:
     std::vector<CircleCollider> circles_;
     std::vector<Collider> colliders_;
     std::unordered_set<TriggerPair, TriggerHash> triggerPairs_;
-    static constexpr Vec2f defaultGravity{0.0f, -9.81f};
+    static constexpr Vec2f defaultGravity{Scalar{0.0f}, Scalar{ -9.81f }};
 
     ContactListener* contactListener_ = nullptr;
     BoundingSurfaceHierarchy* bsh_;

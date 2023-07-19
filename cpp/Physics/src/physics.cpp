@@ -4,7 +4,6 @@
 #include <tracy/Tracy.hpp>
 #endif
 
-#include <ranges>
 
 
 namespace neko
@@ -15,7 +14,7 @@ PhysicsWorld::PhysicsWorld(Vec2f gravity): gravity_(gravity)
 
 BodyIndex PhysicsWorld::AddBody()
 {
-    const auto it = std::ranges::find_if(bodies_, [](const auto& body)
+    const auto it = std::find_if(bodies_.begin(), bodies_.end(), [](const auto& body)
     {
         return body.type == BodyType::NONE;
     });
@@ -33,7 +32,7 @@ void PhysicsWorld::RemoveBody(BodyIndex index)
 {
     bodies_[index.index].type = BodyType::NONE;
     //remove all colliders attached to this body
-    auto it = std::ranges::find_if(colliders_, [&index](const auto& collider)
+    auto it = std::find_if(colliders_.begin(), colliders_.end(), [&index](const auto& collider)
         {
             return collider.bodyIndex == index;
         });
@@ -47,7 +46,8 @@ void PhysicsWorld::RemoveBody(BodyIndex index)
         {
             RemoveCircleCollider(it->colliderIndex);
         }
-        it = std::ranges::find_if(colliders_, [&index](const auto& collider)
+        it = std::find_if(colliders_.begin(), colliders_.end(), 
+            [&index](const auto& collider)
             {
                 return collider.bodyIndex == index;
             });
@@ -89,7 +89,7 @@ void PhysicsWorld::ResolveTriggers()
                 const auto& body1 = bodies_[collider.bodyIndex.index];
                 const auto& body2 = bodies_[otherCollider.bodyIndex.index];
                 const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider.offset, aabbs_[collider.colliderIndex.index].halfSize);
-                const Circle circle = Circle{ body2.position + otherCollider.offset, circles_[otherCollider.colliderIndex.index].radius };
+                const Circlef circle = Circlef{ body2.position + otherCollider.offset, circles_[otherCollider.colliderIndex.index].radius };
                 doesIntersect = Intersect(aabb1, circle);
                 break;
             }
@@ -147,7 +147,7 @@ void PhysicsWorld::ResolveTriggers()
 
 ColliderIndex PhysicsWorld::AddCircleCollider(BodyIndex body)
 {
-    const auto it = std::ranges::find_if(colliders_, [](const Collider& collider)
+    const auto it = std::find_if(colliders_.begin(), colliders_.end(), [](const Collider& collider)
         {
             return collider.type == ColliderType::NONE;
         });
@@ -167,14 +167,14 @@ ColliderIndex PhysicsWorld::AddCircleCollider(BodyIndex body)
     collider.colliderIndex.index = index;
     collider.type = ColliderType::CIRCLE;
 
-    const auto circleIt = std::ranges::find_if(circles_, [](const auto& circle)
+    const auto circleIt = std::find_if(circles_.begin(), circles_.end(), [](const auto& circle)
     {
-        return circle.radius < 0.0f;
+        return circle.radius < Scalar{0};
     });
     int shapeIndex;
     if(circleIt != circles_.end())
     {
-        circleIt->radius = 0.0f;
+        circleIt->radius = Scalar{ 0 };
         shapeIndex = static_cast<int>(std::distance(circles_.begin(), circleIt));
     }
     else
@@ -188,7 +188,7 @@ ColliderIndex PhysicsWorld::AddCircleCollider(BodyIndex body)
 
 ColliderIndex PhysicsWorld::AddAabbCollider(BodyIndex body)
 {
-    const auto it = std::ranges::find_if(colliders_, [](const Collider& collider)
+    const auto it = std::find_if(colliders_.begin(), colliders_.end(), [](const Collider& collider)
         {
             return collider.type == ColliderType::NONE;
         });
@@ -208,14 +208,14 @@ ColliderIndex PhysicsWorld::AddAabbCollider(BodyIndex body)
     collider.colliderIndex.index = index;
     collider.type = ColliderType::AABB;
 
-    const auto aabbIt = std::ranges::find_if(aabbs_, [](const auto& aabb)
+    const auto aabbIt = std::find_if(aabbs_.begin(), aabbs_.end(), [](const auto& aabb)
         {
-            return aabb.halfSize.x < -1.0f;
+            return aabb.halfSize.x < Scalar{-1};
         });
     int shapeIndex;
     if (aabbIt != aabbs_.end())
     {
-        aabbIt->halfSize.x = 0.0f;
+        aabbIt->halfSize.x = Scalar{ 0 };
         shapeIndex = static_cast<int>(std::distance(aabbs_.begin(), aabbIt));
     }
     else
@@ -231,7 +231,7 @@ void PhysicsWorld::RemoveAabbCollider(ColliderIndex index)
 {
     auto& collider = colliders_[index.index];
     auto& [halfSize] = aabbs_[collider.shapeIndex.index];
-    halfSize = {-1,-1};
+    halfSize = Vec2f{ Scalar{-1},Scalar{-1} };
 
     collider.type = ColliderType::NONE;
 }
@@ -240,7 +240,7 @@ void PhysicsWorld::RemoveCircleCollider(ColliderIndex index)
 {
     auto& collider = colliders_[index.index];
     auto& circle = circles_[collider.shapeIndex.index];
-    circle.radius = -1.0f;
+    circle.radius = Scalar{ -1 };
 
     collider.type = ColliderType::NONE;
 }

@@ -1,7 +1,7 @@
 cmake_minimum_required (VERSION 3.18)
 project(NekoPhysics)
 
-set (CMAKE_CXX_STANDARD 20)
+set (CMAKE_CXX_STANDARD 17)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -10,6 +10,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 if (MSVC)
     # warning level 4 and all warnings as errors
     add_compile_options(/W4 /w14640)
+    add_compile_definitions(_USE_MATH_DEFINES)
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 else()
     # lots of warnings and all warnings as errors

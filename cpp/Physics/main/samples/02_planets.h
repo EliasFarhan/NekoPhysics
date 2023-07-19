@@ -13,7 +13,7 @@ public:
     void Draw(SDL_Renderer* renderer) override;
     void End() override;
 private:
-    PhysicsWorld world_{{0,0}};
+    PhysicsWorld world_{ {Scalar{0},Scalar{0}} };
     std::vector<SDL_Vertex> vertices_;
     std::vector<int> indices_;
 };

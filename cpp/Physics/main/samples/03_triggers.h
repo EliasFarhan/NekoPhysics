@@ -19,7 +19,7 @@ private:
     {
         ColliderIndex index{};
         int count = 0;
-        float circleRadius = 0.0f;
+        Scalar circleRadius{ 0.0f };
     };
     PhysicsWorld world_;
     QuadTree quadTree_;
