@@ -15,7 +15,7 @@ public:
     constexpr Fixed() = default;
     constexpr explicit Fixed(float f)
     {
-        underlyingValue_ = static_cast<int>((f) * (1 << Exp));
+        underlyingValue_ = static_cast<T>((f) * (1 << Exp));
     }
 
     constexpr explicit Fixed(T i)
@@ -28,7 +28,7 @@ public:
         return (static_cast<float>(underlyingValue_) / (1 << Exp));
     }
 
-    explicit constexpr operator int() const
+    explicit constexpr operator T() const
     {
         return underlyingValue_ >> Exp;
     }

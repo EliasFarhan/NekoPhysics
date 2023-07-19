@@ -46,6 +46,7 @@ TEST(PhysicsWorld, TwoBodiesOneFrame)
     std::vector<neko::TriggerPair> pairs{ {c1, c2} };
 
     MockBSH bsh;
+    //Order for Clear and SetWorldAabb is not constrained, but need to be called before Insert
     testing::Sequence s1, s2;
     EXPECT_CALL(bsh, Clear)
         .Times(1)

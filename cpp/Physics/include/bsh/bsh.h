@@ -18,6 +18,9 @@ class BoundingSurfaceHierarchy
 {
 public:
     virtual ~BoundingSurfaceHierarchy() = default;
+    /**
+     * @brief Insert a ColliderAabb in the BSH. Needs to be called after Clear and SetWorldAabb
+     */
     virtual void Insert(const ColliderAabb& colliderAabb) = 0;
     virtual void CalculatePairs() = 0;
     virtual void Clear() = 0;

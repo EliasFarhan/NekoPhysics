@@ -150,6 +150,7 @@ TEST(Vec2f, Normalized)
     const auto result = v1.Normalized();
     
     EXPECT_FLOAT_EQ(result.Length(), 1.0f);
+    //TODO same direction
 
     constexpr neko::Vec2f v2{};
     const auto tmp = v2.Normalized();
