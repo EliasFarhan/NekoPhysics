@@ -54,7 +54,7 @@ void TriggersSample::Begin()
 
             if (j != 0)
             {
-                pos += (Vec2f::up() * circleRadius).Rotate(Scalar{ 2 } * pi * Scalar(j - 1) / Scalar (circleResolution)) * pixelPerMeter;
+                pos += (Vec2f::up() * circleRadius).Rotate(Scalar{ 2 } * Pi<Scalar>() * Scalar(j - 1) / Scalar (circleResolution)) * pixelPerMeter;
             }
             vertex.position.x = float{pos.x};
             vertex.position.y = float{ pos.y };
@@ -98,7 +98,7 @@ void TriggersSample::Update(float dt)
 
             if (j != 0)
             {
-                pos += (Vec2f::up() * triggerBody.circleRadius).Rotate(Scalar{ 2 } * pi * Scalar(j - 1) / Scalar(circleResolution)) * pixelPerMeter;
+                pos += (Vec2f::up() * triggerBody.circleRadius).Rotate(Scalar{ 2 } * Pi<Scalar>() * Scalar(j - 1) / Scalar(circleResolution)) * pixelPerMeter;
             }
             vertex.position.x = float{pos.x};
             vertex.position.y = float{ pos.y };

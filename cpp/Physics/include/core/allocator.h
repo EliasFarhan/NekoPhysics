@@ -8,6 +8,7 @@ namespace neko
 class Allocator
 {
 public:
+    virtual ~Allocator() = default;
     template<typename T>
     T* Allocate(std::size_t count)
     {

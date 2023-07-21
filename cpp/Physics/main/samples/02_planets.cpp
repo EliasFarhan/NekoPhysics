@@ -1,4 +1,5 @@
 #include "02_planets.h"
+#include "math/fixed_lut.h"
 
 #include <SDL_log.h>
 
@@ -27,7 +28,7 @@ void PlanetSample::Begin()
         const auto index = world_.AddBody();
         Body& body = world_.body(index);
         body.mass = Scalar{ 1.0f };
-        body.position = worldCenter + (Vec2f::up() * Scalar { RandomRange(innerRadius, outerRadius) }).Rotate(Scalar{ RandomRange(0.0f, 2.0f * float{ pi }) });
+        body.position = worldCenter + (Vec2f::up() * Scalar { RandomRange(innerRadius, outerRadius) }).Rotate(Scalar{ RandomRange(0.0f, 2.0f * Pi<float>()) });
         const auto delta = body.position - worldCenter;
         const auto force = G * body.mass * blackHoleMass / delta.SquareLength();
         const auto speed = Sqrt(force / body.mass * delta.Length());
@@ -50,7 +51,7 @@ void PlanetSample::Begin()
 
             if (j != 0)
             {
-                pos += (Vec2f::up() * circleRadius).Rotate(Scalar{ 2.0f } * pi * Scalar(j - 1) / Scalar(circleResolution));
+                pos += (Vec2f::up() * circleRadius).Rotate(Scalar{ 2.0f } * Pi<Scalar>() * Scalar(j - 1) / Scalar(circleResolution));
             }
             vertex.position.x = float{pos.x};
             vertex.position.y = float{pos.y};
@@ -88,7 +89,7 @@ void PlanetSample::Update(float dt)
 
             if (j != 0)
             {
-                pos += (Vec2f::up() * circleRadius).Rotate(Scalar{ 2 } * pi * Scalar(j - 1) / Scalar(circleResolution));
+                pos += (Vec2f::up() * circleRadius).Rotate(Scalar{ 2 } * Pi<Scalar>() * Scalar(j - 1) / Scalar(circleResolution));
             }
             vertex.position.x = float{pos.x};
             vertex.position.y = float{pos.y};

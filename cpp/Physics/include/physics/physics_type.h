@@ -8,7 +8,6 @@ namespace neko
 
 using Scalar = Fixed16;
 
-static constexpr auto pi = Scalar(static_cast<float>(M_PI));
 
 struct BodyIndex
 {

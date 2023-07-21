@@ -163,6 +163,12 @@ public:
         return Fixed{ std::cos(float{f}) };
     }
 
+    static constexpr Fixed fromUnderlyingValue(T value)
+    {
+        Fixed f;
+        f.underlyingValue_ = value;
+        return f;
+    }
     [[nodiscard]] constexpr int underlyingValue() const { return underlyingValue_; }
     [[nodiscard]] int& underlyingValue() { return underlyingValue_; }
 private:
@@ -171,46 +177,7 @@ private:
 
 using Fixed16 = Fixed<std::int32_t, 16, std::int64_t>;
 
-
-
-template<typename T>
-T Sqrt(T value)
-{
-    if constexpr (std::is_floating_point_v<T>)
-    {
-        return std::sqrt(value);
-    }
-    else
-    {
-        return T::Sqrt(value);
-    }
-}
-
-template<typename T>
-T Sin(T value)
-{
-    if constexpr (std::is_floating_point_v<T>)
-    {
-        return std::sin(value);
-    }
-    else
-    {
-        return T::Sin(value);
-    }
-}
-
-template<typename T>
-T Cos(T value)
-{
-    if constexpr (std::is_floating_point_v<T>)
-    {
-        return std::cos(value);
-    }
-    else
-    {
-        return T::Cos(value);
-    }
-}
+constexpr Fixed pi = Fixed16::fromUnderlyingValue(205887);
 
 
 } // namespace neko

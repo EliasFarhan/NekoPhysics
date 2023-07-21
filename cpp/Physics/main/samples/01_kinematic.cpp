@@ -39,7 +39,7 @@ void KinematicSample::Begin()
             
             if(j != 0)
             {
-                pos += (Vec2f::up() * circleRadius).Rotate(Scalar{ 2.0f } * pi * Scalar(j - 1) / Scalar(circleResolution));
+                pos += (Vec2f::up() * circleRadius).Rotate(Scalar{ 2.0f } * Pi<Scalar>() * Scalar(j - 1) / Scalar(circleResolution));
             }
             vertex.position.x = float{pos.x};
             vertex.position.y = float{pos.y};
@@ -81,7 +81,7 @@ void KinematicSample::Update(float dt)
 
             if (j != 0)
             {
-                pos += (Vec2f::up() * circleRadius).Rotate(Scalar{ 2.0f } * pi * Scalar(static_cast<int>(j) - 1) / Scalar{circleResolution});
+                pos += (Vec2f::up() * circleRadius).Rotate(Scalar{ 2.0f } * Pi<Scalar>() * Scalar(static_cast<int>(j) - 1) / Scalar{circleResolution});
             }
             vertex.position.x = float{pos.x};
             vertex.position.y = float{pos.y};

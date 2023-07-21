@@ -1,5 +1,6 @@
 
 #include "math/fixed.h"
+#include "math/fixed_lut.h"
 
 #include <gtest/gtest.h>
 
@@ -143,6 +144,22 @@ INSTANTIATE_TEST_SUITE_P(NegativeNumbers,
         std::pair{ 23.0f,-32.0f }
     )
 );
+
+TEST(LookupTable, Sqrt)
+{
+    EXPECT_NEAR(float(neko::Fixed16(1)), float(neko::Sqrt(neko::Fixed(1))), 0.0001f);
+    EXPECT_NEAR(float(neko::Fixed16(3)), float(neko::Sqrt(neko::Fixed(9))), 0.0001f);
+}
+
+TEST(LookupTable, Cos)
+{
+
+}
+
+TEST(LookupTable, Sin)
+{
+
+}
 
 int main(int argc, char** argv)
 {
