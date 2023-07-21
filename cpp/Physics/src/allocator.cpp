@@ -1,7 +1,7 @@
 #include "core/allocator.h"
 
 #ifdef TRACY_ENABLE
-#include <Tracy.hpp>
+#include <tracy/Tracy.hpp>
 #endif
 
 namespace neko
