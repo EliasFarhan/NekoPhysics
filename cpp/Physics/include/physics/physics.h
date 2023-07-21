@@ -6,13 +6,14 @@
 #include "math/shape.h"
 
 #include "physics_type.h"
+#include "core/allocator.h"
+#include "contact_listener.h"
+#include "bsh/quadtree.h"
 
 #include <vector>
 #include <unordered_set>
 #include <string>
 
-#include "contact_listener.h"
-#include "bsh/quadtree.h"
 
 namespace neko
 {
@@ -86,11 +87,14 @@ public:
     void SetBSH(BoundingSurfaceHierarchy* boundingSurfaceHierarchy) { bsh_ = boundingSurfaceHierarchy; }
     void SetContactListener(ContactListener* contactListener) { contactListener_ = contactListener; }
 private:
-    std::vector<Body> bodies_;
-    std::vector<AabbCollider> aabbs_;
-    std::vector<CircleCollider> circles_;
-    std::vector<Collider> colliders_;
-    std::unordered_set<TriggerPair, TriggerHash> triggerPairs_;
+    HeapAllocator heapAllocator_;
+    ArrayList<Body> bodies_{{heapAllocator_}};
+    ArrayList<AabbCollider> aabbs_{{heapAllocator_}};
+    ArrayList<CircleCollider> circles_{{heapAllocator_}};
+    ArrayList<Collider> colliders_{{heapAllocator_}};
+    std::unordered_set<TriggerPair, TriggerHash, std::equal_to<>, StandardAllocator<TriggerPair>>
+        triggerPairs_{StandardAllocator<TriggerPair>{heapAllocator_}};
+
     static constexpr Vec2f defaultGravity{Scalar{0.0f}, Scalar{ -9.81f }};
 
     ContactListener* contactListener_ = nullptr;

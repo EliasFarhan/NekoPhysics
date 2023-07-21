@@ -80,10 +80,10 @@ void QuadTree::Insert(const ColliderAabb& colliderAabb, QuadNode* node)
 #endif
            constexpr static std::array<Vec2f, 4> direction
            {
-               Vec2f{Scalar{-1}, Scalar{ -1 }},
-                   Vec2f{ Scalar{-1},Scalar{1} },
-                   Vec2f{ Scalar{1},Scalar{-1} },
-                   Vec2f{ Scalar{1},Scalar{1} },
+               Vec2f{Scalar{-1}, Scalar{-1}},
+               Vec2f{Scalar{-1}, Scalar{1} },
+               Vec2f{Scalar{1},  Scalar{-1} },
+               Vec2f{Scalar{1},  Scalar{1} },
            };
            for(std::size_t i = 0; i < direction.size(); i++)
            {

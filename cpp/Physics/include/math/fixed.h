@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cmath>
 
 namespace neko
 {
@@ -25,7 +26,7 @@ public:
 
     constexpr explicit Fixed(T i)
     {
-        underlyingValue_ = i << Exp;
+        underlyingValue_ = i * (1 << Exp); //for negative value of i, left shift is undefined behavior
     }
 
     constexpr explicit Fixed(T up, T down)
