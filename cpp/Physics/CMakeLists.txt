@@ -7,6 +7,12 @@ set (CMAKE_CXX_STANDARD_REQUIRED ON)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 
+find_package (Python3 COMPONENTS Interpreter)
+if(NOT Python3_EXECUTABLE)
+    message( FATAL_ERROR "Could not find Python 3" )
+endif()
+execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/scripts/gen_fixed_table.py" WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+
 if (MSVC)
     # warning level 4 and all warnings as errors
     add_compile_options(/W4 /w14640)

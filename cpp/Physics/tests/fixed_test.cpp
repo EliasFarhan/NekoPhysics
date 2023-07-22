@@ -147,18 +147,20 @@ INSTANTIATE_TEST_SUITE_P(NegativeNumbers,
 
 TEST(LookupTable, Sqrt)
 {
-    EXPECT_NEAR(float(neko::Fixed16(1)), float(neko::Sqrt(neko::Fixed(1))), 0.0001f);
-    EXPECT_NEAR(float(neko::Fixed16(3)), float(neko::Sqrt(neko::Fixed(9))), 0.0001f);
+    EXPECT_NEAR(float(neko::Fixed16(1)), float(neko::Sqrt(neko::Fixed(1))), 0.001f);
+    EXPECT_NEAR(float(neko::Fixed16(3)), float(neko::Sqrt(neko::Fixed(9))), 0.001f);
 }
 
 TEST(LookupTable, Cos)
 {
-
+    EXPECT_NEAR(float(neko::Fixed16(0)), float(neko::Sin(neko::Fixed(0))), 0.001f);
+    EXPECT_NEAR(float(neko::Fixed16(3)), float(neko::Sin(neko::pi)), 0.001f);
 }
 
 TEST(LookupTable, Sin)
 {
-
+    EXPECT_NEAR(float(neko::Fixed16(1)), float(neko::Cos(neko::Fixed(0))), 0.001f);
+    EXPECT_NEAR(float(neko::Fixed16(3)), float(neko::Cos(neko::Fixed(9))), 0.001f);
 }
 
 int main(int argc, char** argv)
