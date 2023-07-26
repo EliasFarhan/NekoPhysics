@@ -31,8 +31,7 @@ public:
 
     constexpr explicit Fixed(T up, T down)
     {
-        constexpr auto tmp = Fixed(up) / Fixed(down);
-        underlyingValue_ = tmp.underlyingValue();
+        underlyingValue_ = (Fixed{ up } / Fixed{down}).underlyingValue_;
     }
 
     explicit constexpr operator float() const
@@ -102,8 +101,8 @@ public:
 
     constexpr Fixed operator/(Fixed other) const
     {
-        Fixed result;
-        MulT leftOp = static_cast<MulT>(underlyingValue_) << static_cast<MulT>(Exp);
+        Fixed result{};
+        MulT leftOp = static_cast<MulT>(underlyingValue_) * (static_cast<MulT>(1) << static_cast<MulT>(Exp));
         MulT rightOp = static_cast<MulT>(other.underlyingValue_);
         result.underlyingValue_ = static_cast<T>((leftOp / rightOp));
         return result;

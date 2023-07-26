@@ -59,8 +59,8 @@ def gen_sin_tables(resolution: float):
 
 def main():
     gen_sqrt_tables(0.0, 100.0, 0.0125)
-    gen_cos_tables(0.0125)
-    gen_sin_tables(0.0125)
+    gen_cos_tables(0.0075)
+    gen_sin_tables(0.0075)
 
 
 if __name__ == '__main__':
