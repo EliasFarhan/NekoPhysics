@@ -1,9 +1,9 @@
 #pragma once
 #include <array>
-#include <unordered_set>
 #include <vector>
 
 #include "bsh/bsh.h"
+#include "core/allocator.h"
 
 namespace neko
 {
@@ -23,7 +23,7 @@ public:
     void CalculatePairs() override;
     void Clear() override;
     void SetWorldAabb(const Aabbf& worldAabb) override;
-    [[nodiscard]] const std::vector<TriggerPair>& GetPossiblePairs() const  override { return possiblePairs_; }
+    [[nodiscard]] const ArrayList<TriggerPair>& GetPossiblePairs() const override { return possiblePairs_; }
 
 
     static constexpr std::size_t depth = 5;
@@ -32,9 +32,11 @@ private:
     void Insert(const ColliderAabb& colliderAabb, QuadNode* node);
     void GoDownTree(const QuadNode*);
     void InsertPairs(const QuadNode*, ColliderIndex);
-    std::vector<TriggerPair> possiblePairs_;
+    
+    HeapAllocator heapAllocator_;
+    ArrayList<TriggerPair> possiblePairs_{{heapAllocator_}};
     std::size_t index_ = 1;
-    std::vector<QuadNode> nodes_;
+    ArrayList<QuadNode> nodes_{{heapAllocator_}};
 };
 
 }

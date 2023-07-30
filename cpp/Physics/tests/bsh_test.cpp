@@ -6,6 +6,7 @@
 #include "physics/contact_listener.h"
 #include "physics/physics.h"
 
+
 class MockBSH : public neko::BoundingSurfaceHierarchy
 {
 public:
@@ -13,7 +14,8 @@ public:
     MOCK_METHOD(void, CalculatePairs, (), (override));
     MOCK_METHOD(void, Clear, (), (override));
     MOCK_METHOD(void, SetWorldAabb, (const neko::Aabbf&), (override) );
-    MOCK_METHOD( const std::vector<neko::TriggerPair>&, GetPossiblePairs,(), (const, override));
+    MOCK_METHOD(const ArrayList<neko::TriggerPair>&, GetPossiblePairs,(), (const, override));
+private:
 };
 
 class MockContactListener : public neko::ContactListener
@@ -50,7 +52,8 @@ TEST(PhysicsWorld, TwoBodiesOneFrame)
         halfSize = { neko::Scalar{1}, neko::Scalar{1} };
     }
 
-    std::vector<neko::TriggerPair> pairs{ {c1, c2} };
+    neko::HeapAllocator allocator_;
+    ArrayList<neko::TriggerPair> pairs{ {neko::TriggerPair{c1, c2}}, allocator_ };
 
     MockBSH bsh;
     //Order for Clear and SetWorldAabb is not constrained, but need to be called before Insert

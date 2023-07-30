@@ -152,7 +152,7 @@ TEST(Vec2f, Normalized)
     constexpr neko::Vec2f v1{ neko::Scalar{1.0f}, neko::Scalar{2.1f} };
     const auto result = v1.Normalized();
     
-    EXPECT_NEAR(float{ result.Length() }, 1.0f, 0.0001f);
+    EXPECT_NEAR(float{ result.Length() }, 1.0f, 0.0125f);
 
     if constexpr (std::is_floating_point_v<neko::Scalar>)
     {

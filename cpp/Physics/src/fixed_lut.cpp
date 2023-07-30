@@ -1,8 +1,8 @@
 #include "math/fixed_lut.h"
 
-#include "sin_const.h"
-#include "cos_const.h"
-#include "sqrt_const.h"
+#include "generated/sin_const.h"
+#include "generated/cos_const.h"
+#include "generated/sqrt_const.h"
 
 extern int sqrt_table[];
 extern int sin_table[];
@@ -15,12 +15,24 @@ Fixed16 Sqrt(Fixed16 value)
 {
     constexpr Fixed16 minValue = Fixed16::fromUnderlyingValue(sqrt_min);
     constexpr Fixed16 maxValue = Fixed16::fromUnderlyingValue(sqrt_max);
+    Fixed16 result{ 1 };
+    while(maxValue < value)
+    {
+        result *= Sqrt(maxValue);
+        value /= maxValue;
+    }
     constexpr Fixed16 delta = maxValue-minValue;
     const auto index = (value - minValue) / (delta) * Fixed16 { sqrt_len }; // v = a + (b-a)*t; <=> (v-a)/(b-a)
-    const auto ratio = index - Fixed16{static_cast<int>(index)};
-    const auto v1 = Fixed16::fromUnderlyingValue(sqrt_table[static_cast<int>(index)]);
-    const auto v2 = Fixed16::fromUnderlyingValue(sqrt_table[static_cast<int>(index)+1]);
-    return v1 + (v2-v1)*ratio;
+    const auto intIndex = static_cast<int>(index);
+    const auto ratio = index - Fixed16{intIndex};
+    if (intIndex == sqrt_len && ratio == Fixed{0})
+    {
+        return Fixed16::fromUnderlyingValue(sqrt_table[sqrt_len - 1]);
+    }
+    const auto v1 = Fixed16::fromUnderlyingValue(sqrt_table[intIndex]);
+    const auto v2 = Fixed16::fromUnderlyingValue(sqrt_table[intIndex + 1]);
+    return (v1 + (v2 - v1) * ratio) * result;
+
 }
 
 template<>

@@ -3,6 +3,7 @@
 
 #include "math/shape.h"
 #include "physics/physics_type.h"
+#include "core/allocator.h"
 
 namespace neko
 {
@@ -25,7 +26,7 @@ public:
     virtual void CalculatePairs() = 0;
     virtual void Clear() = 0;
     virtual void SetWorldAabb(const Aabbf& worldAabb) = 0;
-    [[nodiscard]] virtual const std::vector<TriggerPair>& GetPossiblePairs() const = 0;
+    [[nodiscard]] virtual const ArrayList<TriggerPair>& GetPossiblePairs() const = 0;
 };
 
 } // namespace neko

@@ -152,6 +152,9 @@ TEST(LookupTable, Sqrt)
     EXPECT_NEAR(float(neko::Fixed16(3)), float(neko::Sqrt(neko::Fixed(9))), sqrtPrecision);
     EXPECT_NEAR(float(neko::Fixed16(7)), float(neko::Sqrt(neko::Fixed(49))), sqrtPrecision);
     EXPECT_NEAR(float(neko::Fixed16(9)), float(neko::Sqrt(neko::Fixed(81))), sqrtPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(10)), float(neko::Sqrt(neko::Fixed(100))), sqrtPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(11)), float(neko::Sqrt(neko::Fixed(121))), sqrtPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(16)), float(neko::Sqrt(neko::Fixed(256))), sqrtPrecision);
 }
 
 constexpr float sinPrecision = 0.0075f;
