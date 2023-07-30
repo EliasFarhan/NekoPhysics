@@ -43,6 +43,7 @@ struct Collider
     ColliderIndex colliderIndex{};
     ShapeIndex shapeIndex{};
     ColliderType type = ColliderType::NONE;
+    bool isTrigger = true;
 };
 
 struct CircleCollider
@@ -92,8 +93,8 @@ private:
     ArrayList<AabbCollider> aabbs_{{heapAllocator_}};
     ArrayList<CircleCollider> circles_{{heapAllocator_}};
     ArrayList<Collider> colliders_{{heapAllocator_}};
-    std::unordered_set<TriggerPair, TriggerHash, std::equal_to<>, StandardAllocator<TriggerPair>>
-        triggerPairs_{StandardAllocator<TriggerPair>{heapAllocator_}};
+    std::unordered_set<ColliderPair, ColliderHash, std::equal_to<>, StandardAllocator<ColliderPair>>
+        manifold_{StandardAllocator<ColliderPair>{heapAllocator_}};
 
     static constexpr Vec2f defaultGravity{Scalar{0.0f}, Scalar{ -9.81f }};
 

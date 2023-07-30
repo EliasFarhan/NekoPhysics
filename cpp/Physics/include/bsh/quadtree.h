@@ -23,7 +23,7 @@ public:
     void CalculatePairs() override;
     void Clear() override;
     void SetWorldAabb(const Aabbf& worldAabb) override;
-    [[nodiscard]] const ArrayList<TriggerPair>& GetPossiblePairs() const override { return possiblePairs_; }
+    [[nodiscard]] const ArrayList<ColliderPair>& GetPossiblePairs() const override { return possiblePairs_; }
 
 
     static constexpr std::size_t depth = 5;
@@ -34,7 +34,7 @@ private:
     void InsertPairs(const QuadNode*, ColliderIndex);
     
     HeapAllocator heapAllocator_;
-    ArrayList<TriggerPair> possiblePairs_{{heapAllocator_}};
+    ArrayList<ColliderPair> possiblePairs_{{heapAllocator_}};
     std::size_t index_ = 1;
     ArrayList<QuadNode> nodes_{{heapAllocator_}};
 };

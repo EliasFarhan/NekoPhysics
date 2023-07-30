@@ -4,8 +4,10 @@
 #include "01_kinematic.h"
 #include "02_planets.h"
 #include "03_triggers.h"
+#include "04_collision.h"
 
 #include <imgui.h>
+
 
 namespace neko
 {
@@ -14,6 +16,7 @@ SampleManager::SampleManager()
     samples_.emplace_back("01 Kinematic", std::make_unique<KinematicSample>());
     samples_.emplace_back("02 Planets", std::make_unique<PlanetSample>());
     samples_.emplace_back("03 Triggers", std::make_unique<TriggersSample>());
+    samples_.emplace_back("04 Collision", std::make_unique<CollisionSample>());
 }
 
 void SampleManager::Update(float dt)

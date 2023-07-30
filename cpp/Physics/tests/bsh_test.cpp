@@ -14,15 +14,17 @@ public:
     MOCK_METHOD(void, CalculatePairs, (), (override));
     MOCK_METHOD(void, Clear, (), (override));
     MOCK_METHOD(void, SetWorldAabb, (const neko::Aabbf&), (override) );
-    MOCK_METHOD(const ArrayList<neko::TriggerPair>&, GetPossiblePairs,(), (const, override));
+    MOCK_METHOD(const ArrayList<neko::ColliderPair>&, GetPossiblePairs,(), (const, override));
 private:
 };
 
 class MockContactListener : public neko::ContactListener
 {
 public:
-    MOCK_METHOD(void, OnTriggerEnter, (const neko::TriggerPair&), (override));
-    MOCK_METHOD(void, OnTriggerExit, (const neko::TriggerPair&), (override));
+    MOCK_METHOD(void, OnTriggerEnter, (const neko::ColliderPair&), (override));
+    MOCK_METHOD(void, OnTriggerExit, (const neko::ColliderPair&), (override));
+    MOCK_METHOD(void, OnCollisionEnter, (const neko::ColliderPair&), (override));
+    MOCK_METHOD(void, OnCollisionExit, (const neko::ColliderPair&), (override));
 };
 
 TEST(PhysicsWorld, TwoBodiesOneFrame)
@@ -53,7 +55,7 @@ TEST(PhysicsWorld, TwoBodiesOneFrame)
     }
 
     neko::HeapAllocator allocator_;
-    ArrayList<neko::TriggerPair> pairs{ {neko::TriggerPair{c1, c2}}, allocator_ };
+    ArrayList<neko::ColliderPair> pairs{ {neko::ColliderPair{c1, c2}}, allocator_ };
 
     MockBSH bsh;
     //Order for Clear and SetWorldAabb is not constrained, but need to be called before Insert

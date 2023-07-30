@@ -4,7 +4,7 @@
 
 namespace neko
 {
-class TriggersSample : public Sample, public ContactListener
+class CollisionSample : public Sample, public ContactListener
 {
 public:
     void Begin() override;
@@ -16,18 +16,12 @@ public:
     void FixedUpdate() override;
     void OnCollisionEnter(const ColliderPair& p) override;
     void OnCollisionExit(const ColliderPair& p) override;
-
 private:
-    struct TriggeredBody
-    {
-        ColliderIndex index{};
-        int count = 0;
-        Scalar circleRadius{ 0.0f };
-    };
-    PhysicsWorld world_;
+    PhysicsWorld world_{ Vec2f{Scalar{0.0f}, Scalar{9.81f}} };
     QuadTree quadTree_;
-    std::vector<TriggeredBody> bodies_;
     std::vector<SDL_Vertex> vertices_;
     std::vector<int> indices_;
+    BodyIndex circleBodyIndex_ = INVALID_BODY_INDEX;
+    BodyIndex groundBodyIndex_ = INVALID_BODY_INDEX;
 };
 }

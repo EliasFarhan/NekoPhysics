@@ -71,7 +71,7 @@ void TriggersSample::Begin()
     }
 }
 
-void TriggersSample::Update(float dt)
+void TriggersSample::Update([[maybe_unused]]float dt)
 {
 #ifdef TRACY_ENABLE
     ZoneScoped;
@@ -135,7 +135,7 @@ void TriggersSample::End()
     quadTree_.Clear();
 }
 
-void TriggersSample::OnTriggerEnter(const TriggerPair& p)
+void TriggersSample::OnTriggerEnter(const ColliderPair& p)
 {
     const auto& c1 = world_.collider(p.c1);
     bodies_[c1.bodyIndex.index].count++;
@@ -143,7 +143,7 @@ void TriggersSample::OnTriggerEnter(const TriggerPair& p)
     bodies_[c2.bodyIndex.index].count++;
 }
 
-void TriggersSample::OnTriggerExit(const TriggerPair& p)
+void TriggersSample::OnTriggerExit(const ColliderPair& p)
 {
     const auto& c1 = world_.collider(p.c1);
     bodies_[c1.bodyIndex.index].count--;
@@ -158,5 +158,13 @@ void TriggersSample::FixedUpdate()
 #endif
     world_.Step(fixedDeltaTime);
     
+}
+
+void TriggersSample::OnCollisionEnter([[maybe_unused]] const ColliderPair& p)
+{
+}
+
+void TriggersSample::OnCollisionExit([[maybe_unused]] const ColliderPair& p)
+{
 }
 }

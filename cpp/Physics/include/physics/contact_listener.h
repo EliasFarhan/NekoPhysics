@@ -8,8 +8,10 @@ class ContactListener
 {
 public:
     virtual ~ContactListener() = default;
-    virtual void OnTriggerEnter(const TriggerPair& p) = 0;
-    virtual void OnTriggerExit(const TriggerPair& p) = 0;
+    virtual void OnTriggerEnter(const ColliderPair& p) = 0;
+    virtual void OnTriggerExit(const ColliderPair& p) = 0;
+    virtual void OnCollisionEnter(const ColliderPair& p) = 0;
+    virtual void OnCollisionExit(const ColliderPair& p) = 0;
 };
 
 

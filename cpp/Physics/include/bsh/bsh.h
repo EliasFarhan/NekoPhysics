@@ -26,7 +26,7 @@ public:
     virtual void CalculatePairs() = 0;
     virtual void Clear() = 0;
     virtual void SetWorldAabb(const Aabbf& worldAabb) = 0;
-    [[nodiscard]] virtual const ArrayList<TriggerPair>& GetPossiblePairs() const = 0;
+    [[nodiscard]] virtual const ArrayList<ColliderPair>& GetPossiblePairs() const = 0;
 };
 
 } // namespace neko

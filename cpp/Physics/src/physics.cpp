@@ -63,12 +63,12 @@ void PhysicsWorld::ResolveTriggers()
     {
         return;
     }
-    const auto& pairs = bsh_->GetPossiblePairs();
-    for(const auto& triggerPair : pairs)
+    const auto& newPossiblePairs = bsh_->GetPossiblePairs();
+    for(const auto& newColliderPair : newPossiblePairs)
     {
-        const auto& collider = colliders_[triggerPair.c1.index];
-        const auto& otherCollider = colliders_[triggerPair.c2.index];
-        auto it = triggerPairs_.find(triggerPair);
+        const auto& collider = colliders_[newColliderPair.c1.index];
+        const auto& otherCollider = colliders_[newColliderPair.c2.index];
+        auto it = manifold_.find(newColliderPair);
         bool doesIntersect = false;
         switch (collider.type)
         {
@@ -79,8 +79,8 @@ void PhysicsWorld::ResolveTriggers()
             {
                 const auto& body1 = bodies_[collider.bodyIndex.index];
                 const auto& body2 = bodies_[otherCollider.bodyIndex.index];
-                const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider.offset, aabbs_[collider.colliderIndex.index].halfSize);
-                const Aabbf aabb2 = Aabbf::FromCenter(body2.position + otherCollider.offset, aabbs_[otherCollider.colliderIndex.index].halfSize);
+                const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider.offset, aabbs_[collider.shapeIndex.index].halfSize);
+                const Aabbf aabb2 = Aabbf::FromCenter(body2.position + otherCollider.offset, aabbs_[otherCollider.shapeIndex.index].halfSize);
                 doesIntersect = Intersect(aabb1, aabb2);
                 break;
             }
@@ -88,8 +88,8 @@ void PhysicsWorld::ResolveTriggers()
             {
                 const auto& body1 = bodies_[collider.bodyIndex.index];
                 const auto& body2 = bodies_[otherCollider.bodyIndex.index];
-                const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider.offset, aabbs_[collider.colliderIndex.index].halfSize);
-                const Circlef circle = Circlef{ body2.position + otherCollider.offset, circles_[otherCollider.colliderIndex.index].radius };
+                const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider.offset, aabbs_[collider.shapeIndex.index].halfSize);
+                const Circlef circle = Circlef{ body2.position + otherCollider.offset, circles_[otherCollider.shapeIndex.index].radius };
                 doesIntersect = Intersect(aabb1, circle);
                 break;
             }
@@ -103,8 +103,8 @@ void PhysicsWorld::ResolveTriggers()
             {
                 const auto& body1 = bodies_[collider.bodyIndex.index];
                 const auto& body2 = bodies_[otherCollider.bodyIndex.index];
-                const Circlef c1 = { body1.position + collider.offset, circles_[collider.colliderIndex.index].radius };
-                const Aabbf aabb2 = Aabbf::FromCenter( body2.position + otherCollider.offset, aabbs_[otherCollider.colliderIndex.index].halfSize);
+                const Circlef c1 = { body1.position + collider.offset, circles_[collider.shapeIndex.index].radius };
+                const Aabbf aabb2 = Aabbf::FromCenter( body2.position + otherCollider.offset, aabbs_[otherCollider.shapeIndex.index].halfSize);
                 doesIntersect = Intersect(c1, aabb2);
                 break;
             }
@@ -112,8 +112,8 @@ void PhysicsWorld::ResolveTriggers()
             {
                 const auto& body1 = bodies_[collider.bodyIndex.index];
                 const auto& body2 = bodies_[otherCollider.bodyIndex.index];
-                const Circlef c1 = { body1.position + collider.offset, circles_[collider.colliderIndex.index].radius };
-                const Circlef c2 = { body2.position + otherCollider.offset, circles_[otherCollider.colliderIndex.index].radius };
+                const Circlef c1 = { body1.position + collider.offset, circles_[collider.shapeIndex.index].radius };
+                const Circlef c2 = { body2.position + otherCollider.offset, circles_[otherCollider.shapeIndex.index].radius };
                 doesIntersect = Intersect(c1, c2);
                 break;
             }
@@ -123,22 +123,42 @@ void PhysicsWorld::ResolveTriggers()
         default: break;
         }
 
-        if (it != triggerPairs_.end())
+        if (it != manifold_.end())
         {
             if (!doesIntersect)
             {
-                contactListener_->OnTriggerExit(triggerPair);
-                //End Trigger
-                triggerPairs_.erase(it);
+                if (collider.isTrigger || otherCollider.isTrigger)
+                {
+                    contactListener_->OnTriggerExit(newColliderPair);
+                }
+                else
+                {
+                    contactListener_->OnCollisionExit(newColliderPair);
+                }
+                manifold_.erase(it);
+            }
+            else
+            {
+                if(!collider.isTrigger && !otherCollider.isTrigger)
+                {
+                    //TODO resolve collision
+                }
             }
         }
         else
         {
             if (doesIntersect)
             {
-                //Begin Trigger
-                contactListener_->OnTriggerEnter(triggerPair);
-                triggerPairs_.insert(triggerPair);
+                if (collider.isTrigger || otherCollider.isTrigger)
+                {
+                    contactListener_->OnTriggerEnter(newColliderPair);
+                }
+                else
+                {
+                    contactListener_->OnCollisionEnter(newColliderPair);
+                    //TODO Manage collision
+                }
+                manifold_.insert(newColliderPair);
             }
         }
     }
@@ -250,8 +270,6 @@ void PhysicsWorld::Step(Scalar dt)
 #ifdef TRACY_ENABLE
     ZoneScoped;
 #endif
-    ResolveBroadphase();
-    ResolveTriggers();
 
     for (auto& body : bodies_)
     {
@@ -276,6 +294,11 @@ void PhysicsWorld::Step(Scalar dt)
         }
 
     }
+
+    ResolveBroadphase();
+    ResolveTriggers();
+
+    
 }
 
 void PhysicsWorld::Clear()
