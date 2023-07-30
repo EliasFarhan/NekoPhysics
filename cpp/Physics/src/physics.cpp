@@ -1,5 +1,6 @@
 #include "physics/physics.h"
 #include "math/vec2.h"
+#include "physics/contact_solver.h"
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
 #endif
@@ -54,7 +55,7 @@ void PhysicsWorld::RemoveBody(BodyIndex index)
     }
 }
 
-void PhysicsWorld::ResolveTriggers()
+void PhysicsWorld::ResolveNarrowphase(Scalar dt)
 {
 #ifdef TRACY_ENABLE
     ZoneScoped;
@@ -66,30 +67,29 @@ void PhysicsWorld::ResolveTriggers()
     const auto& newPossiblePairs = bsh_->GetPossiblePairs();
     for(const auto& newColliderPair : newPossiblePairs)
     {
-        const auto& collider = colliders_[newColliderPair.c1.index];
-        const auto& otherCollider = colliders_[newColliderPair.c2.index];
+        const auto& collider1 = colliders_[newColliderPair.c1.index];
+        const auto& collider2 = colliders_[newColliderPair.c2.index];
+
+        auto& body1 = bodies_[collider1.bodyIndex.index];
+        auto& body2 = bodies_[collider2.bodyIndex.index];
         auto it = manifold_.find(newColliderPair);
         bool doesIntersect = false;
-        switch (collider.type)
+        switch (collider1.type)
         {
         case ColliderType::AABB:
-            switch (otherCollider.type)
+            switch (collider2.type)
             {
             case ColliderType::AABB:
             {
-                const auto& body1 = bodies_[collider.bodyIndex.index];
-                const auto& body2 = bodies_[otherCollider.bodyIndex.index];
-                const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider.offset, aabbs_[collider.shapeIndex.index].halfSize);
-                const Aabbf aabb2 = Aabbf::FromCenter(body2.position + otherCollider.offset, aabbs_[otherCollider.shapeIndex.index].halfSize);
+                const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider1.offset, aabbs_[collider1.shapeIndex.index].halfSize);
+                const Aabbf aabb2 = Aabbf::FromCenter(body2.position + collider2.offset, aabbs_[collider2.shapeIndex.index].halfSize);
                 doesIntersect = Intersect(aabb1, aabb2);
                 break;
             }
             case ColliderType::CIRCLE:
             {
-                const auto& body1 = bodies_[collider.bodyIndex.index];
-                const auto& body2 = bodies_[otherCollider.bodyIndex.index];
-                const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider.offset, aabbs_[collider.shapeIndex.index].halfSize);
-                const Circlef circle = Circlef{ body2.position + otherCollider.offset, circles_[otherCollider.shapeIndex.index].radius };
+                const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider1.offset, aabbs_[collider1.shapeIndex.index].halfSize);
+                const Circlef circle = Circlef{ body2.position + collider2.offset, circles_[collider2.shapeIndex.index].radius };
                 doesIntersect = Intersect(aabb1, circle);
                 break;
             }
@@ -97,23 +97,19 @@ void PhysicsWorld::ResolveTriggers()
             }
             break;
         case ColliderType::CIRCLE:
-            switch (otherCollider.type)
+            switch (collider2.type)
             {
             case ColliderType::AABB:
             {
-                const auto& body1 = bodies_[collider.bodyIndex.index];
-                const auto& body2 = bodies_[otherCollider.bodyIndex.index];
-                const Circlef c1 = { body1.position + collider.offset, circles_[collider.shapeIndex.index].radius };
-                const Aabbf aabb2 = Aabbf::FromCenter( body2.position + otherCollider.offset, aabbs_[otherCollider.shapeIndex.index].halfSize);
+                const Circlef c1 = { body1.position + collider1.offset, circles_[collider1.shapeIndex.index].radius };
+                const Aabbf aabb2 = Aabbf::FromCenter( body2.position + collider2.offset, aabbs_[collider2.shapeIndex.index].halfSize);
                 doesIntersect = Intersect(c1, aabb2);
                 break;
             }
             case ColliderType::CIRCLE:
             {
-                const auto& body1 = bodies_[collider.bodyIndex.index];
-                const auto& body2 = bodies_[otherCollider.bodyIndex.index];
-                const Circlef c1 = { body1.position + collider.offset, circles_[collider.shapeIndex.index].radius };
-                const Circlef c2 = { body2.position + otherCollider.offset, circles_[otherCollider.shapeIndex.index].radius };
+                const Circlef c1 = { body1.position + collider1.offset, circles_[collider1.shapeIndex.index].radius };
+                const Circlef c2 = { body2.position + collider2.offset, circles_[collider2.shapeIndex.index].radius };
                 doesIntersect = Intersect(c1, c2);
                 break;
             }
@@ -127,7 +123,7 @@ void PhysicsWorld::ResolveTriggers()
         {
             if (!doesIntersect)
             {
-                if (collider.isTrigger || otherCollider.isTrigger)
+                if (collider1.isTrigger || collider2.isTrigger)
                 {
                     contactListener_->OnTriggerExit(newColliderPair);
                 }
@@ -137,26 +133,26 @@ void PhysicsWorld::ResolveTriggers()
                 }
                 manifold_.erase(it);
             }
-            else
-            {
-                if(!collider.isTrigger && !otherCollider.isTrigger)
-                {
-                    //TODO resolve collision
-                }
-            }
         }
         else
         {
             if (doesIntersect)
             {
-                if (collider.isTrigger || otherCollider.isTrigger)
+                if (collider1.isTrigger || collider2.isTrigger)
                 {
                     contactListener_->OnTriggerEnter(newColliderPair);
                 }
                 else
                 {
-                    contactListener_->OnCollisionEnter(newColliderPair);
                     //TODO Manage collision
+                    Contact contact;
+                    contact.bodies[0].body = &body1;
+                    contact.bodies[1].body = &body2;
+                    contact.bodies[0].collider = &collider1;
+                    contact.bodies[1].collider = &collider2;
+                    contact.contactNormal = (body1.position- body2.position).Normalized();
+                    contact.Resolve(dt);
+                    contactListener_->OnCollisionEnter(newColliderPair);
                 }
                 manifold_.insert(newColliderPair);
             }
@@ -296,7 +292,7 @@ void PhysicsWorld::Step(Scalar dt)
     }
 
     ResolveBroadphase();
-    ResolveTriggers();
+    ResolveNarrowphase(dt);
 
     
 }

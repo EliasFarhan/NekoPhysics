@@ -49,10 +49,8 @@ constexpr static bool Intersect(const Circle<T>& c1, const Circle<T>& c2)
 template<typename T>
 constexpr bool Intersect(const Circle<T>& circle, const Aabb<T>& aabb)
 {
-    const auto halfSize = aabb.GetHalfSize();
-    const auto delta = Vec2<T>::Clamp(aabb.GetCenter() - circle.position, -halfSize, halfSize);
-    const auto closestPoint = aabb.GetCenter() + delta;
-    return (closestPoint-circle.position).SquareLength() > circle.radius * circle.radius;
+    const auto delta = aabb.GetCenter() - circle.position;
+    return Abs(delta.x) < aabb.GetHalfSize().x + circle.radius && Abs(delta.y) < aabb.GetHalfSize().y + circle.radius;
 }
 
 template<typename T>

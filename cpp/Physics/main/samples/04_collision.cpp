@@ -12,7 +12,8 @@ constexpr static Vec2f groundHalfSize = Vec2f{ Scalar{5}, Scalar{ 1 } };
 constexpr static std::size_t quadResolution = 2;
 constexpr static std::size_t quadVertexCount = 4;
 constexpr static Scalar pixelPerMeter = Scalar{ 100.0f };
-constexpr static SDL_Color color{ 0, 255, 0, 255 };
+constexpr static SDL_Color groundColor{ 0, 255, 0, 255 };
+constexpr static SDL_Color circleColor{ 0, 0, 255, 255 };
 constexpr static Vec2f worldCenter = { Scalar{12.8f / 2.0f}, Scalar{7.2f / 2.0f} };
 constexpr static Vec2f groundPosition = worldCenter+Vec2f{Scalar{0}, Scalar{3}};
 constexpr static Vec2f circlePosition = worldCenter-Vec2f{Scalar{0}, Scalar{3}};
@@ -50,7 +51,7 @@ void CollisionSample::Begin()
         {
             const auto [x, y] = (groundPosition+vertexOffset) * pixelPerMeter;
             SDL_Vertex vertex{};
-            vertex.color = color;
+            vertex.color = groundColor;
             vertex.position.x = float{ x };
             vertex.position.y = float{ y };
             vertices_.push_back(vertex);
@@ -82,7 +83,7 @@ void CollisionSample::Begin()
         {
             auto pos = body.position * pixelPerMeter;
             SDL_Vertex vertex{};
-            vertex.color = color;
+            vertex.color = circleColor;
 
             if (j != 0)
             {
@@ -140,11 +141,11 @@ void CollisionSample::End()
     quadTree_.Clear();
 }
 
-void CollisionSample::OnTriggerEnter(const ColliderPair& p)
+void CollisionSample::OnTriggerEnter([[maybe_unused]]const ColliderPair& p)
 {
 }
 
-void CollisionSample::OnTriggerExit(const ColliderPair& p)
+void CollisionSample::OnTriggerExit([[maybe_unused]] const ColliderPair& p)
 {
 }
 

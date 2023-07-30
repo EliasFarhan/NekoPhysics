@@ -42,6 +42,7 @@ struct Collider
     BodyIndex bodyIndex{};
     ColliderIndex colliderIndex{};
     ShapeIndex shapeIndex{};
+    Scalar restitution{ 1 };
     ColliderType type = ColliderType::NONE;
     bool isTrigger = true;
 };
@@ -66,7 +67,7 @@ public:
     void Step(Scalar dt);
     void Clear();
     void ResolveBroadphase();
-    void ResolveTriggers();
+    void ResolveNarrowphase(Scalar dt);
 
     [[nodiscard]] Body& body(BodyIndex index) { return bodies_[index.index]; }
     [[nodiscard]] const Body& body(BodyIndex index) const { return bodies_[index.index]; }

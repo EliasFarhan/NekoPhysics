@@ -6,6 +6,14 @@ namespace neko
 {
 
 template<typename T>
+T Abs(T value)
+{
+    if(value >= T{0})
+        return value;
+    return -value;
+}
+
+template<typename T>
 T Sqrt(T value)
 {
     return std::sqrt(value);
