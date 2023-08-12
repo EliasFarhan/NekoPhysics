@@ -18,7 +18,8 @@ struct Contact
 {
     std::array<CollidingBody, 2> bodies{};
     Vec2f contactNormal{};
-    Scalar restitution{};
+    Vec2f contactPoint{};
+    Scalar restitution{1};
     Scalar penetration{};
     void ResolveInterpenetration(Scalar dt) const;
     void Resolve(Scalar dt) const;

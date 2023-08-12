@@ -27,11 +27,11 @@ void PlanetSample::Begin()
     {
         const auto index = world_.AddBody();
         Body& body = world_.body(index);
-        body.mass = Scalar{ 1.0f };
+        body.inverseMass = Scalar{ 1.0f };
         body.position = worldCenter + (Vec2f::up() * Scalar { RandomRange(innerRadius, outerRadius) }).Rotate(Scalar{ RandomRange(0.0f, 2.0f * Pi<float>()) });
         const auto delta = body.position - worldCenter;
-        const auto force = G * body.mass * blackHoleMass / delta.SquareLength();
-        const auto speed = Sqrt(force / body.mass * delta.Length());
+        const auto force = G * blackHoleMass / (delta.SquareLength() * body.inverseMass);
+        const auto speed = Sqrt(force * body.inverseMass * delta.Length());
         body.velocity = speed * delta.Perpendicular().Normalized();
         body.velocity += Scalar{RandomRange(-1.0f, 1.0f)} *speedDisturbanceFactor* body.velocity.Perpendicular().Normalized();
         
@@ -74,7 +74,7 @@ void PlanetSample::Update(float dt)
     {
         auto& body = world_.body({ static_cast<int>(i) });
         const auto delta = body.position - worldCenter;
-        const auto force = G * body.mass * blackHoleMass / delta.SquareLength();
+        const auto force = G * blackHoleMass / (delta.SquareLength() * body.inverseMass);
         body.force += force * (-delta).Normalized();
     }
     world_.Step(Scalar{ dt });

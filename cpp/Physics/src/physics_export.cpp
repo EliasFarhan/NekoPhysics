@@ -35,7 +35,7 @@ EXPORT void AddForce(neko::Body * instance, Vector2f force)
 }
 EXPORT void SetMass(neko::Body * instance, float mass)
 {
-    instance->mass = neko::Scalar{ mass };
+    instance->inverseMass = neko::Scalar{ 1.0f/mass };
 }
 EXPORT Vector2f GetPosition(const neko::Body * instance)
 {
@@ -51,7 +51,7 @@ EXPORT Vector2f GetForce(const neko::Body * instance)
 }
 EXPORT float GetMass(const neko::Body * instance)
 {
-    return float{ instance->mass };
+    return 1.0f/float{ instance->inverseMass };
 }
 EXPORT void Step(neko::PhysicsWorld* instance, float dt)
 {

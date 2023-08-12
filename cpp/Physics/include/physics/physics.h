@@ -14,6 +14,8 @@
 #include <unordered_set>
 #include <string>
 
+#include "contact_solver.h"
+
 
 namespace neko
 {
@@ -32,7 +34,7 @@ struct Body
     Vec2f position{};
     Vec2f velocity{};
     Vec2f force{};
-    Scalar mass{1};
+    Scalar inverseMass{1};
     BodyType type = BodyType::DYNAMIC;
 };
 
@@ -57,6 +59,11 @@ struct AabbCollider
     Vec2f halfSize{ Scalar {-1}, Scalar {-1} };
 };
 
+struct PlaneCollider
+{
+    Vec2f normal{ Vec2f::zero() };
+};
+
 class PhysicsWorld
 {
 public:
@@ -64,6 +71,7 @@ public:
     explicit PhysicsWorld(Vec2f gravity);
     BodyIndex AddBody();
     void RemoveBody(BodyIndex index);
+    bool DetectCollision(Body& body1, const Collider& collider1, Body& body2, const Collider& collider2, Contact* contact);
     void Step(Scalar dt);
     void Clear();
     void ResolveBroadphase();
@@ -74,6 +82,7 @@ public:
 
     ColliderIndex AddCircleCollider(BodyIndex body);
     ColliderIndex AddAabbCollider(BodyIndex body);
+    ColliderIndex AddPlaneCollider(BodyIndex body);
 
     Collider& collider(ColliderIndex colliderIndex) { return colliders_[colliderIndex.index]; }
     const Collider& collider(ColliderIndex colliderIndex) const { return colliders_[colliderIndex.index]; }
@@ -85,6 +94,7 @@ public:
     
     void RemoveAabbCollider(ColliderIndex index);
     void RemoveCircleCollider(ColliderIndex index);
+    void RemovePlaneCollider(ColliderIndex index);
 
     void SetBSH(BoundingSurfaceHierarchy* boundingSurfaceHierarchy) { bsh_ = boundingSurfaceHierarchy; }
     void SetContactListener(ContactListener* contactListener) { contactListener_ = contactListener; }
@@ -93,6 +103,7 @@ private:
     ArrayList<Body> bodies_{{heapAllocator_}};
     ArrayList<AabbCollider> aabbs_{{heapAllocator_}};
     ArrayList<CircleCollider> circles_{{heapAllocator_}};
+    ArrayList<PlaneCollider> planes_{{heapAllocator_}};
     ArrayList<Collider> colliders_{{heapAllocator_}};
     std::unordered_set<ColliderPair, ColliderHash, std::equal_to<>, StandardAllocator<ColliderPair>>
         manifold_{StandardAllocator<ColliderPair>{heapAllocator_}};

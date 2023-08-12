@@ -22,13 +22,6 @@ struct Aabb
     [[nodiscard]] constexpr Vec2<T> GetHalfSize() const { return (maxBound - minBound) / T{2}; }
 };
 
-template<typename T>
-constexpr bool Intersect(const Aabb<T>& a, const Aabb<T>& b)
-{
-    if (a.maxBound.x < b.minBound.x || a.minBound.x > b.maxBound.x) return false;
-    if (a.maxBound.y < b.minBound.y || a.minBound.y > b.maxBound.y) return false;
-    return true;
-}
 
 template<typename T>
 struct Circle
@@ -40,6 +33,16 @@ struct Circle
         return Aabb<T>::FromCenter(position, { radius, radius });
     }
 };
+
+
+template<typename T>
+constexpr bool Intersect(const Aabb<T>& a, const Aabb<T>& b)
+{
+    if (a.maxBound.x < b.minBound.x || a.minBound.x > b.maxBound.x) return false;
+    if (a.maxBound.y < b.minBound.y || a.minBound.y > b.maxBound.y) return false;
+    return true;
+}
+
 template<typename T>
 constexpr static bool Intersect(const Circle<T>& c1, const Circle<T>& c2)
 {

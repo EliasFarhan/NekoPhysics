@@ -35,6 +35,7 @@ enum class ColliderType : short
 {
     AABB,
     CIRCLE,
+    PLANE,
     NONE
 };
 

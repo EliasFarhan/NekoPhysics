@@ -22,7 +22,7 @@ void KinematicSample::Begin()
         Body& body = world_.body(index);
         body.position = { Scalar{RandomRange(0.0f, 12.8f)}, Scalar{RandomRange(0.0f, 7.2f)} };
         body.velocity = Vec2f{ Scalar{RandomRange(-1.0f, 1.0f)}, Scalar{RandomRange(-1.0f, 1.0f)} }*maxSpeed;
-        body.mass = Scalar{ 1.0f };
+        body.inverseMass = Scalar{ 1.0f };
 
         const SDL_Color color{
             static_cast<Uint8>(RandomRange(100u,255u)),

@@ -32,7 +32,7 @@ void CollisionSample::Begin()
         body.position = groundPosition;
         body.velocity = Vec2f{};
         body.type = BodyType::STATIC;
-        body.mass = Scalar{ 1 };
+        body.inverseMass = Scalar{ 0 };
 
         const auto colliderIndex = world_.AddAabbCollider(groundBodyIndex_);
         auto& collider = world_.collider(colliderIndex);
@@ -71,7 +71,7 @@ void CollisionSample::Begin()
         body.position = circlePosition;
         body.velocity = Vec2f{};
         body.type = BodyType::DYNAMIC;
-        body.mass = Scalar{ 1 };
+        body.inverseMass = Scalar{ 1 };
 
         const auto colliderIndex = world_.AddCircleCollider(circleBodyIndex_);
         auto& collider = world_.collider(colliderIndex);

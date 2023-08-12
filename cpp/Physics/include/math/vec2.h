@@ -55,7 +55,11 @@ struct Vec2
 
     constexpr Vec2 operator/(T other) const
     {
-        return { x / other, y / other };
+        if (other == T{ 0 })
+        {
+            return Vec2{ std::numeric_limits<T>::max(), std::numeric_limits<T>::max() };
+        }
+        return Vec2{ x, y } * (T{1}/other);
     }
     constexpr Vec2& operator/=(T other)
     {
@@ -110,6 +114,11 @@ struct Vec2
     [[nodiscard]] constexpr static Vec2 Clamp(Vec2 v, Vec2 minV, Vec2 maxV)
     {
         return { std::clamp(v.x, minV.x, maxV.x), std::clamp(v.y, minV.y, maxV.y) };
+    }
+
+    constexpr bool operator==(Vec2 other) const
+    {
+        return x == other.x && y == other.y;
     }
 };
 

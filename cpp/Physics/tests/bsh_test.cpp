@@ -34,12 +34,12 @@ TEST(PhysicsWorld, TwoBodiesOneFrame)
     const auto b1 = world.AddBody();
     {
         auto& body1 = world.body(b1);
-        body1.mass = neko::Scalar{ 1 };
+        body1.inverseMass = neko::Scalar{ 1 };
     }
     const auto b2 = world.AddBody();
     {
         auto& body2 = world.body(b2);
-        body2.mass = neko::Scalar{ 1 };
+        body2.inverseMass = neko::Scalar{ 1 };
     }
     const auto c1 = world.AddAabbCollider(b1);
     {

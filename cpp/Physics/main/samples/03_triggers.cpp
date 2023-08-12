@@ -34,7 +34,7 @@ void TriggersSample::Begin()
         Body& body = world_.body(index);
         body.position = { Scalar{RandomRange(0.0f, 12.8f)}, Scalar{RandomRange(0.0f, 7.2f)} };
         body.velocity = Vec2f{ Scalar{RandomRange(-1.0f, 1.0f)}, Scalar{RandomRange(-1.0f, 1.0f)} } *maxSpeed;
-        body.mass = Scalar{ 1 };
+        body.inverseMass = Scalar{ 1 };
 
         auto& triggerBody = bodies_[i];
         
