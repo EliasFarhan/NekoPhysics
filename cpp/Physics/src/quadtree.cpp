@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "bsh/quadtree.h"
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
@@ -55,6 +57,7 @@ void QuadTree::CalculatePairs()
 
 void QuadTree::Clear()
 {
+    index_ = 1;
     possiblePairs_.clear();
     for(auto& node: nodes_)
     {
@@ -72,7 +75,7 @@ void QuadTree::Insert(const ColliderAabb& colliderAabb, QuadNode* node)
 {
     if(node->nodes[0] == nullptr)
     {
-       if(node->colliders.size() == maxSize && index_ < nodes_.size())
+       if(node->colliders.size() >= maxSize && index_ < nodes_.size())
        {
            //Break into 4 new nodes
 #ifdef TRACY_ENABLE
@@ -89,8 +92,8 @@ void QuadTree::Insert(const ColliderAabb& colliderAabb, QuadNode* node)
            {
                node->nodes[i] = &nodes_[index_+i];
                node->nodes[i]->aabb = Aabbf::FromCenter(
-                   node->aabb.GetCenter() + direction[i] * node->aabb.GetHalfSize() / Scalar{2},
-                   node->aabb.GetHalfSize() / Scalar{2});
+                   node->aabb.GetCenter() + direction[i] * node->aabb.GetHalfSize()*Scalar{0.5f},
+                   node->aabb.GetHalfSize()*Scalar{0.5f});
            }
            std::array<ColliderAabb, maxSize> tmp;
            for(std::size_t i = 0; i < maxSize; ++i)
@@ -112,11 +115,12 @@ void QuadTree::Insert(const ColliderAabb& colliderAabb, QuadNode* node)
     }
     else
     {
+        //If I have children
         int count = 0;
         QuadNode* insertNode = nullptr;
         for(const auto& childNode: node->nodes)
         {
-            if(Intersect(colliderAabb.aabb, node->aabb))
+            if(Intersect(colliderAabb.aabb, childNode->aabb))
             {
                 count++;
                 insertNode = childNode;
@@ -178,5 +182,21 @@ void QuadTree::InsertPairs(const QuadNode* node, ColliderIndex colliderIndex)
             InsertPairs(childNode, colliderIndex);
         }
     }
+}
+
+void QuadTree::Iterate(std::function<void(const QuadNode*)> func) const
+{
+    std::function<void(std::function<void(const QuadNode *)>, const QuadNode *)> iterateFunc = [&iterateFunc](
+            std::function<void(const QuadNode *)> func, const QuadNode *node)
+        {
+            func(node);
+            for (auto *child: node->nodes) {
+                if (child != nullptr) {
+                    iterateFunc(func, child);
+                }
+        }
+    };
+    iterateFunc(func, &nodes_[0]);
+
 }
 }

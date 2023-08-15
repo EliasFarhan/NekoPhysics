@@ -71,7 +71,7 @@ public:
     explicit PhysicsWorld(Vec2f gravity);
     BodyIndex AddBody();
     void RemoveBody(BodyIndex index);
-    bool DetectCollision(Body& body1, const Collider& collider1, Body& body2, const Collider& collider2, Contact* contact);
+    bool DetectCollision(Body& body1, Collider& collider1, Body& body2, Collider& collider2, Contact* contact);
     void Step(Scalar dt);
     void Clear();
     void ResolveBroadphase();

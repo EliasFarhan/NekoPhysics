@@ -105,13 +105,13 @@ TEST(Vec2f, Mul)
 
 TEST(Vec2f, Div)
 {
-    constexpr neko::Vec2f v1{ neko::Scalar{1.0f}, neko::Scalar{2.1f} };
+    constexpr neko::Vec2f v1{ neko::Scalar{1.0f}, neko::Scalar{2.125f} };
 
     constexpr neko::Scalar f{3.141f};
 
     constexpr auto result = v1 / f;
-    EXPECT_FLOAT_EQ(float{ result.x }, float{ v1.x / f });
-    EXPECT_FLOAT_EQ(float{ result.y }, float{ v1.y / f});
+    EXPECT_FLOAT_EQ(float{ result.x }, float{ v1.x * (neko::Scalar{1} / f) });
+    EXPECT_FLOAT_EQ(float{ result.y }, float{ v1.y * (neko::Scalar{1} / f) });
 
     auto tmp = v1;
     tmp /= f;

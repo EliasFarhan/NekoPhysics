@@ -1,4 +1,4 @@
-#include "04_collision.h"
+#include "04_ground.h"
 
 #include <SDL_log.h>
 
@@ -14,11 +14,12 @@ constexpr static std::size_t quadVertexCount = 4;
 constexpr static Scalar pixelPerMeter = Scalar{ 100.0f };
 constexpr static SDL_Color groundColor{ 0, 255, 0, 255 };
 constexpr static SDL_Color circleColor{ 0, 0, 255, 255 };
+constexpr static SDL_Color collisionCircleColor{ 255, 0, 255, 255 };
 constexpr static Vec2f worldCenter = { Scalar{12.8f / 2.0f}, Scalar{7.2f / 2.0f} };
 constexpr static Vec2f groundPosition = worldCenter+Vec2f{Scalar{0}, Scalar{3}};
 constexpr static Vec2f circlePosition = worldCenter-Vec2f{Scalar{0}, Scalar{3}};
 
-void CollisionSample::Begin()
+void GroundSample::Begin()
 {
     world_.SetContactListener(this);
     world_.SetBSH(&quadTree_);
@@ -105,7 +106,7 @@ void CollisionSample::Begin()
     
 }
 
-void CollisionSample::Update(float dt)
+void GroundSample::Update([[maybe_unused]] float dt)
 {
     const auto& circleBody = world_.body(circleBodyIndex_);
 
@@ -120,10 +121,11 @@ void CollisionSample::Update(float dt)
         }
         vertex.position.x = float{ pos.x };
         vertex.position.y = float{ pos.y };
+        vertex.color = collisionCount > 0 ? collisionCircleColor : circleColor;
     }
 }
 
-void CollisionSample::Draw(SDL_Renderer* renderer)
+void GroundSample::Draw(SDL_Renderer* renderer)
 {
     if (SDL_RenderGeometry(renderer, nullptr,
         vertices_.data(), static_cast<int>(vertices_.size()),
@@ -133,7 +135,7 @@ void CollisionSample::Draw(SDL_Renderer* renderer)
     }
 }
 
-void CollisionSample::End()
+void GroundSample::End()
 {
     world_.Clear();
     vertices_.clear();
@@ -141,15 +143,15 @@ void CollisionSample::End()
     quadTree_.Clear();
 }
 
-void CollisionSample::OnTriggerEnter([[maybe_unused]]const ColliderPair& p)
+void GroundSample::OnTriggerEnter([[maybe_unused]]const ColliderPair& p)
 {
 }
 
-void CollisionSample::OnTriggerExit([[maybe_unused]] const ColliderPair& p)
+void GroundSample::OnTriggerExit([[maybe_unused]] const ColliderPair& p)
 {
 }
 
-void CollisionSample::FixedUpdate()
+void GroundSample::FixedUpdate()
 {
 #ifdef TRACY_ENABLE
     ZoneScoped;
@@ -157,11 +159,13 @@ void CollisionSample::FixedUpdate()
     world_.Step(fixedDeltaTime);
 }
 
-void CollisionSample::OnCollisionEnter(const ColliderPair& p)
+void GroundSample::OnCollisionEnter([[maybe_unused]] const ColliderPair& p)
 {
+    collisionCount++;
 }
 
-void CollisionSample::OnCollisionExit(const ColliderPair& p)
+void GroundSample::OnCollisionExit([[maybe_unused]] const ColliderPair& p)
 {
+    collisionCount--;
 }
 }

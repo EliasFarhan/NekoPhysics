@@ -11,7 +11,7 @@ struct Body;
 struct CollidingBody
 {
     Body* body = nullptr;
-    const Collider* collider = nullptr;
+    Collider* collider = nullptr;
 };
 
 struct Contact
@@ -22,7 +22,7 @@ struct Contact
     Scalar restitution{1};
     Scalar penetration{};
     void ResolveInterpenetration(Scalar dt) const;
-    void Resolve(Scalar dt) const;
+    void Resolve(Scalar dt);
     Scalar CalculateSeparateVelocity() const;
     void ResolveVelocity(Scalar dt) const;
 };

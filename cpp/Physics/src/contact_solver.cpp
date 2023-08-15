@@ -6,8 +6,13 @@ namespace neko
 {
 
 
-void Contact::Resolve(Scalar dt) const
+void Contact::Resolve(Scalar dt)
 {
+    if(bodies[0].body->type == BodyType::STATIC)
+    {
+        std::swap(bodies[0], bodies[1]);
+        contactNormal = -contactNormal;
+    }
     ResolveVelocity(dt);
     ResolveInterpenetration(dt);
 }
@@ -18,7 +23,7 @@ Scalar Contact::CalculateSeparateVelocity() const
     return Vec2f::Dot(relativeVelocity, contactNormal);
 }
 
-void Contact::ResolveVelocity(Scalar dt) const
+void Contact::ResolveVelocity([[maybe_unused]] Scalar dt) const
 {
     const auto separatingVelocity = CalculateSeparateVelocity();
     if (separatingVelocity > Scalar{0})
@@ -42,7 +47,7 @@ void Contact::ResolveVelocity(Scalar dt) const
     }
 }
 
-void Contact::ResolveInterpenetration(Scalar dt) const
+void Contact::ResolveInterpenetration([[maybe_unused]] Scalar dt) const
 {
     // If we don't have any penetration, skip this step.
     if (penetration <= Scalar{0}) return;

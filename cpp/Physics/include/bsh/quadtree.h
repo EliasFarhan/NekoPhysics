@@ -1,9 +1,10 @@
 #pragma once
-#include <array>
-#include <vector>
 
 #include "bsh/bsh.h"
 #include "core/allocator.h"
+
+#include <array>
+#include <vector>
 
 namespace neko
 {
@@ -25,9 +26,10 @@ public:
     void SetWorldAabb(const Aabbf& worldAabb) override;
     [[nodiscard]] const ArrayList<ColliderPair>& GetPossiblePairs() const override { return possiblePairs_; }
 
+    void Iterate(std::function<void(const QuadNode*)> func) const;
 
     static constexpr std::size_t depth = 5;
-    static constexpr std::size_t maxSize = 32;
+    static constexpr std::size_t maxSize = 16;
 private:
     void Insert(const ColliderAabb& colliderAabb, QuadNode* node);
     void GoDownTree(const QuadNode*);

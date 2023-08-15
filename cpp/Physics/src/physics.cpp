@@ -61,9 +61,9 @@ void PhysicsWorld::RemoveBody(BodyIndex index)
 
 bool PhysicsWorld::DetectCollision(
     Body& body1, 
-    const Collider& collider1, 
+    Collider& collider1,
     Body& body2, 
-    const Collider& collider2,
+    Collider& collider2,
     Contact* contact)
 {
     bool doesIntersect = false;
@@ -151,7 +151,9 @@ bool PhysicsWorld::DetectCollision(
                     doesIntersect = false;
                     break;
                 }
+                doesIntersect = true;
                 contact->contactNormal = midline / size;
+                contact->contactPoint = c1.position + midline * Scalar {0.5f};
                 contact->penetration = c1.radius + c2.radius - size;
             }
             else
@@ -180,8 +182,8 @@ void PhysicsWorld::ResolveNarrowphase(Scalar dt)
     const auto& newPossiblePairs = bsh_->GetPossiblePairs();
     for(const auto& newColliderPair : newPossiblePairs)
     {
-        const auto& collider1 = colliders_[newColliderPair.c1.index];
-        const auto& collider2 = colliders_[newColliderPair.c2.index];
+        auto& collider1 = colliders_[newColliderPair.c1.index];
+        auto& collider2 = colliders_[newColliderPair.c2.index];
 
         auto& body1 = bodies_[collider1.bodyIndex.index];
         auto& body2 = bodies_[collider2.bodyIndex.index];
@@ -203,6 +205,14 @@ void PhysicsWorld::ResolveNarrowphase(Scalar dt)
                     contactListener_->OnCollisionExit(newColliderPair);
                 }
                 manifold_.erase(it);
+            }
+            else
+            {
+                if(!collider1.isTrigger && !collider2.isTrigger)
+                {
+                    contact.Resolve(dt);
+
+                }
             }
         }
         else

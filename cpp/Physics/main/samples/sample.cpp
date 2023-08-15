@@ -4,7 +4,8 @@
 #include "01_kinematic.h"
 #include "02_planets.h"
 #include "03_triggers.h"
-#include "04_collision.h"
+#include "04_ground.h"
+#include "05_collisions.h"
 
 #include <imgui.h>
 
@@ -16,7 +17,8 @@ SampleManager::SampleManager()
     samples_.emplace_back("01 Kinematic", std::make_unique<KinematicSample>());
     samples_.emplace_back("02 Planets", std::make_unique<PlanetSample>());
     samples_.emplace_back("03 Triggers", std::make_unique<TriggersSample>());
-    samples_.emplace_back("04 Collision", std::make_unique<CollisionSample>());
+    samples_.emplace_back("04 Ground", std::make_unique<GroundSample>());
+    samples_.emplace_back("05 Collisions", std::make_unique<CollisionsSample>());
 }
 
 void SampleManager::Update(float dt)

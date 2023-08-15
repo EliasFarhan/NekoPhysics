@@ -1,18 +1,11 @@
-#include "03_triggers.h"
-
 #include <SDL_log.h>
-
-#ifdef TRACY_ENABLE
-#include <tracy/Tracy.hpp>
-#endif
-
+#include "05_collisions.h"
 #include "random_utils.h"
 
 namespace neko
 {
 
-
-constexpr static std::size_t circleCount = 200;
+constexpr static std::size_t circleCount = 50;
 constexpr static std::size_t circleResolution = 30;
 constexpr static Scalar maxSpeed = Scalar{ 4 };
 constexpr static Scalar maxCircleRadius = Scalar{ 0.2f };
@@ -21,7 +14,8 @@ constexpr static Scalar pixelPerMeter = Scalar{ 100.0f };
 constexpr static SDL_Color triggerColor{ 0,255,0,255 };
 constexpr static SDL_Color untriggerColor{ 255,0,0,255 };
 
-void TriggersSample::Begin()
+
+void CollisionsSample::Begin()
 {
     world_.SetContactListener(this);
     world_.SetBSH(&quadTree_);
@@ -37,12 +31,13 @@ void TriggersSample::Begin()
         body.inverseMass = Scalar{ 1 };
 
         auto& triggerBody = bodies_[i];
-        
+
 
         const auto circleRadius = Scalar{ RandomRange(float{minCircleRadius}, float{maxCircleRadius}) };
         triggerBody.circleRadius = circleRadius;
         triggerBody.index = world_.AddCircleCollider(index);
-        const auto& triggerCollider = world_.collider({ triggerBody.index });
+        auto& triggerCollider = world_.collider({ triggerBody.index });
+        triggerCollider.isTrigger = false;
         auto& circleCollider = world_.circle(triggerCollider.shapeIndex);
         circleCollider.radius = triggerBody.circleRadius;
 
@@ -71,11 +66,8 @@ void TriggersSample::Begin()
     }
 }
 
-void TriggersSample::Update([[maybe_unused]]float dt)
+void CollisionsSample::Update([[maybe_unused]] float dt)
 {
-#ifdef TRACY_ENABLE
-    ZoneScoped;
-#endif
     for (std::size_t i = 0; i < circleCount; i++)
     {
         auto& body = world_.body({ static_cast<int>(i) });
@@ -114,44 +106,20 @@ void TriggersSample::Update([[maybe_unused]]float dt)
             indices[2] = (static_cast<int>(firstIndex + (j == circleResolution - 1ull ? 1ull : 2ull + j)));
         }
     }
+
 }
 
-void TriggersSample::Draw(SDL_Renderer* renderer)
+void CollisionsSample::Draw(SDL_Renderer *renderer)
 {
     if (SDL_RenderGeometry(renderer, nullptr,
-        vertices_.data(), static_cast<int>(vertices_.size()),
-        indices_.data(), static_cast<int>(indices_.size())))
+                           vertices_.data(), static_cast<int>(vertices_.size()),
+                           indices_.data(), static_cast<int>(indices_.size())))
     {
         SDL_Log("%s\n", SDL_GetError());
     }
-    auto func = [renderer](const QuadNode* node)
-    {
-        const auto& aabb = node->aabb;
-        const auto center = aabb.GetCenter();
-        const auto halfSize = aabb.GetHalfSize();
-        std::array<Vec2f, 4> pos
-        {
-            center+Vec2f(-halfSize.x, halfSize.y),
-            center+Vec2f(-halfSize.x, -halfSize.y),
-            center+Vec2f(halfSize.x, -halfSize.y),
-            center+Vec2f(halfSize.x, halfSize.y),
-        };
-        for(int i = 0; i < 4; i++)
-        {
-            const auto pos1 = pos[i]*pixelPerMeter;
-            const auto pos2 = pos[(i+1)%4]*pixelPerMeter;
-            if(SDL_RenderDrawLine(renderer, (int)pos1.x, (int)pos1.y, (int)pos2.x, (int)pos2.y))
-            {
-                SDL_Log("%s\n", SDL_GetError());
-            }
-
-        }
-    };
-    SDL_SetRenderDrawColor(renderer, 255,255,255,255);
-    quadTree_.Iterate(func);
 }
 
-void TriggersSample::End()
+void CollisionsSample::End()
 {
     world_.Clear();
     bodies_.clear();
@@ -160,7 +128,13 @@ void TriggersSample::End()
     quadTree_.Clear();
 }
 
-void TriggersSample::OnTriggerEnter(const ColliderPair& p)
+
+void CollisionsSample::FixedUpdate()
+{
+    world_.Step(fixedDeltaTime);
+}
+
+void CollisionsSample::OnCollisionEnter(const ColliderPair &p)
 {
     const auto& c1 = world_.collider(p.c1);
     bodies_[c1.bodyIndex.index].count++;
@@ -168,7 +142,7 @@ void TriggersSample::OnTriggerEnter(const ColliderPair& p)
     bodies_[c2.bodyIndex.index].count++;
 }
 
-void TriggersSample::OnTriggerExit(const ColliderPair& p)
+void CollisionsSample::OnCollisionExit(const ColliderPair &p)
 {
     const auto& c1 = world_.collider(p.c1);
     bodies_[c1.bodyIndex.index].count--;
@@ -176,20 +150,13 @@ void TriggersSample::OnTriggerExit(const ColliderPair& p)
     bodies_[c2.bodyIndex.index].count--;
 }
 
-void TriggersSample::FixedUpdate()
+void CollisionsSample::OnTriggerEnter([[maybe_unused]]const ColliderPair &p)
 {
-#ifdef TRACY_ENABLE
-    ZoneScoped;
-#endif
-    world_.Step(fixedDeltaTime);
-    
+
 }
 
-void TriggersSample::OnCollisionEnter([[maybe_unused]] const ColliderPair& p)
+void CollisionsSample::OnTriggerExit([[maybe_unused]] const ColliderPair &p)
 {
-}
 
-void TriggersSample::OnCollisionExit([[maybe_unused]] const ColliderPair& p)
-{
 }
 }

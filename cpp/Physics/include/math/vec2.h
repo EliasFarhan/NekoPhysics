@@ -14,6 +14,9 @@ struct Vec2
 {
     T x{}, y{};
 
+    constexpr Vec2(T xArg, T yArg): x(xArg), y(yArg){}
+    constexpr Vec2()= default;
+    constexpr Vec2(T scalar): x(scalar), y(scalar){}
     constexpr Vec2 operator+(Vec2 other) const
     {
         return { x + other.x, y + other.y };
