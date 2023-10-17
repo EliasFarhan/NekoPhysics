@@ -2,7 +2,7 @@
 
 #include "physics/physics_type.h"
 #include "vec2.h"
-
+#include <array>
 namespace neko
 {
 
@@ -20,6 +20,13 @@ struct Aabb
     }
     [[nodiscard]] constexpr Vec2<T> GetCenter() const { return minBound + GetHalfSize(); }
     [[nodiscard]] constexpr Vec2<T> GetHalfSize() const { return (maxBound - minBound) / T{2}; }
+
+    [[nodiscard]] constexpr bool Contains(Vec2<T> point) const noexcept
+    {
+        const auto center = GetCenter();
+        const auto halfSize = GetHalfSize();
+        return Abs(point.x - center.x) < halfSize.x && Abs(point.y - center.y) < halfSize.y;
+    }
 };
 
 
@@ -31,6 +38,10 @@ struct Circle
     [[nodiscard]] constexpr Aabb<T> GetAabb() const
     {
         return Aabb<T>::FromCenter(position, { radius, radius });
+    }
+    [[nodiscard]] constexpr bool Contains(Vec2<T> point) const noexcept
+    {
+        return (point - position).SquareLength() < radius * radius;
     }
 };
 
@@ -53,7 +64,33 @@ template<typename T>
 constexpr bool Intersect(const Circle<T>& circle, const Aabb<T>& aabb)
 {
     const auto delta = aabb.GetCenter() - circle.position;
-    return Abs(delta.x) < aabb.GetHalfSize().x + circle.radius && Abs(delta.y) < aabb.GetHalfSize().y + circle.radius;
+    const auto halfSize = aabb.GetHalfSize();
+
+    const Aabb<T> aabb1{ {aabb.minBound.x-circle.radius, aabb.minBound.y}, {aabb.maxBound.x+circle.radius, aabb.maxBound.y} };
+    const Aabb<T> aabb2{ {aabb.minBound.x, aabb.minBound.y-circle.radius}, {aabb.maxBound.x, aabb.maxBound.y+circle.radius} };
+    if (aabb1.Contains(circle.position))
+    {
+        return true;
+    }
+    if(aabb2.Contains(circle.position))
+    {
+        return true;
+    }
+    const std::array<Vec2<T>, 4> edges =
+    {
+        aabb.minBound,
+        aabb.maxBound,
+        aabb.GetCenter()+Vec2<T>::up()*aabb.GetHalfSize().y,
+        aabb.GetCenter()+Vec2<T>::right()*aabb.GetHalfSize().x,
+    };
+    for(auto edge: edges)
+    {
+        if((edge-circle.position).SquareLength() < circle.radius*circle.radius)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 template<typename T>

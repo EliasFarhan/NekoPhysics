@@ -21,6 +21,13 @@ TEST(Aabb, WithCircle)
 
     constexpr neko::Circlef circle3{neko::Vec2f{neko::Scalar{2}, neko::Scalar{0}}, neko::Scalar{1.1f}};
     EXPECT_TRUE(neko::Intersect(aabb1, circle3));
+
+    constexpr neko::Circlef circle4{ neko::Vec2f{neko::Scalar{2.5f}, neko::Scalar{2.5f}}, neko::Scalar{1.5f} };
+    EXPECT_FALSE(neko::Intersect(aabb1, circle4));
+
+
+    constexpr neko::Circlef circle5{ neko::Vec2f{neko::Scalar{3.5f}, neko::Scalar{3.5f}}, neko::Scalar{3.0f} };
+    EXPECT_FALSE(neko::Intersect(aabb1, circle5));
 }
 
 int main(int argc, char **argv)
