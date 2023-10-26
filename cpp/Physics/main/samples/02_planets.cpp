@@ -94,15 +94,6 @@ void PlanetSample::Update(float dt)
             vertex.position.x = float{pos.x};
             vertex.position.y = float{pos.y};
         }
-
-        const auto firstIndex = i * (circleResolution + 1);
-        for (std::size_t j = 0; j < circleResolution; j++)
-        {
-            auto* indices = &indices_[i * circleResolution * 3 + j * 3];
-            indices[0] = (static_cast<int>(firstIndex));
-            indices[1] = (static_cast<int>(firstIndex + j + 1ull));
-            indices[2] = (static_cast<int>(firstIndex + (j == circleResolution - 1ull ? 1ull : 2ull + j)));
-        }
     }
 }
 

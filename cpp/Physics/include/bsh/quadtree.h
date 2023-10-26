@@ -11,9 +11,10 @@ namespace neko
 
 struct QuadNode
 {
+    QuadNode(Allocator& allocator);
     Aabbf aabb{};
     std::array<QuadNode*, 4> nodes{};
-    std::vector<ColliderAabb> colliders{};
+    ArrayList<ColliderAabb> colliders;
 };
 
 class QuadTree : public BoundingSurfaceHierarchy
@@ -26,19 +27,19 @@ public:
     void SetWorldAabb(const Aabbf& worldAabb) override;
     [[nodiscard]] const ArrayList<ColliderPair>& GetPossiblePairs() const override { return possiblePairs_; }
 
-    void Iterate(std::function<void(const QuadNode*)> func) const;
+    const QuadNode& GetRootNode() { return nodes_[0]; }
 
-    static constexpr std::size_t depth = 5;
-    static constexpr std::size_t maxSize = 16;
+    static constexpr std::size_t MAX_DEPTH = 7;
+    static constexpr std::size_t maxSize = 8;
 private:
-    void Insert(const ColliderAabb& colliderAabb, QuadNode* node);
+    void Insert(const ColliderAabb& colliderAabb, QuadNode* node, int depth);
     void GoDownTree(const QuadNode*);
     void InsertPairs(const QuadNode*, ColliderIndex);
     
     HeapAllocator heapAllocator_;
     ArrayList<ColliderPair> possiblePairs_{{heapAllocator_}};
-    std::size_t index_ = 1;
-    ArrayList<QuadNode> nodes_{{heapAllocator_}};
+    std::size_t nodeAllocationIndex_ = 1;
+    ArrayList<QuadNode> nodes_;
 };
 
 }

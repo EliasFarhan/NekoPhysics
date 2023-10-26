@@ -1,6 +1,9 @@
 #include "04_ground.h"
 
 #include <SDL_log.h>
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#endif
 
 namespace neko
 {

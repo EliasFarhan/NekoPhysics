@@ -9,6 +9,9 @@
 
 #include <imgui.h>
 
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#endif
 
 namespace neko
 {
@@ -23,6 +26,13 @@ SampleManager::SampleManager()
 
 void SampleManager::Update(float dt)
 {
+
+#ifdef TRACY_ENABLE
+    ZoneScoped;
+#endif
+
+//#define REAL_FIXED
+#ifdef REAL_FIXED
     fixedDt += dt;
     while (fixedDt > float{ Sample::fixedDeltaTime })
     {
@@ -32,6 +42,13 @@ void SampleManager::Update(float dt)
         }
         fixedDt -= float{ Sample::fixedDeltaTime };
     }
+#else
+    if (sampleIndex_ != INVALID_INDEX)
+    {
+        samples_[sampleIndex_].second->FixedUpdate();
+    }
+#endif
+
     if (sampleIndex_ != INVALID_INDEX)
     {
         samples_[sampleIndex_].second->Update(dt);
@@ -41,6 +58,9 @@ void SampleManager::Update(float dt)
 
 void SampleManager::Draw(SDL_Renderer* renderer)
 {
+#ifdef TRACY_ENABLE
+    ZoneScoped;
+#endif
     if (sampleIndex_ != INVALID_INDEX)
     {
         samples_[sampleIndex_].second->Draw(renderer);

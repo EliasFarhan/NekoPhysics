@@ -29,10 +29,17 @@ constexpr T quadCount(T n)
 }
 
 
-QuadTree::QuadTree()
+QuadNode::QuadNode(Allocator& allocator) : colliders(StandardAllocator<ColliderAabb>(allocator))
 {
-    possiblePairs_.reserve(pow(static_cast<std::size_t>(4), depth));
-    nodes_.resize(quadCount(depth), {});
+}
+
+QuadTree::QuadTree() : nodes_(StandardAllocator<QuadNode>(heapAllocator_))
+{
+#ifdef TRACY_ENABLE
+    ZoneScoped;
+#endif
+    possiblePairs_.reserve(pow(static_cast<std::size_t>(4), MAX_DEPTH));
+    nodes_.resize(quadCount(MAX_DEPTH), {heapAllocator_});
     for(auto& node : nodes_)
     {
         node.colliders.reserve(maxSize);
@@ -44,7 +51,8 @@ void QuadTree::Insert(const ColliderAabb& colliderAabb)
 #ifdef TRACY_ENABLE
     ZoneScoped;
 #endif
-    Insert(colliderAabb, nodes_.data());
+    //Insert into root node
+    Insert(colliderAabb, &nodes_[0], MAX_DEPTH);
 }
 
 void QuadTree::CalculatePairs()
@@ -57,7 +65,10 @@ void QuadTree::CalculatePairs()
 
 void QuadTree::Clear()
 {
-    index_ = 1;
+#ifdef TRACY_ENABLE
+    ZoneScoped;
+#endif
+    nodeAllocationIndex_ = 1;
     possiblePairs_.clear();
     for(auto& node: nodes_)
     {
@@ -71,11 +82,14 @@ void QuadTree::SetWorldAabb(const Aabbf& worldAabb)
     nodes_[0].aabb = worldAabb;
 }
 
-void QuadTree::Insert(const ColliderAabb& colliderAabb, QuadNode* node)
+void QuadTree::Insert(const ColliderAabb& colliderAabb, QuadNode* node, int depth)
 {
-    if(node->nodes[0] == nullptr)
+#ifdef TRACY_ENABLE
+    ZoneScoped;
+#endif
+    if(node->nodes[0] == nullptr && depth != 0)
     {
-       if(node->colliders.size() >= maxSize && index_ < nodes_.size())
+       if(node->colliders.size() >= maxSize && nodeAllocationIndex_ < nodes_.size())
        {
            //Break into 4 new nodes
 #ifdef TRACY_ENABLE
@@ -90,7 +104,7 @@ void QuadTree::Insert(const ColliderAabb& colliderAabb, QuadNode* node)
            };
            for(std::size_t i = 0; i < direction.size(); i++)
            {
-               node->nodes[i] = &nodes_[index_+i];
+               node->nodes[i] = &nodes_[nodeAllocationIndex_+i];
                node->nodes[i]->aabb = Aabbf::FromCenter(
                    node->aabb.GetCenter() + direction[i] * node->aabb.GetHalfSize()*Scalar{0.5f},
                    node->aabb.GetHalfSize()*Scalar{0.5f});
@@ -101,12 +115,12 @@ void QuadTree::Insert(const ColliderAabb& colliderAabb, QuadNode* node)
                tmp[i] = node->colliders[i];
            }
            node->colliders.clear();
-           index_ += 4;
+           nodeAllocationIndex_ += 4; // node index for quad node linear allocation
            for(const auto& localAabb: tmp)
            {
-               Insert(localAabb, node);
+               Insert(localAabb, node, depth);
            }
-           Insert(colliderAabb, node);
+           Insert(colliderAabb, node, depth);
        }
        else
        {
@@ -120,19 +134,21 @@ void QuadTree::Insert(const ColliderAabb& colliderAabb, QuadNode* node)
         QuadNode* insertNode = nullptr;
         for(const auto& childNode: node->nodes)
         {
+            if(childNode == nullptr)
+                continue;
             if(Intersect(colliderAabb.aabb, childNode->aabb))
             {
                 count++;
                 insertNode = childNode;
             }
         }
-        if(count > 1)
+        if(count > 1 || depth == 0)
         {
             node->colliders.push_back(colliderAabb);
         }
         else
         {
-            Insert(colliderAabb, insertNode);
+            Insert(colliderAabb, insertNode, depth-1);
         }
     }
 }
@@ -182,21 +198,5 @@ void QuadTree::InsertPairs(const QuadNode* node, ColliderIndex colliderIndex)
             InsertPairs(childNode, colliderIndex);
         }
     }
-}
-
-void QuadTree::Iterate(std::function<void(const QuadNode*)> func) const
-{
-    std::function<void(std::function<void(const QuadNode *)>, const QuadNode *)> iterateFunc = [&iterateFunc](
-            std::function<void(const QuadNode *)> func, const QuadNode *node)
-        {
-            func(node);
-            for (auto *child: node->nodes) {
-                if (child != nullptr) {
-                    iterateFunc(func, child);
-                }
-        }
-    };
-    iterateFunc(func, &nodes_[0]);
-
 }
 }

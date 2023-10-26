@@ -6,7 +6,7 @@
 namespace neko
 {
 
-using Scalar = Fixed16;
+using Scalar = float;
 
 
 struct BodyIndex
@@ -31,7 +31,7 @@ struct ShapeIndex
 
 constexpr auto INVALID_SHAPE_INDEX = ShapeIndex{ -1 };
 
-enum class ColliderType : short
+enum class ShapeType : short
 {
     AABB,
     CIRCLE,
@@ -55,7 +55,7 @@ struct ColliderPair
 {
     ColliderIndex c1{};
     ColliderIndex c2{};
-    constexpr bool operator ==(const ColliderPair& rhs) const
+    constexpr bool operator ==(const ColliderPair& rhs) const noexcept
     {
         return (c1 == rhs.c1 && c2 == rhs.c2) || (c1 == rhs.c2 && c2 == rhs.c1);
     }

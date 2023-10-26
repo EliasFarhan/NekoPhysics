@@ -34,8 +34,8 @@ TEST(Vec2f, Get)
 TEST(Vec2f, Set)
 {
     constexpr float x = 1.125f;
-    constexpr float newX = -1.125f;
     constexpr float y = -2.125f;
+    constexpr float newX = -1.125f;
     constexpr float newY = 2.125f;
 
     neko::Vec2f v{ neko::Scalar{x}, neko::Scalar{y} };

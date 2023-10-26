@@ -12,17 +12,21 @@ namespace neko
 {
 
 
-constexpr static std::size_t circleCount = 200;
+constexpr static std::size_t circleCount = 10'000;
 constexpr static std::size_t circleResolution = 30;
 constexpr static Scalar maxSpeed = Scalar{ 4 };
-constexpr static Scalar maxCircleRadius = Scalar{ 0.2f };
-constexpr static Scalar minCircleRadius = Scalar{ 0.1f };
+constexpr static Scalar maxCircleRadius = Scalar{ 0.02f };
+constexpr static Scalar minCircleRadius = Scalar{ 0.01f };
 constexpr static Scalar pixelPerMeter = Scalar{ 100.0f };
 constexpr static SDL_Color triggerColor{ 0,255,0,255 };
 constexpr static SDL_Color untriggerColor{ 255,0,0,255 };
 
 void TriggersSample::Begin()
 {
+
+#ifdef TRACY_ENABLE
+    ZoneScoped;
+#endif
     world_.SetContactListener(this);
     world_.SetBSH(&quadTree_);
     indices_.reserve(circleCount * (circleResolution * 3));
@@ -118,13 +122,17 @@ void TriggersSample::Update([[maybe_unused]]float dt)
 
 void TriggersSample::Draw(SDL_Renderer* renderer)
 {
+
+#ifdef TRACY_ENABLE
+    ZoneScoped;
+#endif
     if (SDL_RenderGeometry(renderer, nullptr,
         vertices_.data(), static_cast<int>(vertices_.size()),
         indices_.data(), static_cast<int>(indices_.size())))
     {
         SDL_Log("%s\n", SDL_GetError());
     }
-    auto func = [renderer](const QuadNode* node)
+    std::function<void(const QuadNode*)> drawQuad = [renderer, &drawQuad](const QuadNode* node)
     {
         const auto& aabb = node->aabb;
         const auto center = aabb.GetCenter();
@@ -144,11 +152,17 @@ void TriggersSample::Draw(SDL_Renderer* renderer)
             {
                 SDL_Log("%s\n", SDL_GetError());
             }
-
+        }
+        if(node->nodes[0] != nullptr)
+        {
+            for(const auto childNode : node->nodes)
+            {
+                drawQuad(childNode);
+            }
         }
     };
     SDL_SetRenderDrawColor(renderer, 255,255,255,255);
-    quadTree_.Iterate(func);
+    drawQuad(&quadTree_.GetRootNode());
 }
 
 void TriggersSample::End()

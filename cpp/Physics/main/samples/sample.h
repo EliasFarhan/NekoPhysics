@@ -21,7 +21,7 @@ public:
     virtual void End() = 0;
     virtual void DrawImGui(){}
 
-    static constexpr auto fixedDeltaTime = Scalar{ 1.0f / 120.0f };
+    static constexpr auto fixedDeltaTime = Scalar{ 1.0f / 60.0f };
 };
 
 class SampleManager

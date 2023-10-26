@@ -2,7 +2,6 @@
 
 
 #include "math/vec2.h"
-
 #include "math/shape.h"
 
 #include "physics_type.h"
@@ -45,7 +44,7 @@ struct Collider
     ColliderIndex colliderIndex{};
     ShapeIndex shapeIndex{};
     Scalar restitution{ 1 };
-    ColliderType type = ColliderType::NONE;
+    ShapeType type = ShapeType::NONE;
     bool isTrigger = true;
 };
 
@@ -71,7 +70,7 @@ public:
     explicit PhysicsWorld(Vec2f gravity);
     BodyIndex AddBody();
     void RemoveBody(BodyIndex index);
-    bool DetectCollision(Body& body1, Collider& collider1, Body& body2, Collider& collider2, Contact* contact);
+    bool DetectContact(Body& body1, Collider& collider1, Body& body2, Collider& collider2, Contact* contact);
     void Step(Scalar dt);
     void Clear();
     void ResolveBroadphase();
@@ -106,9 +105,10 @@ private:
     ArrayList<PlaneCollider> planes_{{heapAllocator_}};
     ArrayList<Collider> colliders_{{heapAllocator_}};
     std::unordered_set<ColliderPair, ColliderHash, std::equal_to<>, StandardAllocator<ColliderPair>>
-        manifold_{StandardAllocator<ColliderPair>{heapAllocator_}};
+        manifold_{manifoldBaseSize, StandardAllocator<ColliderPair>{heapAllocator_}};
 
     static constexpr Vec2f defaultGravity{Scalar{0.0f}, Scalar{ -9.81f }};
+    static constexpr auto manifoldBaseSize = 1000;
 
     ContactListener* contactListener_ = nullptr;
     BoundingSurfaceHierarchy* bsh_;

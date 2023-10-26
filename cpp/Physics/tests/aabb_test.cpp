@@ -9,6 +9,13 @@ TEST(Aabb, Same)
     EXPECT_TRUE(neko::Intersect(aabb1, aabb2));
 }
 
+TEST(Aabb, Inside)
+{
+    constexpr neko::Aabbf aabb1 = neko::Aabbf::FromCenter({}, neko::Vec2f(3, 1));
+    constexpr neko::Aabbf aabb2 = neko::Aabbf::FromCenter({}, neko::Vec2f(1, 3));
+    EXPECT_TRUE(neko::Intersect(aabb1, aabb2));
+}
+
 TEST(Aabb, WithCircle)
 {
     constexpr neko::Aabbf aabb1 = neko::Aabbf::FromCenter({}, neko::Vec2f::one());
