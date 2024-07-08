@@ -1,3 +1,12 @@
+
+option(USE_SAMPLES "Use Samples" OFF)
+if(USE_SAMPLES)
+    list(APPEND VCPKG_MANIFEST_FEATURES "samples")
+endif (USE_SAMPLES)
+option(USE_TESTING "Use Testing" OFF)
+if(USE_TESTING)
+    list(APPEND VCPKG_MANIFEST_FEATURES "tests")
+endif (USE_TESTING)
 cmake_minimum_required (VERSION 3.18)
 project(NekoPhysics)
 
@@ -6,8 +15,6 @@ set (CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-option(USE_SAMPLES "Use Samples" OFF)
-option(USE_TESTING "Use Testing" OFF)
 
 find_package (Python3 COMPONENTS Interpreter)
 if(NOT Python3_EXECUTABLE)

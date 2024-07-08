@@ -1,12 +1,9 @@
 {
     "name": "neko-physics",
     "version-string": "1.0",
-    "dependencies": [
-      "sdl2",
-      "gtest",
-      {
-        "name": "imgui",
-        "features": ["sdl2-binding", "opengl3-binding"]
+    "features": {
+      "tests" : {"description":  "Tests",
+        "dependencies": ["gtest"]},
+      "samples": {"description": "Samples", "dependencies": [{"name": "imgui", "features": ["sdl2-binding", "opengl3-binding"]}, "sdl2"] }
       }
-    ]
   }
