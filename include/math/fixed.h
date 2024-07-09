@@ -110,7 +110,6 @@ public:
 
     constexpr Fixed& operator/=(Fixed other)
     {
-        Fixed result;
         MulT leftOp = static_cast<MulT>(underlyingValue_) << static_cast<MulT>(Exp);
         MulT rightOp = static_cast<MulT>(other.underlyingValue_);
         underlyingValue_ = static_cast<T>((leftOp / rightOp));

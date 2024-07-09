@@ -42,7 +42,7 @@ QuadTree::QuadTree() : nodes_(StandardAllocator<QuadNode>(heapAllocator_))
     nodes_.resize(quadCount(MAX_DEPTH), {heapAllocator_});
     for(auto& node : nodes_)
     {
-        node.colliders.reserve(maxSize);
+        node.colliders.reserve(MAX_SIZE);
     }
 }
 
@@ -89,7 +89,7 @@ void QuadTree::Insert(const ColliderAabb& colliderAabb, QuadNode* node, int dept
 #endif
     if(node->nodes[0] == nullptr && depth != 0)
     {
-       if(node->colliders.size() >= maxSize && nodeAllocationIndex_ < nodes_.size())
+       if(node->colliders.size() >= MAX_SIZE && nodeAllocationIndex_ < nodes_.size())
        {
            //Break into 4 new nodes
 #ifdef TRACY_ENABLE
@@ -109,8 +109,8 @@ void QuadTree::Insert(const ColliderAabb& colliderAabb, QuadNode* node, int dept
                    node->aabb.GetCenter() + direction[i] * node->aabb.GetHalfSize()*Scalar{0.5f},
                    node->aabb.GetHalfSize()*Scalar{0.5f});
            }
-           std::array<ColliderAabb, maxSize> tmp;
-           for(std::size_t i = 0; i < maxSize; ++i)
+           std::array<ColliderAabb, MAX_SIZE> tmp;
+           for(std::size_t i = 0; i < MAX_SIZE; ++i)
            {
                tmp[i] = node->colliders[i];
            }

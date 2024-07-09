@@ -63,8 +63,6 @@ constexpr static bool Intersect(const Circle<T>& c1, const Circle<T>& c2)
 template<typename T>
 constexpr bool Intersect(const Circle<T>& circle, const Aabb<T>& aabb)
 {
-    const auto delta = aabb.GetCenter() - circle.position;
-    const auto halfSize = aabb.GetHalfSize();
 
     const Aabb<T> aabb1{ {aabb.minBound.x-circle.radius, aabb.minBound.y}, {aabb.maxBound.x+circle.radius, aabb.maxBound.y} };
     const Aabb<T> aabb2{ {aabb.minBound.x, aabb.minBound.y-circle.radius}, {aabb.maxBound.x, aabb.maxBound.y+circle.radius} };
