@@ -1,4 +1,5 @@
 #include "math/fixed_lut.h"
+#include "math/const.h"
 
 #include "generated/sin_const.h"
 #include "generated/cos_const.h"

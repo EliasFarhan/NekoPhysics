@@ -4,7 +4,7 @@
 #include <cmath>
 #include <algorithm>
 
-#include "physics/physics_type.h"
+#include "math/const.h"
 #include "math/fixed_lut.h"
 
 namespace neko

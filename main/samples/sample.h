@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "physics/physics_type.h"
+#include "math/const.h"
 
 namespace neko
 {

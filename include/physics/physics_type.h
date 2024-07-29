@@ -6,8 +6,6 @@
 namespace neko
 {
 
-using Scalar = float;
-
 
 struct BodyIndex
 {

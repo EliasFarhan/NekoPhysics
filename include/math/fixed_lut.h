@@ -40,16 +40,6 @@ T Cos(T value)
 template<>
 Fixed16 Cos(Fixed16 value);
 
-template<typename T>
-constexpr T Pi()
-{
-    return M_PI;
-}
 
-template<>
-constexpr inline Fixed16 Pi()
-{
-    return pi;
-}
 
 }
