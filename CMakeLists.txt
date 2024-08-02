@@ -25,7 +25,7 @@ execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scr
 if (MSVC)
     # warning level 4 and all warnings as errors
     add_compile_options(/W4 /w14640)
-    add_compile_definitions(_USE_MATH_DEFINES)
+    add_compile_definitions(_USE_MATH_DEFINES=1)
 else()
     # lots of warnings and all warnings as errors
     add_compile_options(-Wall -Wextra -Wshadow -Wnon-virtual-dtor)

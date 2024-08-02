@@ -1,11 +1,12 @@
 #pragma once
 
 #include <math/fixed.h>
+#include <cmath>
 
 namespace neko
 {
 
-using Scalar = float;
+using Scalar = Fixed16;
 
 template<typename T>
 constexpr T Pi()

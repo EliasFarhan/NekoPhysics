@@ -17,6 +17,8 @@ struct Vec2
     constexpr Vec2(T xArg, T yArg): x(xArg), y(yArg){}
     constexpr Vec2()= default;
     constexpr Vec2(T scalar): x(scalar), y(scalar){}
+	template<typename OtherT>
+	constexpr explicit Vec2(Vec2<OtherT> v): x(static_cast<T>(v.x)), y(static_cast<T>(v.y)){}
     constexpr Vec2 operator+(Vec2 other) const
     {
         return { x + other.x, y + other.y };
@@ -133,4 +135,6 @@ constexpr Vec2<T> operator*(Scalar f, Vec2<T> other)
 
 
 using Vec2f = Vec2<Scalar>;
+using Vec2u = Vec2<unsigned>;
+using Vec2i = Vec2<int>;
 } // namespace neko
