@@ -64,7 +64,7 @@ struct Vec2
         {
             return Vec2{ std::numeric_limits<T>::max(), std::numeric_limits<T>::max() };
         }
-        return Vec2{ x, y } * (T{1}/other);
+        return Vec2{ x/other, y/other };
     }
     constexpr Vec2& operator/=(T other)
     {
