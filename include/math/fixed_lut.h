@@ -8,7 +8,7 @@ namespace neko
 template<typename T>
 constexpr T Abs(T value)
 {
-    if(value >= T{0})
+    if(value >= T{0.0f})
         return value;
     return -value;
 }
