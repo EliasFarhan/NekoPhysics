@@ -6,11 +6,27 @@ namespace neko
 {
 
 template<typename T>
-T Abs(T value)
+constexpr T Abs(T value)
 {
     if(value >= T{0})
         return value;
     return -value;
+}
+
+template<typename T>
+constexpr T Clamp(T value, T minValue, T maxValue)
+{
+	if(value > maxValue)
+		return maxValue;
+	if(value < minValue)
+		return minValue;
+	return value;
+}
+
+template<typename T>
+constexpr T Max(T v1, T v2)
+{
+	return v1 > v2 ? v1 : v2;
 }
 
 template<typename T>

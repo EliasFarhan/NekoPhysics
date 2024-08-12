@@ -58,7 +58,7 @@ struct ColliderPair
         return (c1 == rhs.c1 && c2 == rhs.c2) || (c1 == rhs.c2 && c2 == rhs.c1);
     }
 
-    constexpr bool contains(ColliderIndex c) const
+    [[nodiscard]] constexpr bool contains(ColliderIndex c) const
     {
         return c == c1 || c == c2;
     }

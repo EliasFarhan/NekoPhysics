@@ -35,10 +35,12 @@ struct Body
     Vec2f force{};
     Scalar inverseMass{1};
     BodyType type = BodyType::DYNAMIC;
+	bool isActive = true;
 };
 
 struct Collider
 {
+	void* userData = nullptr;
     Vec2f offset{};
     BodyIndex bodyIndex{};
     ColliderIndex colliderIndex{};

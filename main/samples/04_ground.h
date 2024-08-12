@@ -22,6 +22,7 @@ private:
     std::vector<SDL_Vertex> vertices_;
     std::vector<int> indices_;
     BodyIndex circleBodyIndex_ = INVALID_BODY_INDEX;
+    BodyIndex rectBodyIndex_ = INVALID_BODY_INDEX;
     BodyIndex groundBodyIndex_ = INVALID_BODY_INDEX;
     int collisionCount = 0;
 };

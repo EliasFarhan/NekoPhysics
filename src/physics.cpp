@@ -72,6 +72,8 @@ bool PhysicsWorld::DetectContact(
     contact->bodies[0].collider = &collider1;
     contact->bodies[1].collider = &collider2;
 
+	contact->restitution = Max(collider1.restitution, collider2.restitution);
+
     const bool collision = !(collider1.isTrigger || collider2.isTrigger);
 
     switch (collider1.type)
@@ -84,46 +86,62 @@ bool PhysicsWorld::DetectContact(
             const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider1.offset, aabbs_[collider1.shapeIndex.index].halfSize);
             const Aabbf aabb2 = Aabbf::FromCenter(body2.position + collider2.offset, aabbs_[collider2.shapeIndex.index].halfSize);
             doesIntersect = Intersect(aabb1, aabb2);
+			if(collision)
+			{
+				const auto delta = aabb1.GetCenter()-aabb2.GetCenter();
+				contact->contactPoint = aabb1.GetCenter()+delta*neko::Scalar {0.5f};
+				const auto half1 = aabb1.GetHalfSize();
+				const auto half2 = aabb2.GetHalfSize();
+
+				const auto penetrationX = half1.x+half2.x-Abs(delta.x);
+				const auto penetrationY = half1.y+half2.y-Abs(delta.y);
+				if(penetrationX < penetrationY)
+				{
+					contact->contactNormal = delta.x > neko::Scalar{0} ? Vec2f::right() : Vec2f::left();
+					contact->penetration = penetrationX;
+				}
+				else
+				{
+					contact->contactNormal = delta.y > neko::Scalar{0} ? Vec2f::up() : Vec2f::down();
+					contact->penetration = penetrationY;
+				}
+			}
             break;
         }
         case ShapeType::CIRCLE:
         {
-            const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider1.offset, aabbs_[collider1.shapeIndex.index].halfSize);
-            const Circlef circle = Circlef{ body2.position + collider2.offset, circles_[collider2.shapeIndex.index].radius };
-            if(collision)
-            {
+			const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider1.offset, aabbs_[collider1.shapeIndex.index].halfSize);
+			const Circlef circle = Circlef{ body2.position + collider2.offset, circles_[collider2.shapeIndex.index].radius };
+			if(collision)
+			{
 
-                const auto delta = circle.position - aabb1.GetCenter();
-                const auto halfSize = aabb1.GetHalfSize();
-                Vec2f closestPoint{};
-                Scalar dist{};
+				const auto delta = circle.position - aabb1.GetCenter();
+				const auto halfSize = aabb1.GetHalfSize();
 
-                dist = delta.x;
-                if (delta.x > halfSize.x) dist = halfSize.x;
-                if (delta.x < -halfSize.x) dist = -halfSize.x;
-                closestPoint.x = dist;
+				Vec2f closestPoint = Vec2f::Clamp(delta, -halfSize, halfSize);
 
-                dist = delta.y;
-                if (delta.y > halfSize.y) dist = halfSize.y;
-                if (delta.y < -halfSize.y) dist = -halfSize.y;
-                closestPoint.y = dist;
+				Scalar dist = (closestPoint - delta).Length();
+				doesIntersect = dist <= circle.radius;
+				if (!doesIntersect)
+				{
+					break;
+				}
+				const auto closestPointWorld = aabb1.GetCenter() + closestPoint;
+				auto circleToRect = (circle.position - closestPointWorld);
+				if(circleToRect.Length() < Scalar{0.001f})
+				{
+					circleToRect = Vec2f::up();
+				}
+				contact->contactNormal = -circleToRect.Normalized();
+				contact->contactPoint = closestPointWorld;
+				contact->penetration = circle.radius - dist;
 
-                dist = (closestPoint - delta).Length();
-                doesIntersect = dist <= circle.radius;
-                if (!doesIntersect)
-                {
-                    break;
-                }
-                const auto closestPointWorld = aabb1.GetCenter() + closestPoint;
-                contact->contactNormal = (circle.position - closestPointWorld).Normalized();
-                contact->contactPoint = closestPointWorld;
-                contact->penetration = circle.radius - dist;
+			}
+			else
+			{
+				doesIntersect = Intersect(aabb1, circle);
+			}
 
-            }
-            else
-            {
-                doesIntersect = Intersect(aabb1, circle);
-            }
             break;
         }
         default: break;
@@ -134,7 +152,7 @@ bool PhysicsWorld::DetectContact(
         {
         case ShapeType::AABB:
         {
-            doesIntersect = DetectContact(body2, collider2, body1, collider1, contact);
+			doesIntersect = DetectContact(body2, collider2, body1, collider1, contact);
             break;
         }
         case ShapeType::CIRCLE:
@@ -192,8 +210,12 @@ void PhysicsWorld::ResolveNarrowphase(Scalar dt)
 
         auto& body1 = bodies_[collider1.bodyIndex.index];
         auto& body2 = bodies_[collider2.bodyIndex.index];
+		if(!body1.isActive || !body2.isActive)
+		{
+			continue;
+		}
         auto it = manifold_.find(newColliderPair);
-        Contact contact;
+        Contact contact{};
         const bool doesIntersect = DetectContact(body1, collider1, body2, collider2, &contact);
 
         if (it != manifold_.end())
@@ -403,6 +425,10 @@ void PhysicsWorld::Step(Scalar dt)
 
     for (auto& body : bodies_)
     {
+		if(!body.isActive)
+		{
+			continue;
+		}
         switch (body.type)
         {
         case BodyType::DYNAMIC:

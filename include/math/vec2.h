@@ -118,7 +118,7 @@ struct Vec2
     }
     [[nodiscard]] constexpr static Vec2 Clamp(Vec2 v, Vec2 minV, Vec2 maxV)
     {
-        return { std::clamp(v.x, minV.x, maxV.x), std::clamp(v.y, minV.y, maxV.y) };
+        return { neko::Clamp(v.x, minV.x, maxV.x), neko::Clamp(v.y, minV.y, maxV.y) };
     }
 
     constexpr bool operator==(Vec2 other) const

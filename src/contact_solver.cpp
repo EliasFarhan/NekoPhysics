@@ -8,7 +8,7 @@ namespace neko
 
 void Contact::Resolve(Scalar dt)
 {
-    if(bodies[0].body->type == BodyType::STATIC)
+    if(bodies[0].body->type == BodyType::STATIC || bodies[0].body->type == BodyType::KINEMATIC)
     {
         std::swap(bodies[0], bodies[1]);
         contactNormal = -contactNormal;
@@ -58,7 +58,7 @@ void Contact::ResolveInterpenetration([[maybe_unused]] Scalar dt) const
     if (totalInverseMass <= Scalar{0}) return;
     // Find the amount of penetration resolution per unit of inverse mass.
     const auto movePerIMass = contactNormal *
-        (-penetration / totalInverseMass);
+        (penetration / totalInverseMass);
     // Apply the penetration resolution.
     if (bodies[0].body->type == BodyType::DYNAMIC)
     {

@@ -4,6 +4,6 @@
     "features": {
       "tests" : {"description":  "Tests",
         "dependencies": ["gtest"]},
-      "samples": {"description": "Samples", "dependencies": [{"name": "imgui", "features": ["sdl2-binding", "opengl3-binding"]}, "sdl2"] }
+      "samples": {"description": "Samples", "dependencies": [{"name": "imgui", "features": ["sdl2-binding", "opengl3-binding"]}, "sdl2", "fmt"] }
       }
   }
