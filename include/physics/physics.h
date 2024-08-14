@@ -81,17 +81,17 @@ public:
     [[nodiscard]] Body& body(BodyIndex index) { return bodies_[index.index]; }
     [[nodiscard]] const Body& body(BodyIndex index) const { return bodies_[index.index]; }
 
-    ColliderIndex AddCircleCollider(BodyIndex body);
-    ColliderIndex AddAabbCollider(BodyIndex body);
-    ColliderIndex AddPlaneCollider(BodyIndex body);
+	ColliderIndex AddCircleCollider(BodyIndex body);
+	ColliderIndex AddAabbCollider(BodyIndex body);
+	ColliderIndex AddPlaneCollider(BodyIndex body);
 
-    Collider& collider(ColliderIndex colliderIndex) { return colliders_[colliderIndex.index]; }
-    const Collider& collider(ColliderIndex colliderIndex) const { return colliders_[colliderIndex.index]; }
+	[[nodiscard]] Collider& collider(ColliderIndex colliderIndex) { return colliders_[colliderIndex.index]; }
+	[[nodiscard]] const Collider& collider(ColliderIndex colliderIndex) const { return colliders_[colliderIndex.index]; }
 
-    AabbCollider& aabb(ShapeIndex shapeIndex) { return aabbs_[shapeIndex.index]; }
-    const AabbCollider& aabb(ShapeIndex shapeIndex) const { return aabbs_[shapeIndex.index]; }
-    CircleCollider& circle(ShapeIndex shapeIndex) { return circles_[shapeIndex.index]; }
-    const CircleCollider& circle(ShapeIndex shapeIndex) const { return circles_[shapeIndex.index]; }
+	[[nodiscard]] AabbCollider& aabb(ShapeIndex shapeIndex) { return aabbs_[shapeIndex.index]; }
+	[[nodiscard]] const AabbCollider& aabb(ShapeIndex shapeIndex) const { return aabbs_[shapeIndex.index]; }
+	[[nodiscard]] CircleCollider& circle(ShapeIndex shapeIndex) { return circles_[shapeIndex.index]; }
+    [[nodiscard]] const CircleCollider& circle(ShapeIndex shapeIndex) const { return circles_[shapeIndex.index]; }
     
     void RemoveAabbCollider(ColliderIndex index);
     void RemoveCircleCollider(ColliderIndex index);
@@ -99,6 +99,8 @@ public:
 
     void SetBSH(BoundingSurfaceHierarchy* boundingSurfaceHierarchy) { bsh_ = boundingSurfaceHierarchy; }
     void SetContactListener(ContactListener* contactListener) { contactListener_ = contactListener; }
+
+	[[nodiscard]] Vec2f gravity() const {return gravity_; }
 private:
     HeapAllocator heapAllocator_;
     ArrayList<Body> bodies_{{heapAllocator_}};

@@ -40,9 +40,9 @@ constexpr T Sign(T v1)
 {
 	if(v1 < T{0.0f})
 	{
-		return -v1;
+		return T{-1.0f};
 	}
-	return v1;
+	return T{1.0f};
 }
 
 template<typename T>
