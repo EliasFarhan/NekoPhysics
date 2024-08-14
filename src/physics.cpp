@@ -214,6 +214,10 @@ void PhysicsWorld::ResolveNarrowphase(Scalar dt)
 		{
 			continue;
 		}
+		if(collider1.bodyIndex == collider2.bodyIndex)
+		{
+			continue;
+		}
         auto it = manifold_.find(newColliderPair);
         Contact contact{};
         const bool doesIntersect = DetectContact(body1, collider1, body2, collider2, &contact);
