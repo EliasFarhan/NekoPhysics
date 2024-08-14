@@ -30,6 +30,22 @@ constexpr T Max(T v1, T v2)
 }
 
 template<typename T>
+constexpr T Min(T v1, T v2)
+{
+	return v1 < v2 ? v1 : v2;
+}
+
+template<typename T>
+constexpr T Sign(T v1)
+{
+	if(v1 < T{0.0f})
+	{
+		return -v1;
+	}
+	return v1;
+}
+
+template<typename T>
 T Sqrt(T value)
 {
     return std::sqrt(value);

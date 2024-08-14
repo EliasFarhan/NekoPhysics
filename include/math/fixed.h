@@ -34,6 +34,12 @@ public:
         underlyingValue_ = (Fixed{ up } / Fixed{down}).underlyingValue_;
     }
 
+	template<typename OtherT, OtherT OtherExp=16, typename OtherMulT>
+	constexpr explicit Fixed(Fixed<OtherT, OtherExp, OtherMulT> other)
+	{
+		underlyingValue_ = static_cast<T>(other.underlyingValue()) << (Exp-OtherExp);
+	}
+
     explicit constexpr operator float() const
     {
         return (static_cast<float>(underlyingValue_) / (1 << Exp));
@@ -167,8 +173,8 @@ public:
         f.underlyingValue_ = value;
         return f;
     }
-    [[nodiscard]] constexpr int underlyingValue() const { return underlyingValue_; }
-    [[nodiscard]] int& underlyingValue() { return underlyingValue_; }
+    [[nodiscard]] constexpr T underlyingValue() const { return underlyingValue_; }
+    [[nodiscard]] T& underlyingValue() { return underlyingValue_; }
 private:
     T underlyingValue_ = 0;
 };
