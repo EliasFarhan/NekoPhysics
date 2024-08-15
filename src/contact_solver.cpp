@@ -35,6 +35,10 @@ void Contact::ResolveVelocity([[maybe_unused]] Scalar dt) const
     const auto inverseMass1 = bodies[0].body->inverseMass;
     const auto inverseMass2 = bodies[1].body->inverseMass;
     const auto totalInverseMass = inverseMass1 + inverseMass2;
+	if(totalInverseMass == neko::Scalar {0})
+	{
+		return;
+	}
     const auto impulse = deltaVelocity / totalInverseMass;
     const auto impulsePerIMass = contactNormal * impulse;
     if (bodies[0].body->type == BodyType::DYNAMIC)

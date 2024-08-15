@@ -214,6 +214,10 @@ void PhysicsWorld::ResolveNarrowphase(Scalar dt)
 		{
 			continue;
 		}
+		if(body1.type == BodyType::STATIC && body2.type == BodyType::STATIC)
+		{
+			continue;
+		}
 		if(collider1.bodyIndex == collider2.bodyIndex)
 		{
 			continue;

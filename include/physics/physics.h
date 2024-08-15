@@ -40,7 +40,7 @@ struct Body
 
 struct Collider
 {
-	void* userData = nullptr;
+	const void* userData = nullptr;
     Vec2f offset{};
     BodyIndex bodyIndex{};
     ColliderIndex colliderIndex{};
