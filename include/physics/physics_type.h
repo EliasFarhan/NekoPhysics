@@ -45,6 +45,10 @@ struct ColliderIndex
     {
         return index == rhs.index;
     }
+	constexpr bool operator !=(const ColliderIndex& rhs) const
+	{
+		return index != rhs.index;
+	}
 };
 
 constexpr auto INVALID_COLLIDER_INDEX = ColliderIndex{ -1 };
