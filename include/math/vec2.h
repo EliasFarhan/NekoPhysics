@@ -125,6 +125,11 @@ struct Vec2
     {
         return x == other.x && y == other.y;
     }
+
+	constexpr bool operator!=(Vec2 other) const
+	{
+		return x != other.x || y != other.y;
+	}
 };
 
 template<typename T>

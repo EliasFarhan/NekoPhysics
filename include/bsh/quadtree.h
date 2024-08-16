@@ -27,7 +27,7 @@ public:
     void SetWorldAabb(const Aabbf& worldAabb) override;
     [[nodiscard]] const ArrayList<ColliderPair>& GetPossiblePairs() const override { return possiblePairs_; }
 
-    const QuadNode& GetRootNode() { return nodes_[0]; }
+    const QuadNode& GetRootNode() const { return nodes_[0]; }
 
     static constexpr std::size_t MAX_DEPTH = 7;
     static constexpr std::size_t MAX_SIZE = 8;

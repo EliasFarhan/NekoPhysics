@@ -524,6 +524,10 @@ void PhysicsWorld::ResolveBroadphase()
 
     for(const auto& collider : colliders_)
     {
+		if(!bodies_[collider.bodyIndex.index].isActive)
+		{
+			continue;
+		}
         switch(collider.type)
         {
         case ShapeType::AABB:
