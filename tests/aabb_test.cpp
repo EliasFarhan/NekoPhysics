@@ -11,8 +11,8 @@ TEST(Aabb, Same)
 
 TEST(Aabb, Inside)
 {
-    constexpr neko::Aabbf aabb1 = neko::Aabbf::FromCenter({}, neko::Vec2f(3, 1));
-    constexpr neko::Aabbf aabb2 = neko::Aabbf::FromCenter({}, neko::Vec2f(1, 3));
+    constexpr neko::Aabbf aabb1 = neko::Aabbf::FromCenter({}, neko::Vec2f(neko::Scalar {3}, neko::Scalar {1}));
+    constexpr neko::Aabbf aabb2 = neko::Aabbf::FromCenter({}, neko::Vec2f(neko::Scalar {1}, neko::Scalar {3}));
     EXPECT_TRUE(neko::Intersect(aabb1, aabb2));
 }
 
