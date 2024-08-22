@@ -101,6 +101,8 @@ public:
     void SetContactListener(ContactListener* contactListener) { contactListener_ = contactListener; }
 
 	[[nodiscard]] Vec2f gravity() const {return gravity_; }
+
+	void CopyFrom(const PhysicsWorld& physicsWorld);
 private:
     HeapAllocator heapAllocator_;
     ArrayList<Body> bodies_{{heapAllocator_}};

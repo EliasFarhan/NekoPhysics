@@ -553,4 +553,14 @@ void PhysicsWorld::ResolveBroadphase()
     bsh_->CalculatePairs();
 
 }
+
+void PhysicsWorld::CopyFrom(const PhysicsWorld& physicsWorld)
+{
+	bodies_ = physicsWorld.bodies_;
+	aabbs_ = physicsWorld.aabbs_;
+	circles_ = physicsWorld.circles_;
+	planes_ = physicsWorld.planes_;
+	colliders_ = physicsWorld.colliders_;
+	manifold_ = physicsWorld.manifold_;
+}
 } // namespace neko
