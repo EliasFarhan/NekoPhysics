@@ -245,7 +245,7 @@ void PhysicsWorld::ResolveNarrowphase(Scalar dt)
             {
                 if(!collider1.isTrigger && !collider2.isTrigger)
                 {
-                    //contact.Resolve(dt);
+                    contact.Resolve(dt);
 
                 }
             }

@@ -16,9 +16,11 @@ struct Vec2
 
     constexpr Vec2(T xArg, T yArg): x(xArg), y(yArg){}
     constexpr Vec2()= default;
-    constexpr Vec2(T scalar): x(scalar), y(scalar){}
+    constexpr explicit Vec2(T scalar): x(scalar), y(scalar){}
 	template<typename OtherT>
 	constexpr explicit Vec2(Vec2<OtherT> v): x(static_cast<T>(v.x)), y(static_cast<T>(v.y)){}
+	template<typename OtherT>
+	constexpr explicit Vec2(OtherT x, OtherT y): x(static_cast<T>(x)), y(static_cast<T>(y)){}
     constexpr Vec2 operator+(Vec2 other) const
     {
         return { x + other.x, y + other.y };
@@ -77,11 +79,11 @@ struct Vec2
         return v1.x * v2.x + v1.y * v2.y;
     }
     static constexpr Vec2 zero() { return {}; }
-    static constexpr Vec2 up() { return { Scalar{0},Scalar{1} }; }
-    static constexpr Vec2 down() { return { Scalar{0},Scalar{-1} }; }
-    static constexpr Vec2 left() { return { Scalar{-1},Scalar{0} }; }
-    static constexpr Vec2 right() { return { Scalar{1},Scalar{0} }; }
-    static constexpr Vec2 one() { return { Scalar{1},Scalar{1} }; }
+    static constexpr Vec2 up() { return Vec2{ Scalar{0},Scalar{1} }; }
+    static constexpr Vec2 down() { return Vec2{ Scalar{0},Scalar{-1} }; }
+    static constexpr Vec2 left() { return Vec2{ Scalar{-1},Scalar{0} }; }
+    static constexpr Vec2 right() { return Vec2{ Scalar{1},Scalar{0} }; }
+    static constexpr Vec2 one() { return Vec2{ Scalar{1},Scalar{1} }; }
 
     /**
      *  @brief Rotate the 2d vector of a radian angle
