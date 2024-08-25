@@ -77,11 +77,11 @@ struct Vec2
         return v1.x * v2.x + v1.y * v2.y;
     }
     static constexpr Vec2 zero() { return {}; }
-    static constexpr Vec2 up() { return { Scalar{0},Scalar{1} }; }
-    static constexpr Vec2 down() { return { Scalar{0},Scalar{-1} }; }
-    static constexpr Vec2 left() { return { Scalar{-1},Scalar{0} }; }
-    static constexpr Vec2 right() { return { Scalar{1},Scalar{0} }; }
-    static constexpr Vec2 one() { return { Scalar{1},Scalar{1} }; }
+    static constexpr Vec2 up() { return Vec2{ Scalar{0},Scalar{1} }; }
+    static constexpr Vec2 down() { return Vec2{ Scalar{0},Scalar{-1} }; }
+    static constexpr Vec2 left() { return Vec2{ Scalar{-1},Scalar{0} }; }
+    static constexpr Vec2 right() { return Vec2{ Scalar{1},Scalar{0} }; }
+    static constexpr Vec2 one() { return Vec2{ Scalar{1},Scalar{1} }; }
 
     /**
      *  @brief Rotate the 2d vector of a radian angle
