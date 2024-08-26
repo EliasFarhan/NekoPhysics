@@ -46,6 +46,12 @@ constexpr T Sign(T v1)
 }
 
 template<typename T>
+constexpr T Lerp(T begin, T end, T t)
+{
+	return (end-begin)*t+begin;
+}
+
+template<typename T>
 T Sqrt(T value)
 {
     return std::sqrt(value);
