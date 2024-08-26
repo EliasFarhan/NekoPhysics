@@ -183,6 +183,7 @@ using Fixed16 = Fixed<std::int32_t, 16, std::int64_t>;
 using Fixed8 = Fixed<std::int8_t, 6, std::int16_t>;
 
 constexpr Fixed pi = Fixed16::fromUnderlyingValue(205887);
+constexpr Fixed exp = Fixed16::fromUnderlyingValue(178145);
 
 
 } // namespace neko
