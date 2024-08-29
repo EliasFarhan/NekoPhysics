@@ -20,7 +20,7 @@ namespace neko
 {
 
 
-enum class BodyType
+enum class BodyType : std::uint8_t
 {
     DYNAMIC,
     KINEMATIC,
