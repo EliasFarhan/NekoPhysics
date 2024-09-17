@@ -14,19 +14,19 @@ class Fixed
 {
 public:
     constexpr Fixed() = default;
-    constexpr explicit Fixed(float f)
+
+	template<class OtherT>
+	requires std::is_floating_point_v<OtherT>
+    constexpr explicit Fixed(OtherT f)
     {
         underlyingValue_ = static_cast<T>((f) * (1 << Exp));
     }
 
-    constexpr explicit Fixed(std::size_t n)
+	template<class OtherT>
+	requires std::is_integral_v<OtherT>
+    constexpr explicit Fixed(OtherT n)
     {
         underlyingValue_ = static_cast<T>(n) << Exp;
-    }
-
-    constexpr explicit Fixed(T i)
-    {
-        underlyingValue_ = i * (1 << Exp); //for negative value of i, left shift is undefined behavior
     }
 
     constexpr explicit Fixed(T up, T down)
