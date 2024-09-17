@@ -11,7 +11,7 @@ using Scalar = Fixed16;
 template<typename T>
 constexpr T Pi()
 {
-    return M_PI;
+    return 3.14159265358979323846264338327950288;
 }
 
 template<typename T>
