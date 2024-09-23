@@ -223,12 +223,13 @@ void PhysicsWorld::ResolveNarrowphase(Scalar dt)
 			continue;
 		}
         const auto it = manifold_.find(newColliderPair);
-        Contact contact{};
-        const bool doesIntersect = DetectContact(body1, collider1, body2, collider2, &contact);
+
 
         if (it != manifold_.end())
         {
-            if (!doesIntersect)
+			Contact newContact{};
+			const bool doesIntersect = DetectContact(body1, collider1, body2, collider2, collider1.isTrigger || collider2.isTrigger? &newContact : &it->second.value());
+			if (!doesIntersect)
             {
                 if (collider1.isTrigger || collider2.isTrigger)
                 {
@@ -241,18 +242,20 @@ void PhysicsWorld::ResolveNarrowphase(Scalar dt)
                 //manifold_.erase(it);
                 removePairs.push_back(it->first);
             }
-            else
+			else
             {
                 if(!collider1.isTrigger && !collider2.isTrigger)
                 {
-                    contact.Resolve(dt);
-
+                    it->second->Resolve(dt);
                 }
             }
         }
         else
         {
-            if (doesIntersect)
+			Contact newContact{};
+			const bool doesIntersect = DetectContact(body1, collider1, body2, collider2, &newContact);
+
+			if (doesIntersect)
             {
                 if (collider1.isTrigger || collider2.isTrigger)
                 {
@@ -261,9 +264,9 @@ void PhysicsWorld::ResolveNarrowphase(Scalar dt)
                 }
                 else
                 {
-                    contact.Resolve(dt);
+                    newContact.Resolve(dt);
                     contactListener_->OnCollisionEnter(newColliderPair);
-					newPairs.emplace_back(newColliderPair, contact);
+					newPairs.emplace_back(newColliderPair, newContact);
                 }
                 //manifold_.insert(newColliderPair);
             }
