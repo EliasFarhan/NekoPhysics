@@ -5,15 +5,17 @@
 #include "math/shape.h"
 
 #include "physics_type.h"
+#include "contact_solver.h"
 #include "core/allocator.h"
 #include "contact_listener.h"
 #include "bsh/quadtree.h"
+#include <ankerl/unordered_dense.h>
 
 #include <vector>
-#include <unordered_set>
 #include <string>
+#include <numeric>
 
-#include "contact_solver.h"
+
 
 
 namespace neko
@@ -38,6 +40,21 @@ struct Body
 	bool isActive = true;
 };
 
+[[nodiscard]] constexpr std::uint32_t GenerateChecksum(const Body& body)
+{
+	std::uint32_t result = 0;
+	result += std::bit_cast<std::uint32_t>(body.position.x);
+	result += std::bit_cast<std::uint32_t>(body.position.y);
+	result += std::bit_cast<std::uint32_t>(body.velocity.x);
+	result += std::bit_cast<std::uint32_t>(body.velocity.y);
+	result += std::bit_cast<std::uint32_t>(body.force.x);
+	result += std::bit_cast<std::uint32_t>(body.force.y);
+	result += std::bit_cast<std::uint32_t>(body.inverseMass);
+	result += static_cast<std::uint32_t>(body.type);
+	result += static_cast<std::uint32_t>(body.isActive);
+	return result;
+}
+
 struct Collider
 {
 	const void* userData = nullptr;
@@ -49,21 +66,57 @@ struct Collider
     ShapeType type = ShapeType::NONE;
     bool isTrigger = true;
 };
+[[nodiscard]] constexpr std::uint32_t GenerateChecksum(const Collider& collider)
+{
+	std::uint32_t result = 0;
+	result += std::bit_cast<std::uint32_t>(collider.offset.x);
+	result += std::bit_cast<std::uint32_t>(collider.offset.y);
+	result += std::bit_cast<std::uint32_t>(collider.bodyIndex);
+	result += std::bit_cast<std::uint32_t>(collider.colliderIndex);
+	result += std::bit_cast<std::uint32_t>(collider.shapeIndex);
+	result += std::bit_cast<std::uint32_t>(collider.restitution);
+	result += static_cast<std::uint32_t>(collider.type);
+	result += static_cast<std::uint32_t>(collider.isTrigger);
+	return result;
+}
 
 struct CircleCollider
 {
     Scalar radius{ -1 };
 };
 
+[[nodiscard]] constexpr std::uint32_t GenerateChecksum(const CircleCollider& collider)
+{
+	std::uint32_t result = 0;
+	result += std::bit_cast<std::uint32_t>(collider.radius);
+	return result;
+}
+
 struct AabbCollider
 {
     Vec2f halfSize{ Scalar {-1}, Scalar {-1} };
 };
 
+[[nodiscard]] constexpr std::uint32_t GenerateChecksum(const AabbCollider& collider)
+{
+	std::uint32_t result = 0;
+	result += std::bit_cast<std::uint32_t>(collider.halfSize.x);
+	result += std::bit_cast<std::uint32_t>(collider.halfSize.y);
+	return result;
+}
+
 struct PlaneCollider
 {
     Vec2f normal{ Vec2f::zero() };
 };
+
+[[nodiscard]] constexpr std::uint32_t GenerateChecksum(const PlaneCollider& collider)
+{
+	std::uint32_t result = 0;
+	result += std::bit_cast<std::uint32_t>(collider.normal.x);
+	result += std::bit_cast<std::uint32_t>(collider.normal.y);
+	return result;
+}
 
 class PhysicsWorld
 {
@@ -110,8 +163,8 @@ private:
     ArrayList<CircleCollider> circles_{{heapAllocator_}};
     ArrayList<PlaneCollider> planes_{{heapAllocator_}};
     ArrayList<Collider> colliders_{{heapAllocator_}};
-    std::unordered_set<ColliderPair, ColliderHash, std::equal_to<>, StandardAllocator<ColliderPair>>
-        manifold_{manifoldBaseSize, StandardAllocator<ColliderPair>{heapAllocator_}};
+    ankerl::unordered_dense::map<ColliderPair, std::optional<Contact>, ColliderHash, std::equal_to<>, StandardAllocator<std::pair<ColliderPair, std::optional<Contact>>>>
+        manifold_{manifoldBaseSize, StandardAllocator<std::pair<ColliderPair, std::optional<Contact>>>{heapAllocator_}};
 
     static constexpr Vec2f defaultGravity{Scalar{0.0f}, Scalar{ -9.81f }};
     static constexpr auto manifoldBaseSize = 1000;

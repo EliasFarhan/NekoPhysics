@@ -22,16 +22,11 @@ if(NOT Python3_EXECUTABLE)
 endif()
 execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/gen_fixed_table.py" WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
-if (MSVC)
-    # warning level 4 and all warnings as errors
-    add_compile_options(/W4 /w14640)
-    add_compile_definitions(_USE_MATH_DEFINES=1)
-else()
-    # lots of warnings and all warnings as errors
-    add_compile_options(-Wall -Wextra -Wshadow -Wnon-virtual-dtor)
-endif()
+
 
 option(USE_TRACY "Use Tracy Profiler" OFF)
+
+add_subdirectory(externals/unordered_dense)
 
 if(USE_TRACY)
     add_subdirectory(externals/tracy)
@@ -41,11 +36,21 @@ endif()
 file(GLOB_RECURSE SRC_FILES src/*.cpp include/*.h)
 
 add_library(NekoPhysics ${SRC_FILES} )
+target_link_libraries(NekoPhysics PUBLIC unordered_dense)
 target_include_directories(NekoPhysics PUBLIC include/)
 link_directories(${CMAKE_BINARY_DIR})
 if(USE_TRACY)
     target_link_libraries(NekoPhysics PUBLIC TracyClient)
 endif()
+if (MSVC)
+    # warning level 4 and all warnings as errors
+    target_compile_options(NekoPhysics PRIVATE /W4 /w14640 /permissive-)
+    target_compile_definitions(NekoPhysics PRIVATE _USE_MATH_DEFINES=1)
+else()
+    # lots of warnings and all warnings as errors
+    target_compile_options(NekoPhysics PRIVATE -Wall -Wextra -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wunused -Werror)
+endif()
+
 #install(TARGETS NekoPhysics FILE_SET HEADERS)
 
 if(USE_SAMPLES)

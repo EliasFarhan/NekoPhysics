@@ -68,6 +68,14 @@ struct ColliderPair
     }
 };
 
+struct ColliderEqual
+{
+	bool operator()(const ColliderPair& lhs, const ColliderPair& rhs) const
+	{
+		return lhs == rhs;
+	}
+};
+
 struct ColliderHash
 {
     auto operator()(const ColliderPair& p) const noexcept

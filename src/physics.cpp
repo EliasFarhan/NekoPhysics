@@ -198,7 +198,7 @@ void PhysicsWorld::ResolveNarrowphase(Scalar dt)
         return;
     }
     const auto& newPossiblePairs = bsh_->GetPossiblePairs();
-    ArrayList<ColliderPair> newPairs{ {heapAllocator_} };
+    ArrayList<std::pair<ColliderPair, std::optional<Contact>>> newPairs{ {heapAllocator_} };
     ArrayList<ColliderPair> removePairs{ {heapAllocator_} };
     for(const auto& newColliderPair : newPossiblePairs)
     {
@@ -222,7 +222,7 @@ void PhysicsWorld::ResolveNarrowphase(Scalar dt)
 		{
 			continue;
 		}
-        auto it = manifold_.find(newColliderPair);
+        const auto it = manifold_.find(newColliderPair);
         Contact contact{};
         const bool doesIntersect = DetectContact(body1, collider1, body2, collider2, &contact);
 
@@ -239,7 +239,7 @@ void PhysicsWorld::ResolveNarrowphase(Scalar dt)
                     contactListener_->OnCollisionExit(newColliderPair);
                 }
                 //manifold_.erase(it);
-                removePairs.push_back(*it);
+                removePairs.push_back(it->first);
             }
             else
             {
@@ -257,13 +257,14 @@ void PhysicsWorld::ResolveNarrowphase(Scalar dt)
                 if (collider1.isTrigger || collider2.isTrigger)
                 {
                     contactListener_->OnTriggerEnter(newColliderPair);
+					newPairs.emplace_back(newColliderPair, std::nullopt);
                 }
                 else
                 {
                     contact.Resolve(dt);
                     contactListener_->OnCollisionEnter(newColliderPair);
+					newPairs.emplace_back(newColliderPair, contact);
                 }
-                newPairs.push_back(newColliderPair);
                 //manifold_.insert(newColliderPair);
             }
         }
