@@ -39,7 +39,7 @@ QuadTree::QuadTree() : nodes_(StandardAllocator<QuadNode>(heapAllocator_))
     ZoneScoped;
 #endif
     possiblePairs_.reserve(pow(static_cast<std::size_t>(4), MAX_DEPTH));
-    nodes_.resize(quadCount(MAX_DEPTH), {heapAllocator_});
+    nodes_.resize(quadCount(MAX_DEPTH), QuadNode{heapAllocator_});
     for(auto& node : nodes_)
     {
         node.colliders.reserve(MAX_SIZE);

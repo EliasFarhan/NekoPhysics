@@ -34,10 +34,10 @@ template<typename T>
 class StandardAllocator
 {
 public:
-    typedef T value_type;
-    StandardAllocator(Allocator& allocator);
+    using value_type = T;
+    explicit StandardAllocator(Allocator& allocator);
     template <class U>
-    StandardAllocator(const StandardAllocator<U>& allocator) noexcept : allocator_(allocator.GetAllocator()) {}
+    explicit StandardAllocator(const StandardAllocator<U>& allocator) noexcept : allocator_(allocator.GetAllocator()) {}
     T* allocate(std::size_t n);
     void deallocate(T* ptr, std::size_t n);
     [[nodiscard]] Allocator& GetAllocator() const { return allocator_; }

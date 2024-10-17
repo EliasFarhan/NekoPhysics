@@ -7,6 +7,12 @@ option(USE_TESTING "Use Testing" OFF)
 if(USE_TESTING)
     list(APPEND VCPKG_MANIFEST_FEATURES "tests")
 endif (USE_TESTING)
+
+option(USE_TRACY "Use Tracy Profiler" OFF)
+if(USE_TRACY)
+    list(APPEND VCPKG_MANIFEST_FEATURES "profiling")
+endif (USE_TRACY)
+
 cmake_minimum_required (VERSION 3.18)
 project(NekoPhysics)
 
@@ -24,13 +30,11 @@ execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scr
 
 
 
-option(USE_TRACY "Use Tracy Profiler" OFF)
 
 add_subdirectory(externals/unordered_dense)
 
 if(USE_TRACY)
-    add_subdirectory(externals/tracy)
-    set_target_properties (TracyClient PROPERTIES FOLDER Externals/)
+    find_package(Tracy CONFIG REQUIRED)
 endif()
 
 file(GLOB_RECURSE SRC_FILES src/*.cpp include/*.h)
@@ -40,7 +44,8 @@ target_link_libraries(NekoPhysics PUBLIC unordered_dense)
 target_include_directories(NekoPhysics PUBLIC include/)
 link_directories(${CMAKE_BINARY_DIR})
 if(USE_TRACY)
-    target_link_libraries(NekoPhysics PUBLIC TracyClient)
+    target_link_libraries(NekoPhysics PUBLIC Tracy::TracyClient)
+    target_compile_definitions(NekoPhysics PRIVATE TRACY_ENABLE)
 endif()
 if (MSVC)
     # warning level 4 and all warnings as errors
@@ -54,7 +59,6 @@ endif()
 #install(TARGETS NekoPhysics FILE_SET HEADERS)
 
 if(USE_SAMPLES)
-    find_package(OpenGL REQUIRED)
     find_package(SDL2 CONFIG REQUIRED)
     find_package(imgui CONFIG REQUIRED)
     find_package(fmt CONFIG REQUIRED)

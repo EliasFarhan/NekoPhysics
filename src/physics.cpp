@@ -198,8 +198,9 @@ void PhysicsWorld::ResolveNarrowphase(Scalar dt)
         return;
     }
     const auto& newPossiblePairs = bsh_->GetPossiblePairs();
-    ArrayList<std::pair<ColliderPair, std::optional<Contact>>> newPairs{ {heapAllocator_} };
-    ArrayList<ColliderPair> removePairs{ {heapAllocator_} };
+    ArrayList<std::pair<ColliderPair, std::optional<Contact>>> newPairs{
+        StandardAllocator<std::pair<ColliderPair, std::optional<Contact>>>{heapAllocator_} };
+    ArrayList<ColliderPair> removePairs{ StandardAllocator<ColliderPair>{heapAllocator_} };
     for(const auto& newColliderPair : newPossiblePairs)
     {
 #ifdef TRACY_ENABLE

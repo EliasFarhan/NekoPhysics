@@ -11,7 +11,7 @@ namespace neko
 
 struct QuadNode
 {
-    QuadNode(Allocator& allocator);
+    explicit QuadNode(Allocator& allocator);
     Aabbf aabb{};
     std::array<QuadNode*, 4> nodes{};
     ArrayList<ColliderAabb> colliders;
@@ -27,7 +27,7 @@ public:
     void SetWorldAabb(const Aabbf& worldAabb) override;
     [[nodiscard]] const ArrayList<ColliderPair>& GetPossiblePairs() const override { return possiblePairs_; }
 
-    const QuadNode& GetRootNode() const { return nodes_[0]; }
+    [[nodiscard]] const QuadNode& GetRootNode() const { return nodes_[0]; }
 
     static constexpr std::size_t MAX_DEPTH = 7;
     static constexpr std::size_t MAX_SIZE = 8;
@@ -37,7 +37,7 @@ private:
     void InsertPairs(const QuadNode*, ColliderIndex);
     
     HeapAllocator heapAllocator_;
-    ArrayList<ColliderPair> possiblePairs_{{heapAllocator_}};
+    ArrayList<ColliderPair> possiblePairs_{StandardAllocator<ColliderPair>{heapAllocator_}};
     std::size_t nodeAllocationIndex_ = 1;
     ArrayList<QuadNode> nodes_;
 };

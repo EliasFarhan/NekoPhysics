@@ -6,8 +6,10 @@
 #include "03_triggers.h"
 #include "04_ground.h"
 #include "05_collisions.h"
+#include "06_move_into.h"
 
 #include <imgui.h>
+
 
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
@@ -22,6 +24,7 @@ SampleManager::SampleManager()
     samples_.emplace_back("03 Triggers", std::make_unique<TriggersSample>());
     samples_.emplace_back("04 Ground", std::make_unique<GroundSample>());
     samples_.emplace_back("05 Collisions", std::make_unique<CollisionsSample>());
+    samples_.emplace_back("06 Move Into", std::make_unique<MoveIntoSample>());
 }
 
 void SampleManager::Update(float dt)

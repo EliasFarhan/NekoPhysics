@@ -2,8 +2,8 @@
     "name": "neko-physics",
     "version-string": "1.0",
     "features": {
-      "tests" : {"description":  "Tests",
-        "dependencies": ["gtest"]},
-      "samples": {"description": "Samples", "dependencies": [{"name": "imgui", "features": ["sdl2-binding", "opengl3-binding"]}, "sdl2", "fmt"] }
+      "tests" : {"description":  "Tests", "dependencies": ["gtest"]},
+      "profiling" : {"description":  "Profiling", "dependencies": ["tracy"]},
+      "samples": {"description": "Samples", "dependencies": [{"name": "imgui", "features": ["sdl2-binding", "sdl2-renderer-binding"]}, "sdl2", "fmt"] }
       }
   }

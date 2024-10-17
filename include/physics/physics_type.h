@@ -9,7 +9,7 @@ namespace neko
 
 struct BodyIndex
 {
-    int index = -1;
+    std::int32_t index = -1;
     constexpr bool operator ==(const BodyIndex& rhs) const
     {
         return index == rhs.index;
@@ -20,7 +20,7 @@ constexpr auto INVALID_BODY_INDEX = BodyIndex{ -1 };
 
 struct ShapeIndex
 {
-    int index = -1;
+    std::int32_t index = -1;
     constexpr bool operator ==(const ShapeIndex& rhs) const
     {
         return index == rhs.index;
@@ -39,7 +39,7 @@ enum class ShapeType : short
 
 struct ColliderIndex
 {
-    int index = -1;
+    std::int32_t index = -1;
    
     constexpr bool operator ==(const ColliderIndex& rhs) const
     {

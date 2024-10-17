@@ -158,11 +158,11 @@ public:
 	void CopyFrom(const PhysicsWorld& physicsWorld);
 private:
     HeapAllocator heapAllocator_;
-    ArrayList<Body> bodies_{{heapAllocator_}};
-    ArrayList<AabbCollider> aabbs_{{heapAllocator_}};
-    ArrayList<CircleCollider> circles_{{heapAllocator_}};
-    ArrayList<PlaneCollider> planes_{{heapAllocator_}};
-    ArrayList<Collider> colliders_{{heapAllocator_}};
+    ArrayList<Body> bodies_{StandardAllocator<Body>{heapAllocator_}};
+    ArrayList<AabbCollider> aabbs_{StandardAllocator<AabbCollider>{heapAllocator_}};
+    ArrayList<CircleCollider> circles_{StandardAllocator<CircleCollider>{heapAllocator_}};
+    ArrayList<PlaneCollider> planes_{StandardAllocator<PlaneCollider>{heapAllocator_}};
+    ArrayList<Collider> colliders_{StandardAllocator<Collider>{heapAllocator_}};
     ankerl::unordered_dense::map<ColliderPair, std::optional<Contact>, ColliderHash, std::equal_to<>, StandardAllocator<std::pair<ColliderPair, std::optional<Contact>>>>
         manifold_{manifoldBaseSize, StandardAllocator<std::pair<ColliderPair, std::optional<Contact>>>{heapAllocator_}};
 
