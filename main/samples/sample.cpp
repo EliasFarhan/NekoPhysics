@@ -34,7 +34,7 @@ void SampleManager::Update(float dt)
     ZoneScoped;
 #endif
 
-//#define REAL_FIXED
+#define REAL_FIXED
 #ifdef REAL_FIXED
     fixedDt += dt;
     while (fixedDt > float{ Sample::fixedDeltaTime })

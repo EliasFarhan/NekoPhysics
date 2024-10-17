@@ -6,6 +6,7 @@
 #include <imgui.h>
 #include <imgui_impl_sdl2.h>
 #include <imgui_impl_sdlrenderer2.h>
+#include <fmt/format.h>
 
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
@@ -24,12 +25,16 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 	SDL_Window* window = SDL_CreateWindow("Neko Physics Sample",
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
-		1280, 720, SDL_WINDOW_RESIZABLE );
+		1280, 720,
+		SDL_WINDOW_RESIZABLE );
 
 
 
 	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-	
+	SDL_RendererInfo info;
+	SDL_GetRendererInfo(renderer, &info);
+
+	fmt::println("Renderer: {}", info.name);
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
@@ -78,23 +83,23 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 		sampleManager.DrawImGui();
 
 
-		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 		SDL_RenderClear(renderer);
 
 		sampleManager.Draw(renderer);
 
 		ImGui::Render();
-		ImGuiIO& io = ImGui::GetIO();
 		SDL_RenderSetScale(renderer,
 			io.DisplayFramebufferScale.x,
 			io.DisplayFramebufferScale.y);
 		//Update screen
 		ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer);
+		SDL_RenderPresent(renderer);
+
+		lastTick = currentTick;
 #ifdef TRACY_ENABLE
 		FrameMark;
 #endif
-		lastTick = currentTick;
-
 
 	}
 	ImGui_ImplSDLRenderer2_Shutdown();

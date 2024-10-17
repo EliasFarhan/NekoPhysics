@@ -55,7 +55,8 @@ TEST(PhysicsWorld, TwoBodiesOneFrame)
     }
 
     neko::HeapAllocator allocator_;
-    ArrayList<neko::ColliderPair> pairs{ {neko::ColliderPair{c1, c2}}, allocator_ };
+    ArrayList<neko::ColliderPair> pairs((neko::StandardAllocator<neko::ColliderPair>(allocator_)));
+	pairs.emplace_back(c1, c2);
 
     MockBSH bsh;
     //Order for Clear and SetWorldAabb is not constrained, but need to be called before Insert
