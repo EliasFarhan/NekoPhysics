@@ -29,6 +29,7 @@ constexpr static Vec2f worldCenter = { Scalar{12.8f / 2.0f}, Scalar{7.2f / 2.0f}
 constexpr static Vec2f groundPosition = worldCenter+Vec2f{Scalar{0}, Scalar{3}};
 constexpr static Vec2f dynamicRectPosition = worldCenter-Vec2f{Scalar{-2}, Scalar{3}};
 constexpr static Vec2f staticRectPosition = worldCenter-Vec2f{Scalar{2}, Scalar{3}};
+constexpr static auto maxForce = neko::Scalar{10.0f};
 
 void MoveIntoSample::OnTriggerEnter(const ColliderPair& p)
 {
@@ -193,8 +194,13 @@ void MoveIntoSample::FixedUpdate()
 		Body& dynamicBody = world_.body(dynamicBodyIndex);
 		//Move dynamic object to the right
 		constexpr neko::Vec2f wantedVelocity{Scalar{-1}, Scalar{}};
-		dynamicBody.force += (wantedVelocity-dynamicBody.velocity)/fixedDeltaTime/dynamicBody.inverseMass;
-		fmt::print("Dynamic Player Pos: {}, Player Velocity: {}\n", (float)dynamicBody.position.x, (float)dynamicBody.velocity.x);
+		auto force = (wantedVelocity-dynamicBody.velocity)/fixedDeltaTime/dynamicBody.inverseMass;
+		if(force.SquareLength() > maxForce*maxForce)
+		{
+			force = force.Normalized()*maxForce;
+		}
+		dynamicBody.force += force;
+		fmt::print("Dynamic Player Pos: {}, Player Velocity: {}, Player Force: {}\n", (float)dynamicBody.position.x, (float)dynamicBody.velocity.x, (float)dynamicBody.force.x);
 
 	}
 	if(staticBodyOnGround_)
@@ -203,8 +209,13 @@ void MoveIntoSample::FixedUpdate()
 		Body& staticBody = world_.body(staticBodyIndex);
 		//Move dynamic object to the right
 		constexpr neko::Vec2f wantedVelocity{};
-		staticBody.force += (wantedVelocity-staticBody.velocity)/fixedDeltaTime/staticBody.inverseMass;
-		fmt::print("Static Player Pos: {}, Player Velocity: {}\n", (float)staticBody.position.x, (float)staticBody.velocity.x);
+		auto force = (wantedVelocity-staticBody.velocity)/fixedDeltaTime/staticBody.inverseMass;
+		if(force.SquareLength() > maxForce*maxForce)
+		{
+			force = force.Normalized()*maxForce;
+		}
+		staticBody.force += force;
+		fmt::print("Static Player Pos: {}, Player Velocity: {}, Player Force: {}\n", (float)staticBody.position.x, (float)staticBody.velocity.x, (float)staticBody.force.x);
 
 	}
 
