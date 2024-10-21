@@ -19,6 +19,14 @@ struct Vec2
     constexpr Vec2(T scalar): x(scalar), y(scalar){}
 	template<typename OtherT>
 	constexpr explicit Vec2(Vec2<OtherT> v): x(static_cast<T>(v.x)), y(static_cast<T>(v.y)){}
+
+	template<typename OtherT>
+	constexpr explicit Vec2(const OtherT& v)
+	{
+		x = static_cast<T>(v.x);
+		y = static_cast<T>(v.x);
+	}
+
 	template<typename OtherT>
 	constexpr explicit Vec2(OtherT x, OtherT y): x(static_cast<T>(x)), y(static_cast<T>(y)){}
     constexpr Vec2 operator+(Vec2 other) const

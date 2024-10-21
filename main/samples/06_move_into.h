@@ -8,7 +8,7 @@
 namespace neko
 {
 
-#define USE_BOX2D
+//#define USE_BOX2D
 class MoveIntoSample final : public Sample,
 #ifndef USE_BOX2D
 	public ContactListener
@@ -54,7 +54,7 @@ private:
 	ColliderIndex dynamicColliderIndex_ = INVALID_COLLIDER_INDEX;
 #else
 	//Box 2d version
-	b2World b2World_{b2Vec2{0.0f,-9.81f}};
+	b2World b2World_{b2Vec2{0.0f,9.81f}};
 	b2Body* b2groundBody_;
 	b2Body* b2staticBody_;
 	b2Body* b2dynamicBody_;
