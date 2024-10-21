@@ -35,6 +35,12 @@ TEST_P(FixedIntOperationFixture, Sub)
     const auto result = f1 - f2;
     EXPECT_EQ(i1 - i2, static_cast<std::int32_t>(result));
 
+
+	const auto neg1 = -f1;
+	const auto neg2 = -f2;
+	EXPECT_EQ(-i1, static_cast<std::int32_t>(neg1));
+	EXPECT_EQ(-i2, static_cast<std::int32_t>(neg2));
+
 }
 
 TEST_P(FixedIntOperationFixture, Mul)
@@ -102,6 +108,7 @@ TEST_P(FixedFloatOperationFixture, Sub)
     const auto f2 = neko::Fixed{ i2 };
     const auto result = f1 - f2;
     EXPECT_NEAR(i1 - i2, static_cast<float>(result), epsilon);
+
 
 }
 
