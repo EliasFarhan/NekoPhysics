@@ -4,6 +4,6 @@
     "features": {
       "tests" : {"description":  "Tests", "dependencies": ["gtest"]},
       "profiling" : {"description":  "Profiling", "dependencies": ["tracy"]},
-      "samples": {"description": "Samples", "dependencies": [{"name": "imgui", "features": ["sdl2-binding", "sdl2-renderer-binding"]}, "sdl2", "fmt"] }
+      "samples": {"description": "Samples", "dependencies": [{"name": "imgui", "features": ["sdl2-binding", "sdl2-renderer-binding"]}, "sdl2", "fmt", "box2d"] }
       }
   }

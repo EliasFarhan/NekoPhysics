@@ -6,6 +6,7 @@
 
 #include <SDL_log.h>
 #include <fmt/format.h>
+#include <box2d/b2_contact.h>
 
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
@@ -30,6 +31,7 @@ constexpr static Vec2f groundPosition = worldCenter+Vec2f{Scalar{0}, Scalar{3}};
 constexpr static Vec2f dynamicRectPosition = worldCenter-Vec2f{Scalar{-2}, Scalar{3}};
 constexpr static Vec2f staticRectPosition = worldCenter-Vec2f{Scalar{2}, Scalar{3}};
 
+#ifndef USE_BOX2D
 void MoveIntoSample::OnTriggerEnter(const ColliderPair& p)
 {
 }
@@ -56,16 +58,29 @@ void MoveIntoSample::OnCollisionEnter(const ColliderPair& p)
 void MoveIntoSample::OnCollisionExit(const ColliderPair& p)
 {
 }
+#else
+/// Called when two fixtures begin to touch.
+void MoveIntoSample::BeginContact(b2Contact* contact)
+{
+}
 
+/// Called when two fixtures cease to touch.
+void MoveIntoSample::EndContact(b2Contact* contact)
+{
+}
+#endif
 void MoveIntoSample::Begin()
 {
-	world_.SetContactListener(this);
-	world_.SetBSH(&quadTree_);
+
 	indices_.reserve( quadResolution*3);
 	vertices_.reserve( quadVertexCount);
-
+#ifndef USE_BOX2D
+	world_.SetContactListener(this);
+	world_.SetBSH(&quadTree_);
+#endif
 	//Implement ground
 	{
+#ifndef USE_BOX2D
 		groundBodyIndex_ = world_.AddBody();
 		Body& body = world_.body(groundBodyIndex_);
 		body.position = groundPosition;
@@ -79,7 +94,11 @@ void MoveIntoSample::Begin()
 		aabbCollider.halfSize = groundHalfSize;
 		collider.isTrigger = false;
 		collider.restitution = neko::Scalar {0};
-
+#else
+		b2BodyDef bodyDef{};
+		bodyDef.position = (b2Vec2)groundPosition;
+		b2groundBody_ = b2World_.CreateBody()
+#endif
 		constexpr std::array<Vec2f, 4> vertices =
 		{
 			Vec2f{-groundHalfSize.x, -groundHalfSize.y},
