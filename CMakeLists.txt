@@ -8,10 +8,10 @@ if(USE_TESTING)
     list(APPEND VCPKG_MANIFEST_FEATURES "tests")
 endif (USE_TESTING)
 
-option(USE_TRACY "Use Tracy Profiler" OFF)
-if(USE_TRACY)
+option(ENABLE_PROFILING "Use Tracy Profiler" OFF)
+if(ENABLE_PROFILING)
     list(APPEND VCPKG_MANIFEST_FEATURES "profiling")
-endif (USE_TRACY)
+endif (ENABLE_PROFILING)
 
 cmake_minimum_required (VERSION 3.18)
 project(NekoPhysics)
@@ -33,7 +33,7 @@ execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scr
 
 add_subdirectory(externals/unordered_dense)
 
-if(USE_TRACY)
+if(ENABLE_PROFILING)
     find_package(Tracy CONFIG REQUIRED)
 endif()
 
@@ -43,7 +43,7 @@ add_library(NekoPhysics ${SRC_FILES} )
 target_link_libraries(NekoPhysics PUBLIC unordered_dense)
 target_include_directories(NekoPhysics PUBLIC include/)
 link_directories(${CMAKE_BINARY_DIR})
-if(USE_TRACY)
+if(ENABLE_PROFILING)
     target_link_libraries(NekoPhysics PUBLIC Tracy::TracyClient)
     target_compile_definitions(NekoPhysics PRIVATE TRACY_ENABLE)
 endif()
