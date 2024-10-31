@@ -70,7 +70,7 @@ void Contact::ResolveInterpenetration([[maybe_unused]] Scalar dt) const
     }
     if (bodies[1].body->type == BodyType::DYNAMIC)
     {
-        bodies[1].body->position = bodies[1].body->position + movePerIMass * inverseMass2;
+        bodies[1].body->position = bodies[1].body->position - movePerIMass * inverseMass2;
     }
 } // namespace neko
 }

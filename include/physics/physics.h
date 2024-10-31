@@ -113,8 +113,8 @@ struct PlaneCollider
 [[nodiscard]] constexpr std::uint32_t GenerateChecksum(const PlaneCollider& collider)
 {
 	std::uint32_t result = 0;
-	result += std::bit_cast<std::uint32_t>(collider.normal.x.underlyingValue());
-	result += std::bit_cast<std::uint32_t>(collider.normal.y.underlyingValue());
+	result += std::bit_cast<std::uint32_t>(collider.normal.x);
+	result += std::bit_cast<std::uint32_t>(collider.normal.y);
 	return result;
 }
 

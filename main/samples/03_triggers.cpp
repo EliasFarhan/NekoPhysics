@@ -12,7 +12,7 @@ namespace neko
 {
 
 
-constexpr static std::size_t circleCount = 10'000;
+constexpr static std::size_t circleCount = 1'000;
 constexpr static std::size_t circleResolution = 30;
 constexpr static Scalar maxSpeed = Scalar{ 4 };
 constexpr static Scalar maxCircleRadius = Scalar{ 0.02f };

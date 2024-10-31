@@ -87,7 +87,7 @@ void GroundSample::Begin()
         circleCollider.radius = circleRadius;
         collider.isTrigger = false;
 
-		collider.restitution = neko::Scalar {0};
+		collider.restitution = neko::Scalar {0.5f};
 
         for (std::size_t j = 0; j < circleResolution + 1; j++)
         {
