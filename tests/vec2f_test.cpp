@@ -52,7 +52,7 @@ TEST(Vec2f, Add)
     constexpr neko::Vec2f v1{neko::Scalar{1.0f}, neko::Scalar{ 2.1f} };
     constexpr neko::Vec2f v2{neko::Scalar{1.3f}, neko::Scalar{-2.4f} };
 
-    constexpr auto result = v1 + v2;
+    auto result = v1 + v2;
     EXPECT_FLOAT_EQ(float{ result.x }, float{ v1.x + v2.x });
     EXPECT_FLOAT_EQ(float{ result.y }, float{ v1.y + v2.y });
 
@@ -68,11 +68,11 @@ TEST(Vec2f, Sub)
     constexpr neko::Vec2f v1{ neko::Scalar{1.0f}, neko::Scalar{2.1f} };
     constexpr neko::Vec2f v2{ neko::Scalar{1.3f}, neko::Scalar{-2.4f }};
 
-    constexpr auto result = v1 - v2;
+    auto result = v1 - v2;
     EXPECT_FLOAT_EQ(float{result.x}, float{v1.x - v2.x});
     EXPECT_FLOAT_EQ(float{result.y}, float{v1.y - v2.y});
 
-    constexpr auto neg = -v1;
+    auto neg = -v1;
     EXPECT_FLOAT_EQ(float{neg.x}, float{-v1.x});
     EXPECT_FLOAT_EQ(float{neg.y}, float{-v1.y});
 
@@ -87,13 +87,13 @@ TEST(Vec2f, Mul)
     constexpr neko::Vec2f v1{neko::Scalar{1.0f}, neko::Scalar{2.1f} };
     constexpr neko::Vec2f v2{neko::Scalar{1.3f}, neko::Scalar{-2.4f} };
 
-    constexpr auto result1 = v1 * v2;
+    auto result1 = v1 * v2;
     EXPECT_FLOAT_EQ(float{result1.x}, float{v1.x * v2.x});
     EXPECT_FLOAT_EQ(float{result1.y}, float{v1.y * v2.y});
 
     constexpr neko::Scalar f{3.141f};
 
-    constexpr auto result2 = v1 * f;
+    auto result2 = v1 * f;
     EXPECT_FLOAT_EQ(float{result2.x}, float{v1.x * f});
     EXPECT_FLOAT_EQ(float{result2.y}, float{v1.y * f});
 
@@ -109,7 +109,7 @@ TEST(Vec2f, Div)
 
     constexpr neko::Scalar f{3.141f};
 
-    constexpr auto result = v1 / f;
+    auto result = v1 / f;
     EXPECT_FLOAT_EQ(float{ result.x }, float{ v1.x * (neko::Scalar{1} / f) });
     EXPECT_FLOAT_EQ(float{ result.y }, float{ v1.y * (neko::Scalar{1} / f) });
 
@@ -125,7 +125,7 @@ TEST(Vec2f, Dot)
     constexpr neko::Vec2f v2{ neko::Scalar{1.3f}, neko::Scalar{-2.4f} };
     
 
-    constexpr auto result = neko::Vec2f::Dot(v1, v2);
+    auto result = neko::Vec2f::Dot(v1, v2);
     EXPECT_FLOAT_EQ(float{ result }, float{ v1.x * v2.x + v1.y * v2.y });
 }
 
@@ -135,7 +135,7 @@ TEST(Vec2f, SquareLength)
     constexpr neko::Vec2f v1{ neko::Scalar{1.0f}, neko::Scalar{2.1f} };
 
 
-    constexpr auto result = v1.SquareLength();
+    auto result = v1.SquareLength();
     EXPECT_FLOAT_EQ(float{ result }, float{ v1.x * v1.x + v1.y * v1.y });
 }
 
@@ -166,10 +166,10 @@ TEST(Vec2f, Normalized)
 TEST(Vec2f, Perpendicular)
 {
     constexpr neko::Vec2f v1{ neko::Scalar{1.0f}, neko::Scalar{2.1f} };
-    constexpr auto result = v1.Perpendicular();
+    auto result = v1.Perpendicular();
     EXPECT_FLOAT_EQ(float{ neko::Vec2f::Dot(v1, result) }, 0.0f);
 
-    constexpr auto result2 = v1.Perpendicular2();
+    auto result2 = v1.Perpendicular2();
     EXPECT_FLOAT_EQ(float{ neko::Vec2f::Dot(v1, result2) }, 0.0f);
 }
 
@@ -182,9 +182,9 @@ TEST(Vec2f, Clamp)
     constexpr neko::Vec2f minV{ neko::Scalar{-1.0f}, neko::Scalar{-1.0f }};
     constexpr neko::Vec2f maxV{ neko::Scalar{1.1f}, neko::Scalar{0.9f }};
 
-    constexpr auto result1 = neko::Vec2f::Clamp(v1, minV, maxV);
-    constexpr auto result2 = neko::Vec2f::Clamp(v2, minV, maxV);
-    constexpr auto result3 = neko::Vec2f::Clamp(v3, minV, maxV);
+    auto result1 = neko::Vec2f::Clamp(v1, minV, maxV);
+    auto result2 = neko::Vec2f::Clamp(v2, minV, maxV);
+    auto result3 = neko::Vec2f::Clamp(v3, minV, maxV);
 
     EXPECT_FLOAT_EQ(float{ result1.x }, float{ minV.x });
     EXPECT_FLOAT_EQ(float{ result1.y }, float{ minV.y });

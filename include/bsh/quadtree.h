@@ -21,6 +21,7 @@ class QuadTree : public BoundingSurfaceHierarchy
 {
 public:
     QuadTree();
+    QuadTree(size_t maxDepth, size_t maxSize);
     void Insert(const ColliderAabb& colliderAabb) override;
     void CalculatePairs() override;
     void Clear() override;
@@ -40,6 +41,8 @@ private:
     ArrayList<ColliderPair> possiblePairs_{StandardAllocator<ColliderPair>{heapAllocator_}};
     std::size_t nodeAllocationIndex_ = 1;
     ArrayList<QuadNode> nodes_;
+    size_t maxDepth_ = MAX_DEPTH;
+    size_t maxSize_ = MAX_SIZE;
 };
 
 }

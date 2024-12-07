@@ -21,9 +21,9 @@ constexpr static SDL_Color groundColor{ 0, 255, 0, 255 };
 constexpr static SDL_Color circleColor{ 0, 0, 255, 255 };
 constexpr static SDL_Color collisionCircleColor{ 255, 0, 255, 255 };
 constexpr static Vec2f worldCenter = { Scalar{12.8f / 2.0f}, Scalar{7.2f / 2.0f} };
-constexpr static Vec2f groundPosition = worldCenter+Vec2f{Scalar{0}, Scalar{3}};
-constexpr static Vec2f circlePosition = worldCenter-Vec2f{Scalar{2}, Scalar{3}};
-constexpr static Vec2f rectPosition = worldCenter-Vec2f{Scalar{-2}, Scalar{3}};
+ static Vec2f groundPosition = worldCenter+Vec2f{Scalar{0}, Scalar{3}};
+ static Vec2f circlePosition = worldCenter-Vec2f{Scalar{2}, Scalar{3}};
+ static Vec2f rectPosition = worldCenter-Vec2f{Scalar{-2}, Scalar{3}};
 
 void GroundSample::Begin()
 {
@@ -48,7 +48,7 @@ void GroundSample::Begin()
         collider.isTrigger = false;
 		collider.restitution = neko::Scalar {0};
 
-        constexpr std::array<Vec2f, 4> vertices =
+        std::array<Vec2f, 4> vertices =
         {
             Vec2f{-groundHalfSize.x, -groundHalfSize.y},
             Vec2f{-groundHalfSize.x, groundHalfSize.y},

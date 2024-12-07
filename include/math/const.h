@@ -1,12 +1,13 @@
 #pragma once
 
-#include <math/fixed.h>
+#include "math/fixed.h"
+#include "math/sixit_float.h"
 #include <cmath>
 
 namespace neko
 {
 
-using Scalar = Fixed16;
+using Scalar = sixit::dmath::ieee_float_inline_asm;
 
 template<typename T>
 constexpr T Pi()

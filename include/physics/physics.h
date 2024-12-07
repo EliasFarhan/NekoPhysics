@@ -40,20 +40,7 @@ struct Body
 	bool isActive = true;
 };
 
-[[nodiscard]] constexpr std::uint32_t GenerateChecksum(const Body& body)
-{
-	std::uint32_t result = 0;
-	result += std::bit_cast<std::uint32_t>(body.position.x);
-	result += std::bit_cast<std::uint32_t>(body.position.y);
-	result += std::bit_cast<std::uint32_t>(body.velocity.x);
-	result += std::bit_cast<std::uint32_t>(body.velocity.y);
-	result += std::bit_cast<std::uint32_t>(body.force.x);
-	result += std::bit_cast<std::uint32_t>(body.force.y);
-	result += std::bit_cast<std::uint32_t>(body.inverseMass);
-	result += static_cast<std::uint32_t>(body.type);
-	result += static_cast<std::uint32_t>(body.isActive);
-	return result;
-}
+[[nodiscard]] std::uint32_t GenerateChecksum(const Body& body);
 
 struct Collider
 {
@@ -66,57 +53,28 @@ struct Collider
     ShapeType type = ShapeType::NONE;
     bool isTrigger = true;
 };
-[[nodiscard]] constexpr std::uint32_t GenerateChecksum(const Collider& collider)
-{
-	std::uint32_t result = 0;
-	result += std::bit_cast<std::uint32_t>(collider.offset.x);
-	result += std::bit_cast<std::uint32_t>(collider.offset.y);
-	result += std::bit_cast<std::uint32_t>(collider.bodyIndex);
-	result += std::bit_cast<std::uint32_t>(collider.colliderIndex);
-	result += std::bit_cast<std::uint32_t>(collider.shapeIndex);
-	result += std::bit_cast<std::uint32_t>(collider.restitution);
-	result += static_cast<std::uint32_t>(collider.type);
-	result += static_cast<std::uint32_t>(collider.isTrigger);
-	return result;
-}
+[[nodiscard]] std::uint32_t GenerateChecksum(const Collider& collider);
 
 struct CircleCollider
 {
     Scalar radius{ -1 };
 };
 
-[[nodiscard]] constexpr std::uint32_t GenerateChecksum(const CircleCollider& collider)
-{
-	std::uint32_t result = 0;
-	result += std::bit_cast<std::uint32_t>(collider.radius);
-	return result;
-}
+[[nodiscard]] std::uint32_t GenerateChecksum(const CircleCollider& collider);
 
 struct AabbCollider
 {
     Vec2f halfSize{ Scalar {-1}, Scalar {-1} };
 };
 
-[[nodiscard]] constexpr std::uint32_t GenerateChecksum(const AabbCollider& collider)
-{
-	std::uint32_t result = 0;
-	result += std::bit_cast<std::uint32_t>(collider.halfSize.x);
-	result += std::bit_cast<std::uint32_t>(collider.halfSize.y);
-	return result;
-}
+[[nodiscard]] std::uint32_t GenerateChecksum(const AabbCollider& collider);
 
 struct PlaneCollider
 {
     Vec2f normal{ Vec2f::zero() };
 };
 
-[[nodiscard]] constexpr std::uint32_t GenerateChecksum(const PlaneCollider& collider)
-{
-	std::uint32_t result = 0;
-	result += std::bit_cast<std::uint32_t>(collider.normal.x);
-	result += std::bit_cast<std::uint32_t>(collider.normal.y);
-	return result;
-}
+[[nodiscard]] std::uint32_t GenerateChecksum(const PlaneCollider& collider);
 
 class PhysicsWorld
 {

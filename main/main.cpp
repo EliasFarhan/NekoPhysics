@@ -6,7 +6,6 @@
 #include <imgui.h>
 #include <imgui_impl_sdl2.h>
 #include <imgui_impl_sdlrenderer2.h>
-#include <fmt/format.h>
 
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
@@ -34,7 +33,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 	SDL_RendererInfo info;
 	SDL_GetRendererInfo(renderer, &info);
 
-	fmt::println("Renderer: {}", info.name);
+	//fmt::println("Renderer: {}", info.name);
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();

@@ -13,6 +13,58 @@
 
 namespace neko
 {
+std::uint32_t GenerateChecksum(const Body& body)
+{
+    std::uint32_t result = 0;
+    result ^= *(reinterpret_cast<const uint32_t*>(&body.position.x));
+    result ^= *(reinterpret_cast<const uint32_t*>(&body.position.y));
+    result ^= *(reinterpret_cast<const uint32_t*>(&body.velocity.x));
+    result ^= *(reinterpret_cast<const uint32_t*>(&body.velocity.y));
+    result ^= *(reinterpret_cast<const uint32_t*>(&body.force.x));
+    result ^= *(reinterpret_cast<const uint32_t*>(&body.force.y));
+    result ^= *(reinterpret_cast<const uint32_t*>(&body.inverseMass));
+    result ^= static_cast<std::uint32_t>(body.type);
+    result ^= static_cast<std::uint32_t>(body.isActive);
+    return result;
+}
+
+std::uint32_t GenerateChecksum(const Collider& collider)
+{
+    std::uint32_t result = 0;
+    result ^= *reinterpret_cast<const std::uint32_t*>(&collider.offset.x);
+    result ^= *reinterpret_cast<const std::uint32_t*>(&collider.offset.y);
+    result ^= *reinterpret_cast<const std::uint32_t*>(&collider.restitution);
+    result ^= std::bit_cast<std::uint32_t>(collider.bodyIndex);
+    result ^= std::bit_cast<std::uint32_t>(collider.colliderIndex);
+    result ^= std::bit_cast<std::uint32_t>(collider.shapeIndex);
+    result ^= static_cast<std::uint32_t>(collider.type);
+    result ^= static_cast<std::uint32_t>(collider.isTrigger);
+    return result;
+}
+
+std::uint32_t GenerateChecksum(const CircleCollider& collider)
+{
+    std::uint32_t result = 0;
+    result ^= *reinterpret_cast<const std::uint32_t*>(&collider.radius);
+    return result;
+}
+
+std::uint32_t GenerateChecksum(const AabbCollider& collider)
+{
+    std::uint32_t result = 0;
+    result ^= *reinterpret_cast<const std::uint32_t*>(&collider.halfSize.x);
+    result ^= *reinterpret_cast<const std::uint32_t*>(&collider.halfSize.y);
+    return result;
+}
+
+std::uint32_t GenerateChecksum(const PlaneCollider& collider)
+{
+    std::uint32_t result = 0;
+    result ^= *reinterpret_cast<const std::uint32_t*>(&collider.normal.x);
+    result ^= *reinterpret_cast<const std::uint32_t*>(&collider.normal.y);
+    return result;
+}
+
 PhysicsWorld::PhysicsWorld(Vec2f gravity): gravity_(gravity)
 {
 }

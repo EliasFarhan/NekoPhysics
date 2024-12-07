@@ -31,7 +31,7 @@ execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scr
 
 
 
-add_subdirectory(externals/unordered_dense)
+add_subdirectory(externals/)
 
 if(ENABLE_PROFILING)
     find_package(Tracy CONFIG REQUIRED)
@@ -41,7 +41,7 @@ file(GLOB_RECURSE SRC_FILES src/*.cpp include/*.h)
 
 add_library(NekoPhysics ${SRC_FILES} )
 target_link_libraries(NekoPhysics PUBLIC unordered_dense)
-target_include_directories(NekoPhysics PUBLIC include/)
+target_include_directories(NekoPhysics PUBLIC include/ externals/)
 link_directories(${CMAKE_BINARY_DIR})
 if(ENABLE_PROFILING)
     target_link_libraries(NekoPhysics PUBLIC Tracy::TracyClient)
