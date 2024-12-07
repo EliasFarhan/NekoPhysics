@@ -34,7 +34,7 @@ execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scr
 add_subdirectory(externals/)
 
 if(ENABLE_PROFILING)
-    find_package(Tracy CONFIG REQUIRED)
+    find_package(Tracy CONFIG)
 endif()
 
 file(GLOB_RECURSE SRC_FILES src/*.cpp include/*.h)

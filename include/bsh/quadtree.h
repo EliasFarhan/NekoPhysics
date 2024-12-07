@@ -30,8 +30,8 @@ public:
 
     [[nodiscard]] const QuadNode& GetRootNode() const { return nodes_[0]; }
 
-    static constexpr std::size_t MAX_DEPTH = 7;
-    static constexpr std::size_t MAX_SIZE = 8;
+    static constexpr std::size_t MAX_DEPTH = 3;
+    static constexpr std::size_t MAX_SIZE = 4;
 private:
     void Insert(const ColliderAabb& colliderAabb, QuadNode* node, int depth);
     void GoDownTree(const QuadNode*);
