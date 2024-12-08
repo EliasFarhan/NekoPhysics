@@ -22,13 +22,13 @@ constexpr T Exp()
 }
 
 template<>
-constexpr inline Fixed16 Pi()
+constexpr Fixed16 Pi()
 {
     return pi;
 }
 
 template<>
-constexpr inline Fixed16 Exp()
+constexpr Fixed16 Exp()
 {
 	return exp;
 }
