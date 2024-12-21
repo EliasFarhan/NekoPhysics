@@ -29,7 +29,9 @@ Contributors: Sherry Ignatchenko, Dmytro Ivanchykhin
 #    pragma warning (disable : 4459 )
 #    pragma warning (disable : 4996 )
 #  endif // SIXIT_COMPILER_MSVC
+#ifndef FMT_HEADER_ONLY
 #  define FMT_HEADER_ONLY
+#endif
 #  include "3rdparty/fmt/include/fmt/printf.h"
 #  include "3rdparty/fmt/include/fmt/chrono.h" // subject to remove
 namespace sixit::lwa {
