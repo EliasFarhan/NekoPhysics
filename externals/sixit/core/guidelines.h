@@ -292,13 +292,13 @@ constexpr int32_t ssize32(const C& c)
 }
 
 template <class T, std::size_t N>
-constexpr uint32_t size32(const T (&array)[N]) noexcept
+constexpr uint32_t size32([[maybe_unused]]const T (&array)[N]) noexcept
 {
     return cross_platform_narrow_cast<uint32_t>(N);
 }
 
 template <class T, std::ptrdiff_t N>
-constexpr int32_t ssize32(const T (&array)[N]) noexcept
+constexpr int32_t ssize32([[maybe_unused]]const T (&array)[N]) noexcept
 {
     return cross_platform_narrow_cast<int32_t>(N);
 }

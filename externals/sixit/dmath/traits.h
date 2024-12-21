@@ -104,7 +104,7 @@ namespace sixit::dmath
             return rw_alias_type(val);
         }
         float from_rw_alias_type(rw_alias_type val) {
-            return { val };
+            return float{ val };
         }
 
         static auto to_fallback(const float& val) { return val; }
@@ -125,7 +125,7 @@ namespace sixit::units {
 
         static value_type alias2value(alias_type value)
         {
-            return { value };
+            return value_type { value };
         }
     };
 } // namespace sixit::units
