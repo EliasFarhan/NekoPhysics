@@ -1,6 +1,17 @@
 #pragma once
+
+#include "sixit/core/guidelines.h"
 #include <cmath>
 
+
+constexpr uint16_t operator "" _u16(unsigned long long value)
+{
+	return sixit::guidelines::narrow_cast<std::uint16_t>(value);
+}
+constexpr uint8_t operator "" _u8(unsigned long long value)
+{
+	return sixit::guidelines::narrow_cast<std::uint8_t>(value);
+}
 
 namespace neko
 {
@@ -24,13 +35,13 @@ constexpr T Clamp(T value, T minValue, T maxValue)
 }
 
 template<typename T>
-constexpr T Max(T v1, T v2)
+constexpr const T& Max(const T& v1, const T& v2)
 {
 	return v1 > v2 ? v1 : v2;
 }
 
 template<typename T>
-constexpr T Min(T v1, T v2)
+constexpr const T& Min(const T& v1, const T& v2)
 {
 	return v1 < v2 ? v1 : v2;
 }
