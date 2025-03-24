@@ -1,11 +1,11 @@
 #include "samples/sample.h"
 
-#include <SDL_main.h>
-#include <SDL.h>
-#include <SDL_render.h>
+#include <SDL3/SDL_main.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_render.h>
 #include <imgui.h>
-#include <imgui_impl_sdl2.h>
-#include <imgui_impl_sdlrenderer2.h>
+#include <imgui_impl_sdl3.h>
+#include <imgui_impl_sdlrenderer3.h>
 
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
@@ -17,21 +17,18 @@
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 {
-	if (SDL_Init(SDL_INIT_VIDEO| SDL_INIT_GAMECONTROLLER)) {
+	if (SDL_Init(SDL_INIT_VIDEO| SDL_INIT_GAMEPAD)) {
 		printf("error initializing SDL: %s\n", SDL_GetError());
 	}
 
 	SDL_Window* window = SDL_CreateWindow("Neko Physics Sample",
-		SDL_WINDOWPOS_CENTERED,
-		SDL_WINDOWPOS_CENTERED,
 		1280, 720,
 		SDL_WINDOW_RESIZABLE );
 
 
 
-	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-	SDL_RendererInfo info;
-	SDL_GetRendererInfo(renderer, &info);
+	SDL_Renderer* renderer = SDL_CreateRenderer(window, nullptr);
+	//SDL_GetRendererName(renderer);
 
 	//fmt::println("Renderer: {}", info.name);
 	IMGUI_CHECKVERSION();
@@ -43,8 +40,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 
 	// Setup Dear ImGui style
 	ImGui::StyleColorsDark();
-	ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
-	ImGui_ImplSDLRenderer2_Init(renderer);
+	ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
+	ImGui_ImplSDLRenderer3_Init(renderer);
 
 	neko::SampleManager sampleManager;
 
@@ -60,10 +57,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 		// Events management 
 		while (SDL_PollEvent(&event)) 
 		{
-			ImGui_ImplSDL2_ProcessEvent(&event);
+			ImGui_ImplSDL3_ProcessEvent(&event);
 			switch (event.type)
 		    {
-			case SDL_QUIT:
+			case SDL_EVENT_QUIT:
 				// handling of close button 
 				isClosed = true;
 				break;
@@ -74,8 +71,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 
 		sampleManager.Update(dt);
 
-		ImGui_ImplSDLRenderer2_NewFrame();
-		ImGui_ImplSDL2_NewFrame();
+		ImGui_ImplSDLRenderer3_NewFrame();
+		ImGui_ImplSDL3_NewFrame();
 		ImGui::NewFrame();
 
 		
@@ -88,11 +85,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 		sampleManager.Draw(renderer);
 
 		ImGui::Render();
-		SDL_RenderSetScale(renderer,
+		/*SDL_RenderSetScale(renderer,
 			io.DisplayFramebufferScale.x,
 			io.DisplayFramebufferScale.y);
+		 */
 		//Update screen
-		ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer);
+		ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
 		SDL_RenderPresent(renderer);
 
 		lastTick = currentTick;
@@ -101,8 +99,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 #endif
 
 	}
-	ImGui_ImplSDLRenderer2_Shutdown();
-	ImGui_ImplSDL2_Shutdown();
+	ImGui_ImplSDLRenderer3_Shutdown();
+	ImGui_ImplSDL3_Shutdown();
 	ImGui::DestroyContext();
 
 	SDL_DestroyWindow(window);

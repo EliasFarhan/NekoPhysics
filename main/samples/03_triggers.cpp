@@ -1,6 +1,6 @@
 #include "03_triggers.h"
 
-#include <SDL_log.h>
+#include <SDL3/SDL_log.h>
 
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
@@ -18,8 +18,8 @@ constexpr static Scalar maxSpeed = Scalar{ 4 };
 constexpr static Scalar maxCircleRadius = Scalar{ 0.02f };
 constexpr static Scalar minCircleRadius = Scalar{ 0.01f };
 constexpr static Scalar pixelPerMeter = Scalar{ 100.0f };
-constexpr static SDL_Color triggerColor{ 0,255,0,255 };
-constexpr static SDL_Color untriggerColor{ 255,0,0,255 };
+constexpr static SDL_FColor triggerColor{ 0,1,0,1 };
+constexpr static SDL_FColor untriggerColor{ 1,0,0,1 };
 
 void TriggersSample::Begin()
 {
@@ -148,7 +148,7 @@ void TriggersSample::Draw(SDL_Renderer* renderer)
         {
             const auto pos1 = pos[i]*pixelPerMeter;
             const auto pos2 = pos[(i+1)%4]*pixelPerMeter;
-            if(SDL_RenderDrawLine(renderer, (int)pos1.x, (int)pos1.y, (int)pos2.x, (int)pos2.y))
+            if(SDL_RenderLine(renderer, (float)pos1.x, (float)pos1.y, (float)pos2.x, (float)pos2.y))
             {
                 SDL_Log("%s\n", SDL_GetError());
             }

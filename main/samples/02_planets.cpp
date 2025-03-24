@@ -1,7 +1,7 @@
 #include "02_planets.h"
 #include "math/fixed_lut.h"
 
-#include <SDL_log.h>
+#include <SDL3/SDL_log.h>
 
 #include "random_utils.h"
 
@@ -36,11 +36,11 @@ void PlanetSample::Begin()
         body.velocity += Scalar{RandomRange(-1.0f, 1.0f)} *speedDisturbanceFactor* body.velocity.Perpendicular().Normalized();
         
 
-        const SDL_Color color{
-            static_cast<Uint8>(RandomRange(100u,255u)),
-            static_cast<Uint8>(RandomRange(100u,255u)),
-            static_cast<Uint8>(RandomRange(100u,255u)),
-            255u
+        const SDL_FColor color{
+            static_cast<float>(RandomRange(100u,255u))/255.0f,
+            static_cast<float>(RandomRange(100u,255u))/255.0f,
+            static_cast<float>(RandomRange(100u,255u))/255.0f,
+            1.0f
         };
 
         for (std::size_t j = 0; j < circleResolution + 1; j++)

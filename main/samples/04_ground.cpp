@@ -1,6 +1,6 @@
 #include "04_ground.h"
 
-#include <SDL_log.h>
+#include <SDL3/SDL_log.h>
 #include <fmt/format.h>
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
@@ -17,9 +17,9 @@ constexpr static Vec2f rectHalfSize = Vec2f{ Scalar{0.5f}, Scalar{ 0.5f } };
 constexpr static std::size_t quadResolution = 2;
 constexpr static std::size_t quadVertexCount = 4;
 constexpr static Scalar pixelPerMeter = Scalar{ 100.0f };
-constexpr static SDL_Color groundColor{ 0, 255, 0, 255 };
-constexpr static SDL_Color circleColor{ 0, 0, 255, 255 };
-constexpr static SDL_Color collisionCircleColor{ 255, 0, 255, 255 };
+constexpr static SDL_FColor groundColor{ 0, 1, 0, 1 };
+constexpr static SDL_FColor circleColor{ 0, 0, 1, 1 };
+constexpr static SDL_FColor collisionCircleColor{ 1, 0, 1, 1 };
 constexpr static Vec2f worldCenter = { Scalar{12.8f / 2.0f}, Scalar{7.2f / 2.0f} };
  static Vec2f groundPosition = worldCenter+Vec2f{Scalar{0}, Scalar{3}};
  static Vec2f circlePosition = worldCenter-Vec2f{Scalar{2}, Scalar{3}};
@@ -162,13 +162,13 @@ void GroundSample::Draw(SDL_Renderer* renderer)
         SDL_Log("%s\n", SDL_GetError());
     }
 	const auto& body = world_.body(rectBodyIndex_);
-	const auto rect = SDL_Rect{ (int)((body.position.x-rectHalfSize.x) * pixelPerMeter),
-								(int)((body.position.y-rectHalfSize.y) * pixelPerMeter),
-								(int)(neko::Scalar{ 2 } * rectHalfSize.x * pixelPerMeter),
-								(int)(neko::Scalar{ 2 } * rectHalfSize.y * pixelPerMeter)
+	const auto rect = SDL_FRect{ (float)((body.position.x-rectHalfSize.x) * pixelPerMeter),
+								 (float)((body.position.y-rectHalfSize.y) * pixelPerMeter),
+								 (float)(neko::Scalar{ 2 } * rectHalfSize.x * pixelPerMeter),
+								 (float)(neko::Scalar{ 2 } * rectHalfSize.y * pixelPerMeter)
 	};
 	SDL_SetRenderDrawColor(renderer, 255,255,255,255);
-	SDL_RenderDrawRect(renderer, &rect);
+	SDL_RenderFillRect(renderer, &rect);
 }
 
 void GroundSample::End()
