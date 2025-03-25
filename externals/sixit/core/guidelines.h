@@ -363,18 +363,6 @@ inline constexpr bool is_power_of_two(UnsignedIntegralT n) noexcept
     return std::popcount(n) == 1; // fallback: return n != 0 && (n & (n - 1)) == 0;
 }
 
-template<typename T>
-std::string type_display_name()
-{
-    // full implementation with demangling yet pending (see TR-1379)
-    return typeid(T).name();
-}
-
-template<typename T>
-std::string type_display_name([[maybe_unused]] T&& t)
-{
-    return type_display_name<T>();
-}
 
 namespace templates {
 // constexpr_lambda_returning_vector_to_constexpr_array(f): 
