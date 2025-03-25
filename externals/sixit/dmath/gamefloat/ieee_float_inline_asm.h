@@ -75,7 +75,7 @@ class ieee_float_inline_asm
     }
 
   public:
-    float to_float() const
+    [[nodiscard]] float to_float() const
     {
         return sixit::cpual::ieee_asm_to_float(data);
     }

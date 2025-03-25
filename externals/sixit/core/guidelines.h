@@ -363,7 +363,10 @@ inline constexpr bool is_power_of_two(UnsignedIntegralT n) noexcept
     return std::popcount(n) == 1; // fallback: return n != 0 && (n & (n - 1)) == 0;
 }
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 54d7adbf7a574fca62b65e7e74629b3b26c92242
 namespace templates {
 // constexpr_lambda_returning_vector_to_constexpr_array(f): 
 // expect `f() -> constexpr_minimal_vector` lambda, returns std::array.

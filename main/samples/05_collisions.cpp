@@ -1,4 +1,4 @@
-#include <SDL_log.h>
+#include <SDL3/SDL_log.h>
 #include "05_collisions.h"
 #include "random_utils.h"
 
@@ -11,8 +11,8 @@ constexpr static Scalar maxSpeed = Scalar{ 4 };
 constexpr static Scalar maxCircleRadius = Scalar{ 0.2f };
 constexpr static Scalar minCircleRadius = Scalar{ 0.1f };
 constexpr static Scalar pixelPerMeter = Scalar{ 100.0f };
-constexpr static SDL_Color triggerColor{ 0,255,0,255 };
-constexpr static SDL_Color untriggerColor{ 255,0,0,255 };
+constexpr static SDL_FColor triggerColor{ 0,255,0,255 };
+constexpr static SDL_FColor untriggerColor{ 255,0,0,255 };
 
 
 void CollisionsSample::Begin()

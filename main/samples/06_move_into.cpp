@@ -4,7 +4,7 @@
 
 #include "06_move_into.h"
 
-#include <SDL_log.h>
+#include <SDL3/SDL_log.h>
 #include <fmt/format.h>
 #include <box2d/b2_contact.h>
 #include <box2d/b2_polygon_shape.h>
@@ -21,9 +21,9 @@ constexpr static std::size_t quadResolution = 2;
 constexpr static std::size_t quadVertexCount = 4;
 constexpr static Scalar pixelPerMeter = Scalar{ 100.0f };
 
-constexpr static SDL_Color groundColor{ 0, 255, 0, 255 };
-constexpr static SDL_Color inAirColor{ 0, 0, 255, 255 };
-constexpr static SDL_Color onGroundColor{ 255, 0, 255, 255 };
+constexpr static SDL_FColor groundColor{ 0, 1, 0, 1 };
+constexpr static SDL_FColor inAirColor{ 0, 0, 1, 1 };
+constexpr static SDL_FColor onGroundColor{ 1, 0, 1, 1 };
 constexpr static Vec2f worldCenter = { Scalar{ 12.8f / 2.0f }, Scalar{ 7.2f / 2.0f }};
 static Vec2f groundPosition = worldCenter + Vec2f{ Scalar{ 0 }, Scalar{ 3 }};
 static Vec2f dynamicRectPosition = worldCenter - Vec2f{ Scalar{ -2 }, Scalar{ 3 }};
@@ -243,15 +243,15 @@ void MoveIntoSample::Draw(SDL_Renderer* renderer)
 #else
 		const auto& body = world_.body(staticBodyIndex);
 
-		const auto rect = SDL_Rect{ (int)((body.position.x-rectHalfSize.x) * pixelPerMeter),
-									(int)((body.position.y-rectHalfSize.y) * pixelPerMeter),
-									(int)(neko::Scalar{ 2 } * rectHalfSize.x * pixelPerMeter),
-									(int)(neko::Scalar{ 2 } * rectHalfSize.y * pixelPerMeter)
+		const auto rect = SDL_FRect{ (float)((body.position.x-rectHalfSize.x) * pixelPerMeter),
+									(float)((body.position.y-rectHalfSize.y) * pixelPerMeter),
+									(float)(neko::Scalar{ 2 } * rectHalfSize.x * pixelPerMeter),
+									(float)(neko::Scalar{ 2 } * rectHalfSize.y * pixelPerMeter)
 		};
 #endif
-		const SDL_Color color = staticBodyOnGround_ ? onGroundColor : inAirColor;
-		SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
-		SDL_RenderDrawRect(renderer, &rect);
+		const auto color = staticBodyOnGround_ ? onGroundColor : inAirColor;
+		SDL_SetRenderDrawColorFloat(renderer, color.r, color.g, color.b, color.a);
+		SDL_RenderFillRect(renderer, &rect);
 	}
 	{
 #ifdef USE_BOX2D
@@ -264,15 +264,15 @@ void MoveIntoSample::Draw(SDL_Renderer* renderer)
 		};
 #else
 		const auto& body = world_.body(dynamicBodyIndex);
-		const auto rect = SDL_Rect{ (int)((body.position.x - rectHalfSize.x) * pixelPerMeter),
-									(int)((body.position.y - rectHalfSize.y) * pixelPerMeter),
-									(int)(neko::Scalar{ 2 } * rectHalfSize.x * pixelPerMeter),
-									(int)(neko::Scalar{ 2 } * rectHalfSize.y * pixelPerMeter)
+		const auto rect = SDL_FRect{ (float)((body.position.x - rectHalfSize.x) * pixelPerMeter),
+									(float)((body.position.y - rectHalfSize.y) * pixelPerMeter),
+									(float)(neko::Scalar{ 2 } * rectHalfSize.x * pixelPerMeter),
+									(float)(neko::Scalar{ 2 } * rectHalfSize.y * pixelPerMeter)
 		};
 #endif
-		const SDL_Color color = dynamicBodyOnGround_ ? onGroundColor : inAirColor;
-		SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
-		SDL_RenderDrawRect(renderer, &rect);
+		const auto color = dynamicBodyOnGround_ ? onGroundColor : inAirColor;
+		SDL_SetRenderDrawColorFloat(renderer, color.r, color.g, color.b, color.a);
+		SDL_RenderFillRect(renderer, &rect);
 	}
 }
 

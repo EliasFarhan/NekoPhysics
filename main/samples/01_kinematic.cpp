@@ -1,7 +1,7 @@
 #include "01_kinematic.h"
 #include "random_utils.h"
 
-#include <SDL_log.h>
+#include <SDL3/SDL_log.h>
 
 namespace neko
 {
@@ -24,11 +24,11 @@ void KinematicSample::Begin()
         body.velocity = Vec2f{ Scalar{RandomRange(-1.0f, 1.0f)}, Scalar{RandomRange(-1.0f, 1.0f)} }*maxSpeed;
         body.inverseMass = Scalar{ 1.0f };
 
-        const SDL_Color color{
-            static_cast<Uint8>(RandomRange(100u,255u)),
-            static_cast<Uint8>(RandomRange(100u,255u)),
-            static_cast<Uint8>(RandomRange(100u,255u)),
-            255u
+        const SDL_FColor color{
+            static_cast<float>(RandomRange(100u,255u))/1.0f,
+            static_cast<float>(RandomRange(100u,255u))/1.0f,
+            static_cast<float>(RandomRange(100u,255u))/1.0f,
+            1.0f
         };
 
         for (std::size_t j = 0; j < std::size_t{circleResolution} + 1; j++)

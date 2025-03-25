@@ -18,7 +18,6 @@
 
 namespace neko
 {
-
 template<>
 inline sixit::dmath::ieee_float_inline_asm Sqrt(sixit::dmath::ieee_float_inline_asm value)
 {

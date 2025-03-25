@@ -60,14 +60,13 @@ endif()
 
 if(USE_SAMPLES)
     find_package(box2d CONFIG REQUIRED)
-    find_package(SDL2 CONFIG REQUIRED)
+    find_package(SDL3 CONFIG REQUIRED)
     find_package(imgui CONFIG REQUIRED)
     find_package(fmt CONFIG REQUIRED)
     file(GLOB_RECURSE MAIN_FILES main/*cpp main/*.h)
     add_executable(Sample ${MAIN_FILES})
     target_include_directories(Sample PRIVATE include/ main/ ${OPENGL_INCLUDE_DIR})
-    target_link_libraries(Sample PRIVATE NekoPhysics ${OPENGL_LIBRARIES} fmt::fmt-header-only
-            $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main> $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
+    target_link_libraries(Sample PRIVATE NekoPhysics ${OPENGL_LIBRARIES} fmt::fmt-header-only SDL3::SDL3
             imgui::imgui box2d::box2d)
     if(MSVC)
         target_link_libraries(Sample PRIVATE opengl32)
