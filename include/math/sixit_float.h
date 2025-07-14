@@ -5,6 +5,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wold-style-cast"
 #pragma clang diagnostic ignored "-Wself-assign-overloaded"
+#pragma clang diagnostic ignored "-Wdeprecated-literal-operator"
 #endif
 #include "sixit/dmath/mathf/floor.h"
 #include "sixit/dmath/gamefloat/ieee_float_inline_asm.h"

@@ -1,17 +1,6 @@
 #pragma once
 
-#include "sixit/core/guidelines.h"
 #include <cmath>
-
-
-constexpr uint16_t operator "" _u16(unsigned long long value)
-{
-	return sixit::guidelines::narrow_cast<std::uint16_t>(value);
-}
-constexpr uint8_t operator "" _u8(unsigned long long value)
-{
-	return sixit::guidelines::narrow_cast<std::uint8_t>(value);
-}
 
 namespace neko
 {
