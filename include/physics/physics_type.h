@@ -1,22 +1,15 @@
 #pragma once
 
 #include <functional>
+
+#include "container/index_based_container.h"
 #include "math/fixed.h"
 
 namespace neko
 {
 
 
-struct BodyIndex
-{
-    std::int32_t index = -1;
-    constexpr bool operator ==(const BodyIndex& rhs) const
-    {
-        return index == rhs.index;
-    }
-};
 
-constexpr auto INVALID_BODY_INDEX = BodyIndex{ -1 };
 
 struct ShapeIndex
 {
@@ -37,21 +30,8 @@ enum class ShapeType : short
     NONE
 };
 
-struct ColliderIndex
-{
-    std::int32_t index = -1;
-   
-    constexpr bool operator ==(const ColliderIndex& rhs) const
-    {
-        return index == rhs.index;
-    }
-	constexpr bool operator !=(const ColliderIndex& rhs) const
-	{
-		return index != rhs.index;
-	}
-};
 
-constexpr auto INVALID_COLLIDER_INDEX = ColliderIndex{ -1 };
+
 
 struct ColliderPair
 {

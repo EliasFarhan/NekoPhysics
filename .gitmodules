@@ -2,3 +2,6 @@
 [submodule "externals/unordered_dense"]
 	path = externals/unordered_dense
 	url = https://github.com/martinus/unordered_dense.git
+[submodule "externals/NekoLib"]
+	path = externals/NekoLib
+	url = https://github.com/EliasFarhan/NekoLib.git

@@ -17,6 +17,8 @@
 #include <bit>
 #include <type_traits>
 
+#include "container/index_based_container.h"
+
 
 namespace neko
 {
@@ -37,34 +39,47 @@ struct Body
     Vec2f force{};
     Scalar inverseMass{1};
     BodyType type = BodyType::DYNAMIC;
-	bool isActive = true;
+    [[nodiscard]] bool IsInvalid() const noexcept { return inverseMass < 0;}
+    static Body GenerateInvalidValue() {return {.inverseMass = -1};}
+
 };
+using BodyIndex = Index<Body>;
+
+constexpr auto INVALID_BODY_INDEX = BodyIndex{ -1 };
 
 [[nodiscard]] std::uint32_t GenerateChecksum(const Body& body);
 
+struct Collider;
+using ColliderIndex = Index<Collider>;
+constexpr auto INVALID_COLLIDER_INDEX = ColliderIndex{ -1 };
 struct Collider
 {
 	const void* userData = nullptr;
     Vec2f offset{};
-    BodyIndex bodyIndex{};
-    ColliderIndex colliderIndex{};
+    BodyIndex bodyIndex = INVALID_BODY_INDEX;
+    ColliderIndex colliderIndex = INVALID_COLLIDER_INDEX;
     ShapeIndex shapeIndex{};
     Scalar restitution{ 1 };
     ShapeType type = ShapeType::NONE;
     bool isTrigger = true;
+
+    [[nodiscard]] bool IsInvalid() const noexcept { return restitution < 0; }
+    static Collider GenerateInvalidValue() {return {.restitution = -1};}
 };
 [[nodiscard]] std::uint32_t GenerateChecksum(const Collider& collider);
 
 struct CircleCollider
 {
-    Scalar radius{ -1 };
+    Scalar radius{ 0 };
 };
 
 [[nodiscard]] std::uint32_t GenerateChecksum(const CircleCollider& collider);
 
 struct AabbCollider
 {
-    Vec2f halfSize{ Scalar {-1}, Scalar {-1} };
+    Vec2f halfSize{ Scalar {0}, Scalar {0} };
+    [[nodiscard]] bool IsInvalid() const noexcept { return halfSize.x < 0; }
+    static AabbCollider GenerateInvalidValue() {return {.halfSize = {Scalar {-1}, Scalar {-1}}};}
 };
 
 [[nodiscard]] std::uint32_t GenerateChecksum(const AabbCollider& collider);
@@ -89,15 +104,15 @@ public:
     void ResolveBroadphase();
     void ResolveNarrowphase(Scalar dt);
 
-    [[nodiscard]] Body& body(BodyIndex index) { return bodies_[index.index]; }
-    [[nodiscard]] const Body& body(BodyIndex index) const { return bodies_[index.index]; }
+    [[nodiscard]] Body& body(BodyIndex index) { return bodyManager_.at(index); }
+    [[nodiscard]] const Body& body(BodyIndex index) const { return bodyManager_.at(index); }
 
 	ColliderIndex AddCircleCollider(BodyIndex body);
 	ColliderIndex AddAabbCollider(BodyIndex body);
 	ColliderIndex AddPlaneCollider(BodyIndex body);
 
-	[[nodiscard]] Collider& collider(ColliderIndex colliderIndex) { return colliders_[colliderIndex.index]; }
-	[[nodiscard]] const Collider& collider(ColliderIndex colliderIndex) const { return colliders_[colliderIndex.index]; }
+	[[nodiscard]] Collider& collider(ColliderIndex colliderIndex) { return colliders_.at(colliderIndex); }
+	[[nodiscard]] const Collider& collider(ColliderIndex colliderIndex) const { return colliders_.at(colliderIndex); }
 
 	[[nodiscard]] AabbCollider& aabb(ShapeIndex shapeIndex) { return aabbs_[shapeIndex.index]; }
 	[[nodiscard]] const AabbCollider& aabb(ShapeIndex shapeIndex) const { return aabbs_[shapeIndex.index]; }
@@ -116,11 +131,17 @@ public:
 	void CopyFrom(const PhysicsWorld& physicsWorld);
 private:
     HeapAllocator heapAllocator_;
-    ArrayList<Body> bodies_{StandardAllocator<Body>{heapAllocator_}};
-    ArrayList<AabbCollider> aabbs_{StandardAllocator<AabbCollider>{heapAllocator_}};
-    ArrayList<CircleCollider> circles_{StandardAllocator<CircleCollider>{heapAllocator_}};
-    ArrayList<PlaneCollider> planes_{StandardAllocator<PlaneCollider>{heapAllocator_}};
-    ArrayList<Collider> colliders_{StandardAllocator<Collider>{heapAllocator_}};
+
+    template<typename T>
+    using allocator_type = StandardAllocator<std::pair<T, typename Index<T>::generation_index_type>>;
+    template<typename T>
+    using container_type = IndexBasedContainer<T, allocator_type<T>>;
+
+    container_type<Body> bodyManager_{allocator_type<Body>{heapAllocator_}};
+    container_type<AabbCollider> aabbs_{allocator_type<AabbCollider>{heapAllocator_}};
+    container_type<CircleCollider> circles_{allocator_type<CircleCollider>{heapAllocator_}};
+    container_type<PlaneCollider> planes_{allocator_type<PlaneCollider>{heapAllocator_}};
+    container_type<Collider> colliders_{allocator_type<Collider>{heapAllocator_}};
     ankerl::unordered_dense::map<ColliderPair, std::optional<Contact>, ColliderHash, std::equal_to<>, StandardAllocator<std::pair<ColliderPair, std::optional<Contact>>>>
         manifold_{manifoldBaseSize, StandardAllocator<std::pair<ColliderPair, std::optional<Contact>>>{heapAllocator_}};
 

@@ -16,7 +16,7 @@ endif (ENABLE_PROFILING)
 cmake_minimum_required (VERSION 3.18)
 project(NekoPhysics)
 
-set (CMAKE_CXX_STANDARD 20)
+set (CMAKE_CXX_STANDARD 23)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -28,9 +28,6 @@ if(NOT Python3_EXECUTABLE)
 endif()
 execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/gen_fixed_table.py" WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
-
-
-
 add_subdirectory(externals/)
 
 if(ENABLE_PROFILING)
@@ -40,7 +37,7 @@ endif()
 file(GLOB_RECURSE SRC_FILES src/*.cpp include/*.h)
 
 add_library(NekoPhysics ${SRC_FILES} )
-target_link_libraries(NekoPhysics PUBLIC unordered_dense)
+target_link_libraries(NekoPhysics PUBLIC unordered_dense NekoCore)
 target_include_directories(NekoPhysics PUBLIC include/ externals/)
 link_directories(${CMAKE_BINARY_DIR})
 if(ENABLE_PROFILING)
