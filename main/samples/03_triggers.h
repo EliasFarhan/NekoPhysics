@@ -20,7 +20,7 @@ public:
 private:
     struct TriggeredBody
     {
-        ColliderIndex index{};
+        ColliderIndex index{-1};
         int count = 0;
         Scalar circleRadius{ 0.0f };
     };

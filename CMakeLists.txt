@@ -46,7 +46,7 @@ if(ENABLE_PROFILING)
 endif()
 if (MSVC)
     # warning level 4 and all warnings as errors
-    target_compile_options(NekoPhysics PRIVATE /W4 /w14640 /permissive-)
+    target_compile_options(NekoPhysics PRIVATE /W4 /w14640 /permissive- /utf-8)
     target_compile_definitions(NekoPhysics PRIVATE _USE_MATH_DEFINES=1)
 else()
     # lots of warnings and all warnings as errors

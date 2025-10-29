@@ -59,9 +59,9 @@ void KinematicSample::Begin()
 void KinematicSample::Update(float dt)
 {
     world_.Step(Scalar{ dt });
-    for (std::size_t i = 0; i < circleCount; i++)
+    int i = 0;
+    for (auto& body: world_.bodies())
     {
-        auto& body = world_.body({static_cast<int>(i)});
         if ((body.velocity.x > Scalar{0.0f}&& body.position.x > Scalar{12.8f}) || (body.velocity.x < Scalar{0.0f}&& body.position.x < Scalar{0.0f}))
         {
             body.velocity.x = -body.velocity.x;
@@ -95,6 +95,7 @@ void KinematicSample::Update(float dt)
             indices[1]=(static_cast<int>(firstIndex + j + 1ull));
             indices[2]=(static_cast<int>(firstIndex + (j == circleResolution - 1ull ? 1ull : 2ull + j)));
         }
+        i++;
     }
 }
 

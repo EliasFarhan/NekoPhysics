@@ -70,17 +70,16 @@ void PlanetSample::Begin()
 
 void PlanetSample::Update(float dt)
 {
-    for(std::size_t i = 0; i < circleCount; i++)
+    for(auto& body : world_.bodies())
     {
-        auto& body = world_.body({ static_cast<int>(i) });
         const auto delta = body.position - worldCenter;
         const auto force = G * blackHoleMass / (delta.SquareLength() * body.inverseMass);
         body.force += force * (-delta).Normalized();
     }
     world_.Step(Scalar{ dt });
-    for (std::size_t i = 0; i < circleCount; i++)
+    int i = 0;
+    for (const auto& body: world_.bodies())
     {
-        const auto& body = world_.body({ static_cast<int>(i) });
 
         for (std::size_t j = 0; j < circleResolution + 1; j++)
         {
@@ -94,6 +93,7 @@ void PlanetSample::Update(float dt)
             vertex.position.x = float{pos.x};
             vertex.position.y = float{pos.y};
         }
+        i++;
     }
 }
 

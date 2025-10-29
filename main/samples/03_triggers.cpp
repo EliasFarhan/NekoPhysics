@@ -80,9 +80,9 @@ void TriggersSample::Update([[maybe_unused]]float dt)
 #ifdef TRACY_ENABLE
     ZoneScoped;
 #endif
-    for (std::size_t i = 0; i < circleCount; i++)
+    int i = 0;
+    for (auto& body : world_.bodies())
     {
-        auto& body = world_.body({ static_cast<int>(i) });
         if ((body.velocity.x > Scalar{0.0f}&& body.position.x > Scalar{12.8f}) || (body.velocity.x < Scalar{0.0f}&& body.position.x < Scalar{0.0f}))
         {
             body.velocity.x = -body.velocity.x;
@@ -117,6 +117,7 @@ void TriggersSample::Update([[maybe_unused]]float dt)
             indices[1] = (static_cast<int>(firstIndex + j + 1ull));
             indices[2] = (static_cast<int>(firstIndex + (j == circleResolution - 1ull ? 1ull : 2ull + j)));
         }
+        i++;
     }
 }
 
@@ -177,17 +178,17 @@ void TriggersSample::End()
 void TriggersSample::OnTriggerEnter(const ColliderPair& p)
 {
     const auto& c1 = world_.collider(p.c1);
-    bodies_[c1.bodyIndex.index].count++;
+    bodies_[c1.bodyIndex.index()].count++;
     const auto& c2 = world_.collider(p.c2);
-    bodies_[c2.bodyIndex.index].count++;
+    bodies_[c2.bodyIndex.index()].count++;
 }
 
 void TriggersSample::OnTriggerExit(const ColliderPair& p)
 {
     const auto& c1 = world_.collider(p.c1);
-    bodies_[c1.bodyIndex.index].count--;
+    bodies_[c1.bodyIndex.index()].count--;
     const auto& c2 = world_.collider(p.c2);
-    bodies_[c2.bodyIndex.index].count--;
+    bodies_[c2.bodyIndex.index()].count--;
 }
 
 void TriggersSample::FixedUpdate()
