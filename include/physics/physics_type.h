@@ -5,6 +5,7 @@
 #include "math/vec2.h"
 
 #include <functional>
+#include <variant>
 
 namespace neko
 {
@@ -109,37 +110,24 @@ struct PlaneCollider
 };
 using PlaneIndex = Index<PlaneCollider>;
 
-class ShapeIndex
+class Shape : public std::variant<AabbCollider, CircleCollider, PlaneCollider, std::monostate>
 {
-public:
-    constexpr ShapeIndex() = default;
-
-    template<typename T>
-    constexpr explicit ShapeIndex(Index<T> shapeIndex)
-    {
-        index_ = shapeIndex.index();
-        generationIndex_ = shapeIndex.generationIndex();
-    }
-
-    constexpr bool operator ==(const ShapeIndex& rhs) const
-    {
-        return index_ == rhs.index_;
-    }
-    auto index() const noexcept { return index_; }
-    auto generationIndex() const noexcept { return generationIndex_; }
-private:
-    int index_ = -1;
-    int generationIndex_ = 0;
+    public:
+    using std::variant<AabbCollider, CircleCollider, PlaneCollider, std::monostate>::variant;
+    [[nodiscard]] bool IsInvalid() const noexcept { return std::holds_alternative<std::monostate>(*this); }
+    static Shape GenerateInvalidValue() {Shape newShape = std::monostate{}; return newShape;}
 };
+using ShapeIndex = Index<Shape>;
 
-constexpr auto INVALID_SHAPE_INDEX = ShapeIndex{};
+
+constexpr auto INVALID_SHAPE_INDEX = ShapeIndex{-1, 0};
 struct Collider
 {
     const void* userData = nullptr;
     Vec2f offset{};
     BodyIndex bodyIndex = INVALID_BODY_INDEX;
     ColliderIndex colliderIndex = INVALID_COLLIDER_INDEX;
-    ShapeIndex shapeIndex{};
+    ShapeIndex shapeIndex = INVALID_SHAPE_INDEX;
     Scalar restitution{ 1 };
     ShapeType type = ShapeType::NONE;
     bool isTrigger = true;

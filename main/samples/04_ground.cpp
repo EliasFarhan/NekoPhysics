@@ -87,7 +87,7 @@ void GroundSample::Begin()
         circleCollider.radius = circleRadius;
         collider.isTrigger = false;
 
-		collider.restitution = neko::Scalar {0.5f};
+		collider.restitution = neko::Scalar {1.0f};
 
         for (std::size_t j = 0; j < circleResolution + 1; j++)
         {
@@ -127,7 +127,7 @@ void GroundSample::Begin()
 		auto& aabbCollider = world_.aabb(collider.shapeIndex);
 		aabbCollider.halfSize = rectHalfSize;
 		collider.isTrigger = false;
-		collider.restitution = neko::Scalar {0};
+		collider.restitution = neko::Scalar {1.0f};
 	}
 
 

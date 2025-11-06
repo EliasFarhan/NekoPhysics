@@ -12,13 +12,12 @@
 #include <ankerl/unordered_dense.h>
 
 #include <vector>
+#include <variant>
 #include <string>
 #include <numeric>
 #include <bit>
 #include <span>
 #include <type_traits>
-#include <__msvc_ranges_to.hpp>
-#include <fmt/base.h>
 
 #include "container/index_based_container.h"
 
@@ -51,10 +50,10 @@ public:
 	[[nodiscard]] Collider& collider(ColliderIndex colliderIndex) { return colliderManager_.at(colliderIndex); }
 	[[nodiscard]] const Collider& collider(ColliderIndex colliderIndex) const { return colliderManager_.at(colliderIndex); }
 
-	[[nodiscard]] AabbCollider& aabb(ShapeIndex shapeIndex) { return aabbs_[AabbIndex{shapeIndex.index(), shapeIndex.generationIndex()}]; }
-	[[nodiscard]] const AabbCollider& aabb(ShapeIndex shapeIndex) const { return aabbs_[AabbIndex{shapeIndex.index(), shapeIndex.generationIndex()}]; }
-	[[nodiscard]] CircleCollider& circle(ShapeIndex shapeIndex) { return circles_[CircleIndex{shapeIndex.index(), shapeIndex.generationIndex()}]; }
-    [[nodiscard]] const CircleCollider& circle(ShapeIndex shapeIndex) const { return circles_[CircleIndex{shapeIndex.index(), shapeIndex.generationIndex()}]; }
+	[[nodiscard]] AabbCollider& aabb(ShapeIndex shapeIndex) { return std::get<static_cast<int>(ShapeType::AABB)>(shapes_[shapeIndex]); }
+	[[nodiscard]] const AabbCollider& aabb(ShapeIndex shapeIndex) const { return std::get<static_cast<int>(ShapeType::AABB)>(shapes_[shapeIndex]); }
+	[[nodiscard]] CircleCollider& circle(ShapeIndex shapeIndex) { return std::get<static_cast<int>(ShapeType::CIRCLE)>(shapes_[shapeIndex]); }
+    [[nodiscard]] const CircleCollider& circle(ShapeIndex shapeIndex) const { return std::get<static_cast<int>(ShapeType::CIRCLE)>(shapes_[shapeIndex]); }
     
     void RemoveAabbCollider(ColliderIndex index);
     void RemoveCircleCollider(ColliderIndex index);
@@ -75,9 +74,7 @@ private:
     using container_type = IndexBasedContainer<T, allocator_type<T>>;
 
     container_type<Body> bodyManager_{allocator_type<Body>{heapAllocator_}};
-    container_type<AabbCollider> aabbs_{allocator_type<AabbCollider>{heapAllocator_}};
-    container_type<CircleCollider> circles_{allocator_type<CircleCollider>{heapAllocator_}};
-    container_type<PlaneCollider> planes_{allocator_type<PlaneCollider>{heapAllocator_}};
+    container_type<Shape> shapes_{allocator_type<Shape>{heapAllocator_}};
     container_type<Collider> colliderManager_{allocator_type<Collider>{heapAllocator_}};
     ankerl::unordered_dense::map<ColliderPair, std::optional<Contact>, ColliderHash, std::equal_to<>, StandardAllocator<std::pair<ColliderPair, std::optional<Contact>>>>
         manifold_{manifoldBaseSize, StandardAllocator<std::pair<ColliderPair, std::optional<Contact>>>{heapAllocator_}};

@@ -10,7 +10,7 @@ namespace neko
 void* HeapAllocator::Allocate(std::size_t count, std::size_t typeSize)
 {
     const auto size = count*typeSize;
-    auto* ptr = std::malloc(size);
+    auto* ptr = operator new(size);
 #ifdef TRACY_ENABLE
     TracyAlloc(ptr, size);
 #endif
@@ -22,6 +22,6 @@ void HeapAllocator::Deallocate(void *ptr)
 #ifdef TRACY_ENABLE
     TracyFree(ptr);
 #endif
-    std::free(ptr);
+    operator delete(ptr);
 }
 }

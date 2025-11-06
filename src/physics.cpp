@@ -105,8 +105,10 @@ bool PhysicsWorld::DetectContact(
         {
         case ShapeType::AABB:
         {
-            const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider1.offset, aabbs_[AabbIndex{collider1.shapeIndex.index(), collider1.shapeIndex.generationIndex()}].halfSize);
-            const Aabbf aabb2 = Aabbf::FromCenter(body2.position + collider2.offset, aabbs_[AabbIndex{collider2.shapeIndex.index(), collider2.shapeIndex.generationIndex()}].halfSize);
+            const auto& aabbCollider1 = std::get<(int)ShapeType::AABB>(shapes_[collider1.shapeIndex]);
+            const auto& aabbCollider2 = std::get<(int)ShapeType::AABB>(shapes_[collider2.shapeIndex]);
+            const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider1.offset, aabbCollider1.halfSize);
+            const Aabbf aabb2 = Aabbf::FromCenter(body2.position + collider2.offset, aabbCollider2.halfSize);
             doesIntersect = Intersect(aabb1, aabb2);
 			if(collision)
 			{
@@ -132,8 +134,10 @@ bool PhysicsWorld::DetectContact(
         }
         case ShapeType::CIRCLE:
         {
-			const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider1.offset, aabbs_[AabbIndex{collider1.shapeIndex.index(), collider1.shapeIndex.generationIndex()}].halfSize);
-			const Circlef circle = Circlef{ body2.position + collider2.offset, circles_[CircleIndex{collider2.shapeIndex.index(), collider2.shapeIndex.generationIndex()}].radius };
+            const auto& aabbCollider = std::get<(int)ShapeType::AABB>(shapes_[collider1.shapeIndex]);
+            const auto& circleCollider = std::get<(int)ShapeType::CIRCLE>(shapes_[collider2.shapeIndex]);
+			const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider1.offset, aabbCollider.halfSize);
+			const Circlef circle = Circlef{ body2.position + collider2.offset, circleCollider.radius };
 			if(collision)
 			{
 
@@ -179,8 +183,11 @@ bool PhysicsWorld::DetectContact(
         }
         case ShapeType::CIRCLE:
         {
-            const Circlef c1 = { body1.position + collider1.offset, circles_[CircleIndex{collider1.shapeIndex.index(), collider1.shapeIndex.generationIndex()}].radius };
-            const Circlef c2 = { body2.position + collider2.offset, circles_[CircleIndex{collider2.shapeIndex.index(), collider2.shapeIndex.generationIndex()}].radius };
+            const auto& circleCollider1 = std::get<(int)ShapeType::CIRCLE>(shapes_[collider1.shapeIndex]);
+            const auto& circleCollider2 = std::get<(int)ShapeType::CIRCLE>(shapes_[collider2.shapeIndex]);
+
+            const Circlef c1 = { body1.position + collider1.offset, circleCollider1.radius };
+            const Circlef c2 = { body2.position + collider2.offset, circleCollider2.radius };
 
             if(collision)
             {
@@ -310,7 +317,7 @@ ColliderIndex PhysicsWorld::AddCircleCollider(BodyIndex body)
     collider.colliderIndex = index;
     collider.type = ShapeType::CIRCLE;
 
-    auto circleIndex = circles_.add();
+    auto circleIndex = shapes_.add(CircleCollider{});
     collider.shapeIndex = ShapeIndex{circleIndex};
     return collider.colliderIndex;
 }
@@ -323,7 +330,7 @@ ColliderIndex PhysicsWorld::AddAabbCollider(BodyIndex body)
     collider.colliderIndex = index;
     collider.type = ShapeType::AABB;
 
-    auto aabbIndex = aabbs_.add();
+    auto aabbIndex = shapes_.add(AabbCollider{});
 
     collider.shapeIndex = ShapeIndex{ aabbIndex };
     return collider.colliderIndex;
@@ -337,7 +344,7 @@ ColliderIndex PhysicsWorld::AddPlaneCollider(BodyIndex body)
     collider.colliderIndex = index;
     collider.type = ShapeType::PLANE;
 
-    auto planeIndex = planes_.add();
+    auto planeIndex = shapes_.add(PlaneCollider{});
 
     collider.shapeIndex = ShapeIndex{ planeIndex };
     return collider.colliderIndex;
@@ -346,7 +353,7 @@ ColliderIndex PhysicsWorld::AddPlaneCollider(BodyIndex body)
 void PhysicsWorld::RemoveAabbCollider(ColliderIndex index)
 {
     auto& collider = colliderManager_.at(index);
-   aabbs_.remove(AabbIndex{collider.shapeIndex.index(), collider.shapeIndex.generationIndex()});
+    shapes_.remove(collider.shapeIndex);
 
     collider.type = ShapeType::NONE;
 }
@@ -354,14 +361,14 @@ void PhysicsWorld::RemoveAabbCollider(ColliderIndex index)
 void PhysicsWorld::RemoveCircleCollider(ColliderIndex index)
 {
     auto& collider = colliderManager_.at(index);
-    circles_.remove(CircleIndex{collider.shapeIndex.index(), collider.shapeIndex.generationIndex()});
+    shapes_.remove(collider.shapeIndex);
     collider.type = ShapeType::NONE;
 }
 
 void PhysicsWorld::RemovePlaneCollider(ColliderIndex index)
 {
     auto& collider = colliderManager_.at(index);
-    planes_.remove(PlaneIndex{collider.shapeIndex.index(), collider.shapeIndex.generationIndex()});
+    shapes_.remove(collider.shapeIndex);
 
     collider.type = ShapeType::NONE;
 }
@@ -409,8 +416,7 @@ void PhysicsWorld::Step(Scalar dt)
 void PhysicsWorld::Clear()
 {
     bodyManager_.clear();
-    aabbs_.clear();
-    circles_.clear();
+    shapes_.clear();
 }
 
 void PhysicsWorld::ResolveBroadphase()
@@ -473,18 +479,20 @@ void PhysicsWorld::ResolveBroadphase()
         {
         case ShapeType::AABB:
         {
-            const auto aabbCollider = Aabbf::FromCenter(
+            const auto& aabbCollider = std::get<(int)ShapeType::AABB>(shapes_[collider.shapeIndex]);
+            const auto aabb = Aabbf::FromCenter(
                 bodyManager_[collider.bodyIndex].position + collider.offset,
-                aabbs_[AabbIndex{collider.shapeIndex.index(), collider.shapeIndex.generationIndex()}].halfSize);
-            bsh_->Insert({ aabbCollider, collider.colliderIndex });
+                aabbCollider.halfSize);
+            bsh_->Insert({ aabb, collider.colliderIndex });
             break;
         }
         case ShapeType::CIRCLE:
         {
-            const auto circleCollider = Circlef{
+            const auto& circleCollider = std::get<(int)ShapeType::CIRCLE>(shapes_[collider.shapeIndex]);
+            const auto circle = Circlef{
                 bodyManager_[collider.bodyIndex].position+collider.offset,
-                circles_[CircleIndex{collider.shapeIndex.index(), collider.shapeIndex.generationIndex()}].radius};
-            bsh_->Insert({ circleCollider.GetAabb(), collider.colliderIndex });
+                circleCollider.radius};
+            bsh_->Insert({ circle.GetAabb(), collider.colliderIndex });
             break;
         }
         default: 
@@ -498,9 +506,7 @@ void PhysicsWorld::ResolveBroadphase()
 void PhysicsWorld::CopyFrom(const PhysicsWorld& physicsWorld)
 {
 	bodyManager_ = physicsWorld.bodyManager_;
-	aabbs_ = physicsWorld.aabbs_;
-	circles_ = physicsWorld.circles_;
-	planes_ = physicsWorld.planes_;
+	shapes_ = physicsWorld.shapes_;
 	colliderManager_ = physicsWorld.colliderManager_;
 	manifold_ = physicsWorld.manifold_;
 }
