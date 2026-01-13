@@ -13,6 +13,8 @@ if(ENABLE_PROFILING)
     list(APPEND VCPKG_MANIFEST_FEATURES "profiling")
 endif (ENABLE_PROFILING)
 
+option(USE_SIXIT "Use sixit for deterministic floating point" ON)
+
 cmake_minimum_required (VERSION 3.18)
 project(NekoPhysics)
 
@@ -46,6 +48,9 @@ link_directories(${CMAKE_BINARY_DIR})
 if(ENABLE_PROFILING)
     target_link_libraries(NekoPhysics PUBLIC Tracy::TracyClient)
     target_compile_definitions(NekoPhysics PRIVATE TRACY_ENABLE)
+endif()
+if(USE_SIXIT)
+    target_compile_definitions(NekoPhysics PUBLIC NEKO_USE_SIXIT)
 endif()
 if (MSVC)
     # warning level 4 and all warnings as errors
