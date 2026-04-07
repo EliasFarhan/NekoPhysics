@@ -24,11 +24,11 @@ struct Vec2
 	constexpr explicit Vec2(const OtherT& v)
 	{
 		x = static_cast<T>(v.x);
-		y = static_cast<T>(v.x);
+		y = static_cast<T>(v.y);
 	}
 
 	template<typename OtherT>
-	constexpr explicit Vec2(OtherT x, OtherT y): x(static_cast<T>(x)), y(static_cast<T>(y)){}
+	constexpr explicit Vec2(OtherT xArg, OtherT yArg): x(static_cast<T>(xArg)), y(static_cast<T>(yArg)){}
     constexpr Vec2 operator+(Vec2 other) const
     {
         return { x + other.x, y + other.y };

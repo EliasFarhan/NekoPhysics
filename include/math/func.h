@@ -68,4 +68,10 @@ T Cos(T value)
 {
 	return std::cos(value);
 }
+
+template<typename T>
+T Tan(T value)
+{
+	return std::tan(value);
+}
 }

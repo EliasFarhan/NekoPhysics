@@ -527,6 +527,9 @@ void PhysicsWorld::Clear()
     bodies_.clear();
     aabbs_.clear();
     circles_.clear();
+    planes_.clear();
+    colliders_.clear();
+    manifold_.clear();
 }
 
 void PhysicsWorld::ResolveBroadphase()

@@ -46,7 +46,7 @@ private:
 };
 
 
-constexpr Radian operator*(T value, Radian angle) { return Radian{ angle.value() * value }; }
+constexpr Radian operator*(Scalar value, Radian angle) { return Radian{ angle.value() * value }; }
 
 /**
  * \brief Degree is an utility class that describes degree angles (0 to 360).
@@ -62,7 +62,7 @@ public:
      * \brief Conversion constructor that implicitly converts Radian to Degree
      * \param angle is the radian angle to be converted to Degree
      */
-    constexpr Degree(const Radian& angle) : value_(angle.value() / Pi() * Scalar{180} {}
+    constexpr Degree(const Radian& angle) : value_(angle.value() / Pi() * Scalar{180}) {}
     [[nodiscard]] constexpr Scalar value() const { return value_; }
     constexpr Degree operator+(Degree angle) const { return Degree{ value_ + angle.value() }; }
     constexpr Degree& operator+=(Degree angle)

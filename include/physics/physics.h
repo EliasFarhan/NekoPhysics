@@ -128,8 +128,8 @@ private:
     static constexpr auto manifoldBaseSize = 1000;
 
     ContactListener* contactListener_ = nullptr;
-    BoundingSurfaceHierarchy* bsh_;
-    Vec2f gravity_;
+    BoundingSurfaceHierarchy* bsh_ = nullptr;
+    Vec2f gravity_ = defaultGravity;
 
 };
 
