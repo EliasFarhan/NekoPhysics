@@ -6,6 +6,9 @@
 #pragma clang diagnostic ignored "-Wold-style-cast"
 #pragma clang diagnostic ignored "-Wself-assign-overloaded"
 #pragma clang diagnostic ignored "-Wdeprecated-literal-operator"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wold-style-cast"
 #endif
 #include "sixit/dmath/mathf/floor.h"
 #include "sixit/dmath/gamefloat/ieee_float_inline_asm.h"
@@ -14,6 +17,8 @@
 #include "sixit/dmath/mathf/cos.h"
 #if defined(__clang__)
 #pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
 #endif
 #include <cmath>
 
