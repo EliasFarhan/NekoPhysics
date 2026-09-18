@@ -1,3 +1,5 @@
+cmake_minimum_required (VERSION 3.18)
+
 
 option(USE_SAMPLES "Use Samples" OFF)
 if(USE_SAMPLES)
@@ -15,13 +17,15 @@ endif (ENABLE_PROFILING)
 
 option(USE_SIXIT "Use sixit for deterministic floating point" ON)
 
-cmake_minimum_required (VERSION 3.18)
 project(NekoPhysics)
 
 set (CMAKE_CXX_STANDARD 20)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(CompilerWarnings)
 
 
 find_package (Python3 COMPONENTS Interpreter)
@@ -43,7 +47,8 @@ file(GLOB_RECURSE SRC_FILES src/*.cpp include/*.h)
 
 add_library(NekoPhysics ${SRC_FILES} )
 target_link_libraries(NekoPhysics PUBLIC unordered_dense)
-target_include_directories(NekoPhysics PUBLIC include/ externals/)
+target_include_directories(NekoPhysics PUBLIC include/)
+target_include_directories(NekoPhysics SYSTEM PUBLIC externals/)
 link_directories(${CMAKE_BINARY_DIR})
 if(ENABLE_PROFILING)
     target_link_libraries(NekoPhysics PUBLIC Tracy::TracyClient)
@@ -52,13 +57,9 @@ endif()
 if(USE_SIXIT)
     target_compile_definitions(NekoPhysics PUBLIC NEKO_USE_SIXIT)
 endif()
+neko_set_project_warnings(NekoPhysics)
 if (MSVC)
-    # warning level 4 and all warnings as errors
-    target_compile_options(NekoPhysics PRIVATE /W4 /w14640 /permissive-)
     target_compile_definitions(NekoPhysics PRIVATE _USE_MATH_DEFINES=1)
-else()
-    # lots of warnings and all warnings as errors
-    target_compile_options(NekoPhysics PRIVATE -Wall -Wextra -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wunused -Werror)
 endif()
 
 #install(TARGETS NekoPhysics FILE_SET HEADERS)
@@ -73,6 +74,7 @@ if(USE_SAMPLES)
     target_include_directories(Sample PRIVATE include/ main/ ${OPENGL_INCLUDE_DIR})
     target_link_libraries(Sample PRIVATE NekoPhysics ${OPENGL_LIBRARIES} fmt::fmt-header-only SDL3::SDL3
             imgui::imgui box2d::box2d)
+    neko_set_project_warnings(Sample)
     if(MSVC)
         target_link_libraries(Sample PRIVATE opengl32)
     endif()
@@ -88,6 +90,7 @@ if(USE_TESTING)
         add_executable(${TEST_NAME} ${TEST_FILE})
         target_link_libraries(${TEST_NAME} NekoPhysics GTest::gtest GTest::gmock)
         target_include_directories(${TEST_NAME} PRIVATE include/)
+        neko_set_project_warnings(${TEST_NAME})
         set_target_properties (${TEST_NAME} PROPERTIES FOLDER Tests/)
         gtest_discover_tests(${TEST_NAME})
     endforeach()
