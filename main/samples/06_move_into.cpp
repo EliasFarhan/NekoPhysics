@@ -6,8 +6,7 @@
 
 #include <SDL3/SDL_log.h>
 #include <fmt/format.h>
-#include <box2d/b2_contact.h>
-#include <box2d/b2_polygon_shape.h>
+#include <box2d/box2d.h>
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
 #endif

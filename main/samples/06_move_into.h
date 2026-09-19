@@ -3,7 +3,7 @@
 #include "physics/physics.h"
 #include "sample.h"
 
-#include <box2d/b2_world.h>
+#include <box2d/box2d.h>
 
 namespace neko
 {

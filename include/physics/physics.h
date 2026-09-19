@@ -89,20 +89,20 @@ public:
     void ResolveBroadphase();
     void ResolveNarrowphase(Scalar dt);
 
-    [[nodiscard]] Body& body(BodyIndex index) { return bodies_[index.index]; }
-    [[nodiscard]] const Body& body(BodyIndex index) const { return bodies_[index.index]; }
+    [[nodiscard]] Body& body(BodyIndex index) { return bodies_[static_cast<size_t>(index.index)]; }
+    [[nodiscard]] const Body& body(BodyIndex index) const { return bodies_[static_cast<size_t>(index.index)]; }
 
 	ColliderIndex AddCircleCollider(BodyIndex body);
 	ColliderIndex AddAabbCollider(BodyIndex body);
 	ColliderIndex AddPlaneCollider(BodyIndex body);
 
-	[[nodiscard]] Collider& collider(ColliderIndex colliderIndex) { return colliders_[colliderIndex.index]; }
-	[[nodiscard]] const Collider& collider(ColliderIndex colliderIndex) const { return colliders_[colliderIndex.index]; }
+	[[nodiscard]] Collider& collider(ColliderIndex colliderIndex) { return colliders_[static_cast<size_t>(colliderIndex.index)]; }
+	[[nodiscard]] const Collider& collider(ColliderIndex colliderIndex) const { return colliders_[static_cast<size_t>(colliderIndex.index)]; }
 
-	[[nodiscard]] AabbCollider& aabb(ShapeIndex shapeIndex) { return aabbs_[shapeIndex.index]; }
-	[[nodiscard]] const AabbCollider& aabb(ShapeIndex shapeIndex) const { return aabbs_[shapeIndex.index]; }
-	[[nodiscard]] CircleCollider& circle(ShapeIndex shapeIndex) { return circles_[shapeIndex.index]; }
-    [[nodiscard]] const CircleCollider& circle(ShapeIndex shapeIndex) const { return circles_[shapeIndex.index]; }
+	[[nodiscard]] AabbCollider& aabb(ShapeIndex shapeIndex) { return aabbs_[static_cast<size_t>(shapeIndex.index)]; }
+	[[nodiscard]] const AabbCollider& aabb(ShapeIndex shapeIndex) const { return aabbs_[static_cast<size_t>(shapeIndex.index)]; }
+	[[nodiscard]] CircleCollider& circle(ShapeIndex shapeIndex) { return circles_[static_cast<size_t>(shapeIndex.index)]; }
+    [[nodiscard]] const CircleCollider& circle(ShapeIndex shapeIndex) const { return circles_[static_cast<size_t>(shapeIndex.index)]; }
     
     void RemoveAabbCollider(ColliderIndex index);
     void RemoveCircleCollider(ColliderIndex index);
