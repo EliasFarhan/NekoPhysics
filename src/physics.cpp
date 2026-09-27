@@ -296,7 +296,7 @@ NEKO_HOT bool PhysicsWorld::DetectContact(
     return doesIntersect;
 }
 
-void PhysicsWorld::ResolveNarrowphase()
+NEKO_HOT void PhysicsWorld::ResolveNarrowphase()
 {
     NEKO_PROFILE_FUNCTION();
     newTouchingPairs_.clear();
@@ -352,7 +352,7 @@ void PhysicsWorld::ResolveNarrowphase()
     std::swap(touchingPairs_, newTouchingPairs_);
 }
 
-void PhysicsWorld::NotifyContactChanges() const
+NEKO_HOT void PhysicsWorld::NotifyContactChanges() const
 {
     if(contactListener_ == nullptr)
     {
@@ -460,7 +460,7 @@ void PhysicsWorld::RemoveCollider(ColliderIndex index)
     collider = Collider{};
 }
 
-void PhysicsWorld::Step()
+NEKO_HOT void PhysicsWorld::Step()
 {
     NEKO_PROFILE_FUNCTION();
     const auto dt = config_.dt;
@@ -508,7 +508,7 @@ void PhysicsWorld::Clear()
     newTouchingPairs_.clear();
 }
 
-Aabbf PhysicsWorld::GetAabb(const Collider& collider) const
+NEKO_HOT Aabbf PhysicsWorld::GetAabb(const Collider& collider) const
 {
     const auto center = bodies_[collider.bodyIndex.index].position + collider.offset;
     if (collider.type == ShapeType::AABB)
@@ -518,7 +518,7 @@ Aabbf PhysicsWorld::GetAabb(const Collider& collider) const
     return Circlef{ center, circles_[collider.shapeIndex.index].radius }.GetAabb();
 }
 
-void PhysicsWorld::ResolveBroadphase()
+NEKO_HOT void PhysicsWorld::ResolveBroadphase()
 {
     NEKO_PROFILE_FUNCTION();
     const auto tBroadphaseStart = StepProfileNow();
