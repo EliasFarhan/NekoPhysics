@@ -2,8 +2,8 @@
 #define NEKOPHYSICS_ANGLE_H
 
 #include "math/const.h"
-
-#include <cmath>
+#include "math/fixed_trig.h"
+#include "math/func.h"
 
 namespace neko
 {
@@ -62,7 +62,7 @@ public:
      * \brief Conversion constructor that implicitly converts Radian to Degree
      * \param angle is the radian angle to be converted to Degree
      */
-    constexpr Degree(const Radian& angle) : value_(angle.value() / Pi() * Scalar{180}) {}
+    constexpr Degree(const Radian& angle) : value_(angle.value() / Pi<Scalar>() * Scalar{180}) {}
     [[nodiscard]] constexpr Scalar value() const { return value_; }
     constexpr Degree operator+(Degree angle) const { return Degree{ value_ + angle.value() }; }
     constexpr Degree& operator+=(Degree angle)
@@ -89,7 +89,7 @@ constexpr Degree operator*(Scalar value, Degree angle) { return Degree{ angle.va
 
 constexpr Radian::Radian(const Degree& angle)
 {
-    value_ = angle.value() / Scalar{180} * Pi();
+    value_ = angle.value() / Scalar{180} * Pi<Scalar>();
 }
 
 /**

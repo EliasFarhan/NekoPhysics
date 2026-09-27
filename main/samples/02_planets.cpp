@@ -1,5 +1,5 @@
 #include "02_planets.h"
-#include "math/fixed_lut.h"
+#include "math/fixed_trig.h"
 
 #include <SDL3/SDL_log.h>
 

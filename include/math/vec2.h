@@ -7,7 +7,8 @@
 #include <limits>
 
 #include "math/const.h"
-#include "math/fixed_lut.h"
+#include "math/fixed_trig.h"
+#include "math/func.h"
 
 namespace neko
 {

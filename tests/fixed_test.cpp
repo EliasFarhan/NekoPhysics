@@ -1,6 +1,7 @@
 #include "math/const.h"
 #include "math/fixed.h"
-#include "math/fixed_lut.h"
+#include "math/fixed_trig.h"
+#include "math/func.h"
 
 #include <gtest/gtest.h>
 
@@ -47,7 +48,34 @@ static_assert(neko::Sqrt(Fixed16{ 2 }) == Raw(92681));
 static_assert(neko::Sqrt(Fixed16{ 10000 }) == Fixed16{ 100 });
 static_assert(neko::Sqrt(Fixed16{ 16384 }) == Fixed16{ 128 });
 static_assert(neko::Sqrt(std::numeric_limits<Fixed16>::max()) == Raw(11863283));
+
+// Sin/Cos: compile-time table, radians turned into a phase by one multiplication (DS review D1.9)
+static_assert(neko::Sin(Fixed16{ 0 }) == Fixed16{ 0 });
+static_assert(neko::Cos(Fixed16{ 0 }) == Fixed16{ 1 });
+static_assert(neko::detail::sinTable[neko::detail::SIN_TABLE_SIZE / 4] == 65536);
+static_assert(neko::detail::sinTable[neko::detail::SIN_TABLE_SIZE] == 0);
 } // namespace
+
+TEST(Fixed16, SinCosMatchStd)
+{
+    for (float x = -20.0f; x <= 20.0f; x += 0.0137f)
+    {
+        const Fixed16 angle{ x };
+        const double exact = static_cast<double>(static_cast<float>(angle));
+        EXPECT_NEAR(static_cast<float>(neko::Sin(angle)), std::sin(exact), 5e-5) << x;
+        EXPECT_NEAR(static_cast<float>(neko::Cos(angle)), std::cos(exact), 5e-5) << x;
+    }
+}
+
+TEST(Fixed16, TanMatchesStd)
+{
+    for (float x = -1.4f; x <= 1.4f; x += 0.01f)
+    {
+        const Fixed16 angle{ x };
+        const double exact = std::tan(static_cast<double>(static_cast<float>(angle)));
+        EXPECT_NEAR(static_cast<float>(neko::Tan(angle)), exact, 5e-5 * (1.0 + exact * exact)) << x;
+    }
+}
 
 TEST(Fixed16, MulMatchesExactProductWithinHalfUlp)
 {

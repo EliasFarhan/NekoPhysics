@@ -28,7 +28,6 @@ cmake --preset debug-float    # same with NEKO_SCALAR=FLOAT
 
 As of 2026-09-18 `NEKO_SCALAR=SIXIT` fails to build with MSVC 14.51 and clang (sixit's bundled fmt, non-constexpr `Scalar`); see finding S1.8 in the vault review.
 
-Configure runs `scripts/gen_fixed_table.py` (Python 3 required), which rewrites `src/generated/`.
 
 ## Warnings
 

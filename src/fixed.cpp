@@ -1,5 +1,0 @@
-
-namespace neko
-{
-    
-} // namespace neko

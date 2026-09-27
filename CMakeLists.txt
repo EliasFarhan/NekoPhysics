@@ -32,11 +32,6 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CompilerWarnings)
 
 
-find_package (Python3 COMPONENTS Interpreter)
-if(NOT Python3_EXECUTABLE)
-    message( FATAL_ERROR "Could not find Python 3" )
-endif()
-execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/gen_fixed_table.py" WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
 
 
