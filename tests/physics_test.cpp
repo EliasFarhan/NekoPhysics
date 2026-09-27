@@ -188,6 +188,25 @@ TEST_F(PhysicsWorldTest, CoincidentCirclesSeparate)
     EXPECT_LT(std::abs(F(world_.body(a.body).position.y)), 10.0f);
 }
 
+TEST(Collisions, BoxComesToRestOnStaticGround)
+{
+    neko::PhysicsWorld world{};
+    neko::QuadTree quadTree;
+    world.SetBSH(&quadTree);
+    const auto ground = AddBox(world, V(0, 0), V(5, 0.5f), neko::BodyType::STATIC);
+    const auto box = AddBox(world, V(0, 1.5f), V(0.5f, 0.5f));
+    // Restitution combines with max, like Box2D
+    world.collider(ground.collider).restitution = Scalar{ 0 };
+    world.collider(box.collider).restitution = Scalar{ 0 };
+    for (int i = 0; i < 120; ++i)
+    {
+        world.Step();
+    }
+    EXPECT_NEAR(F(world.body(box.body).position.y), 1.0f, 0.02f);
+    EXPECT_NEAR(F(world.body(box.body).velocity.y), 0.0f, tolerance);
+    EXPECT_NEAR(F(world.body(box.body).position.x), 0.0f, tolerance);
+}
+
 // A pair stored as a trigger dereferenced an empty optional once a collider became solid (DS review D2.2)
 TEST_F(PhysicsWorldTest, TriggerBecomingSolidIsResolved)
 {
