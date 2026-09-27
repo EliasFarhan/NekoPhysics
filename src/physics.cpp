@@ -146,9 +146,16 @@ PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config) :
     circles_(MakeList<CircleCollider>(ConfigAllocator(config), config.maxColliders)),
     colliders_(MakeList<Collider>(ConfigAllocator(config), config.maxColliders)),
     touchingPairs_(MakeList<TouchingPair>(ConfigAllocator(config), config.maxTouchingPairs)),
-    newTouchingPairs_(MakeList<TouchingPair>(ConfigAllocator(config), config.maxTouchingPairs))
+    newTouchingPairs_(MakeList<TouchingPair>(ConfigAllocator(config), config.maxTouchingPairs)),
+    colliderAabbCache_(MakeList<Aabbf>(ConfigAllocator(config), config.maxColliders)),
+    touchingPairBucketCount_(MakeList<std::uint32_t>(ConfigAllocator(config), config.maxColliders)),
+    touchingPairBucketStart_(MakeList<std::uint32_t>(ConfigAllocator(config), config.maxColliders + 1)),
+    sortedTouchingPairs_(MakeList<TouchingPair>(ConfigAllocator(config), config.maxTouchingPairs))
 {
     assert(config.maxBodies <= std::numeric_limits<Index>::max() && config.maxColliders <= std::numeric_limits<Index>::max());
+    // Fixed size from here on: SortNewTouchingPairs indexes these two directly instead of push_back-ing every step
+    touchingPairBucketCount_.resize(config.maxColliders);
+    touchingPairBucketStart_.resize(config.maxColliders + 1);
 }
 
 BodyIndex PhysicsWorld::AddBody()
@@ -345,11 +352,59 @@ NEKO_HOT void PhysicsWorld::ResolveNarrowphase()
         }
     }
     const auto tSortStart = StepProfileNow();
-    std::sort(newTouchingPairs_.begin(), newTouchingPairs_.end(),
-        [](const TouchingPair& a, const TouchingPair& b) { return a.pair < b.pair; });
+    SortNewTouchingPairs();
     NotifyContactChanges();
     StepProfileMark(StepPhase::SortAndNotify, tSortStart);
     std::swap(touchingPairs_, newTouchingPairs_);
+}
+
+NEKO_HOT void PhysicsWorld::SortNewTouchingPairs()
+{
+    std::fill(touchingPairBucketCount_.begin(), touchingPairBucketCount_.end(), std::uint32_t{ 0 });
+    for (const auto& touchingPair : newTouchingPairs_)
+    {
+        ++touchingPairBucketCount_[touchingPair.pair.c1.index];
+    }
+
+    // Exclusive prefix sum: bucketStart[k] is where collider k's pairs begin in the sorted output
+    std::uint32_t runningTotal = 0;
+    for (std::size_t k = 0; k < touchingPairBucketCount_.size(); ++k)
+    {
+        touchingPairBucketStart_[k] = runningTotal;
+        runningTotal += touchingPairBucketCount_[k];
+    }
+    touchingPairBucketStart_.back() = runningTotal;
+
+    sortedTouchingPairs_.resize(newTouchingPairs_.size());
+    // Reuse the counts as write cursors, seeded from the bucket starts just computed
+    std::copy(touchingPairBucketStart_.begin(), touchingPairBucketStart_.end() - 1, touchingPairBucketCount_.begin());
+    for (const auto& touchingPair : newTouchingPairs_)
+    {
+        sortedTouchingPairs_[touchingPairBucketCount_[touchingPair.pair.c1.index]++] = touchingPair;
+    }
+
+    // Each bucket only holds one collider's contacts (typically a handful): insertion sort by c2 finishes the order
+    for (std::size_t k = 0; k + 1 < touchingPairBucketStart_.size(); ++k)
+    {
+        if (touchingPairBucketStart_[k] == touchingPairBucketStart_[k + 1])
+        {
+            continue;
+        }
+        const auto bucketBegin = sortedTouchingPairs_.begin() + static_cast<std::ptrdiff_t>(touchingPairBucketStart_[k]);
+        const auto bucketEnd = sortedTouchingPairs_.begin() + static_cast<std::ptrdiff_t>(touchingPairBucketStart_[k + 1]);
+        for (auto it = bucketBegin + 1; it < bucketEnd; ++it)
+        {
+            const TouchingPair value = *it;
+            auto insertAt = it;
+            while (insertAt > bucketBegin && value.pair.c2 < (insertAt - 1)->pair.c2)
+            {
+                *insertAt = *(insertAt - 1);
+                --insertAt;
+            }
+            *insertAt = value;
+        }
+    }
+    std::swap(newTouchingPairs_, sortedTouchingPairs_);
 }
 
 NEKO_HOT void PhysicsWorld::NotifyContactChanges() const
@@ -524,12 +579,14 @@ NEKO_HOT void PhysicsWorld::ResolveBroadphase()
     const auto tBroadphaseStart = StepProfileNow();
     auto& broadphase = Broadphase();
     broadphase.Clear();
+    colliderAabbCache_.clear();
 
     const auto isInserted = [this](const Collider& collider)
     {
         return collider.type != ShapeType::NONE && bodies_[collider.bodyIndex.index].isActive;
     };
-    // World box from the collider extents, starting from the first one (no infinite bounds to overflow)
+    // World box from the collider extents, starting from the first one (no infinite bounds to overflow). Each
+    // Aabbf is computed once here and cached, since a BSH may need SetWorldAabb called before any Insert.
     bool hasCollider = false;
     Aabbf worldBox{};
     for (const auto& collider : colliders_)
@@ -539,6 +596,7 @@ NEKO_HOT void PhysicsWorld::ResolveBroadphase()
             continue;
         }
         const auto aabb = GetAabb(collider);
+        colliderAabbCache_.push_back(aabb);
         if (!hasCollider)
         {
             worldBox = aabb;
@@ -551,11 +609,13 @@ NEKO_HOT void PhysicsWorld::ResolveBroadphase()
     if (hasCollider)
     {
         broadphase.SetWorldAabb(worldBox);
+        std::size_t cacheIndex = 0;
         for (const auto& collider : colliders_)
         {
             if (isInserted(collider))
             {
-                broadphase.Insert({ GetAabb(collider), collider.colliderIndex });
+                broadphase.Insert({ colliderAabbCache_[cacheIndex], collider.colliderIndex });
+                ++cacheIndex;
             }
         }
     }

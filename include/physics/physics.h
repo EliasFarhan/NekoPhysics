@@ -136,6 +136,13 @@ public:
     void Clear();
     void ResolveBroadphase();
     void ResolveNarrowphase();
+    /**
+     * @brief Sorts newTouchingPairs_ by pair (c1 then c2), the same total order as
+     * std::sort(..., [](a, b){ return a.pair < b.pair; }), but in O(n + maxColliders): a counting sort on c1
+     * (colliders are indices into a small, fixed-size table) followed by an insertion sort of each c1 bucket, which
+     * is short (a body only touches a handful of others).
+     */
+    void SortNewTouchingPairs();
 
     [[nodiscard]] Body& body(BodyIndex index) { return bodies_[index.index]; }
     [[nodiscard]] const Body& body(BodyIndex index) const { return bodies_[index.index]; }
@@ -195,6 +202,18 @@ private:
     ArrayList<Collider> colliders_;
     ArrayList<TouchingPair> touchingPairs_;
     ArrayList<TouchingPair> newTouchingPairs_;
+    /**
+     * @brief Scratch buffer for ResolveBroadphase: each active collider's Aabbf, computed once per Step and reused
+     * for both the world box pass and the insert pass (GetAabb isn't free: a body lookup plus a shape switch)
+     */
+    ArrayList<Aabbf> colliderAabbCache_;
+    /**
+     * @brief Scratch for SortNewTouchingPairs: bucketCount_[k] then bucketStart_[k] hold, then temporarily the write
+     * cursor for, colliders whose ColliderPair::c1.index == k; sorted_ is the counting sort's output buffer.
+     */
+    ArrayList<std::uint32_t> touchingPairBucketCount_;
+    ArrayList<std::uint32_t> touchingPairBucketStart_;
+    ArrayList<TouchingPair> sortedTouchingPairs_;
 
     ContactListener* contactListener_ = nullptr;
     BoundingSurfaceHierarchy* bsh_ = nullptr;
