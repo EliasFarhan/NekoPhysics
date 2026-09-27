@@ -98,3 +98,7 @@ if(USE_TESTING)
         gtest_discover_tests(${TEST_NAME})
     endforeach()
 endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "NintendoDS")
+    add_subdirectory(nds)
+endif()
