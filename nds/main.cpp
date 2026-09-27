@@ -1,5 +1,9 @@
-// DS test ROM: DS == PC determinism of the falling pile scene, self-check of the hardware math hooks, Step timings.
-// Results go to the bottom screen and to the no$gba debug output (nocashMessage).
+// DS test ROM: DS == PC determinism of the falling pile scene, self-check of the hardware math hooks, Step timings
+// and a per-phase breakdown of Step. Results go to the bottom screen and are kept in the g_report global so a
+// host-side arm-none-eabi-gdb session (melonDS exposes a GDB stub, see [Instance0.Gdb] in melonDS.toml) can read
+// exact values back after the TestsDone() breakpoint: melonDS does not implement the no$gba debug message port, and
+// the on-screen console (32x24) scrolls past the early lines well before the run is done.
+#include "core/step_profile.h"
 #include "physics/physics.h"
 #include "scenes/falling_pile.h"
 
@@ -25,6 +29,8 @@ __attribute__((format(printf, 1, 2))) void Log(const char* format, ...)
     nocashMessage(line);
 }
 
+} // namespace
+
 struct Timing
 {
     std::uint64_t total = 0;
@@ -38,6 +44,45 @@ struct Timing
         ++count;
     }
 };
+
+struct ChecksumSample
+{
+    int step = 0;
+    std::uint32_t checksum = 0;
+    std::uint32_t expected = 0;
+};
+
+struct PairCountSample
+{
+    int step = 0;
+    std::uint16_t broadphasePairs = 0;
+    std::uint16_t touchingPairs = 0;
+};
+
+/**
+ * @brief Every number the vault report is built from, kept in one global struct so a host-side gdb session can
+ * `print g_report` (or any field) once the ROM reaches the TestsDone() breakpoint.
+ */
+struct Report
+{
+    bool hooksOk = false;
+    bool pileOk = false;
+    ChecksumSample pileChecksums[6] = {};
+    PairCountSample pilePairCounts[6] = {};
+    Timing pileTiming{};
+
+    std::uint32_t heavyChecksum = 0;
+    PairCountSample heavyPairCounts[4] = {};
+    Timing heavyTiming{};
+
+    neko::StepPhaseTicks heavyPhaseTicks{};
+    int heavyPhaseSteps = 0;
+};
+
+Report g_report;
+
+namespace
+{
 
 std::uint32_t TimedStep(neko::PhysicsWorld& world, Timing& timing)
 {
@@ -54,6 +99,14 @@ void LogTiming(const char* name, const Timing& timing)
     const auto average = static_cast<std::uint32_t>(timing.total / static_cast<std::uint64_t>(timing.count));
     Log("%s avg %" PRIu32 "us max %" PRIu32 "us\n", name, timerTicks2usec(average), timerTicks2usec(timing.max));
     Log("  ticks avg %" PRIu32 " max %" PRIu32 "\n", average, timing.max);
+}
+
+PairCountSample SamplePairCounts(int step, const neko::PhysicsWorld& world)
+{
+    const PairCountSample sample{ step, static_cast<std::uint16_t>(world.broadphasePairCount()),
+                                   static_cast<std::uint16_t>(world.touchingPairs().size()) };
+    Log("  step %3d broadphase %3u touching %3u\n", sample.step, sample.broadphasePairs, sample.touchingPairs);
+    return sample;
 }
 
 std::uint64_t Next(std::uint64_t& state)
@@ -143,33 +196,35 @@ bool RunFallingPile()
 {
     neko::PhysicsWorld world{};
     neko::scenes::BuildFallingPile(world);
-    Timing timing;
     bool ok = true;
     int step = 0;
+    int sampleIndex = 0;
     for (const auto& [expectedStep, expected] : neko::scenes::FALLING_PILE_GOLDEN_CHECKSUMS)
     {
         while (step < expectedStep)
         {
-            TimedStep(world, timing);
+            TimedStep(world, g_report.pileTiming);
             ++step;
         }
         const std::uint32_t checksum = world.GenerateChecksum();
         ok = ok && checksum == expected;
         Log("%3d %08" PRIx32 " %08" PRIx32 " %s\n", step, checksum, expected, checksum == expected ? "OK" : "FAIL");
+        g_report.pileChecksums[sampleIndex] = { step, checksum, expected };
+        g_report.pilePairCounts[sampleIndex] = SamplePairCounts(step, world);
+        ++sampleIndex;
     }
     Log("pile: %s\n", ok ? "OK" : "FAIL");
-    LogTiming("67", timing);
+    LogTiming("67", g_report.pileTiming);
     return ok;
 }
 
 /**
- * @brief Timing only: 3 static boxes and 252 dynamic bodies, near the default capacity of 256 bodies
+ * @brief 3 static boxes and 252 dynamic bodies, near the default capacity of 256 bodies
  */
-void RunHeavyPile()
+void BuildHeavyPile(neko::PhysicsWorld& world)
 {
     using neko::Scalar;
     using neko::scenes::Ratio;
-    neko::PhysicsWorld world{};
     const auto addStaticBox = [&world](neko::Vec2f position, neko::Vec2f halfSize)
     {
         const auto body = world.AddBody();
@@ -207,26 +262,89 @@ void RunHeavyPile()
             world.aabb(world.collider(collider).shapeIndex).halfSize = { Ratio(7, 20), Ratio(5 + i % 2, 20) };
         }
     }
+}
 
-    Timing timing;
-    for (int step = 0; step < 600; ++step)
+constexpr int HEAVY_STEPS = 600;
+
+/**
+ * @brief Timing and checksum only, with no profiling overhead: the numbers reported for the 8ms budget
+ */
+void RunHeavyPile()
+{
+    neko::PhysicsWorld world{};
+    BuildHeavyPile(world);
+
+    int sampleIndex = 0;
+    for (int step = 0; step < HEAVY_STEPS; ++step)
     {
-        TimedStep(world, timing);
+        TimedStep(world, g_report.heavyTiming);
+        if (step == 0 || step == 100 || step == 300 || step == HEAVY_STEPS - 1)
+        {
+            g_report.heavyPairCounts[sampleIndex] = SamplePairCounts(step, world);
+            ++sampleIndex;
+        }
     }
-    Log("255 bodies, 600 steps: %08" PRIx32 "\n", world.GenerateChecksum());
-    LogTiming("255", timing);
+    g_report.heavyChecksum = world.GenerateChecksum();
+    Log("255 bodies, %d steps: %08" PRIx32 "\n", HEAVY_STEPS, g_report.heavyChecksum);
+    LogTiming("255", g_report.heavyTiming);
+}
+
+/**
+ * @brief Same scene, run to a resting pile, then profiled with StepPhase ticks: slower than RunHeavyPile because
+ * of the extra cpuGetTiming() reads, so its own Step timing isn't part of the reported avg/max ms.
+ */
+void RunHeavyPileProfile()
+{
+    neko::PhysicsWorld world{};
+    BuildHeavyPile(world);
+
+    constexpr int warmupSteps = HEAVY_STEPS - 120;
+    Timing warmup;
+    for (int step = 0; step < warmupSteps; ++step)
+    {
+        TimedStep(world, warmup);
+    }
+
+    neko::g_stepPhaseTicks = &g_report.heavyPhaseTicks;
+    Timing profiled;
+    g_report.heavyPhaseSteps = HEAVY_STEPS - warmupSteps;
+    for (int step = 0; step < g_report.heavyPhaseSteps; ++step)
+    {
+        TimedStep(world, profiled);
+    }
+    neko::g_stepPhaseTicks = nullptr;
+
+    const auto average = static_cast<std::uint32_t>(profiled.total / static_cast<std::uint64_t>(profiled.count));
+    Log("255 phase breakdown, resting pile, %d steps (avg %" PRIu32 "us/step with profiling on):\n",
+        g_report.heavyPhaseSteps, timerTicks2usec(average));
+    constexpr const char* names[] = { "integration", "broadphase", "detectContact", "resolve", "sortAndNotify" };
+    for (std::size_t i = 0; i < static_cast<std::size_t>(neko::StepPhase::Count); ++i)
+    {
+        const auto ticksPerStep =
+            g_report.heavyPhaseTicks.ticks[i] / static_cast<std::uint32_t>(g_report.heavyPhaseSteps);
+        Log("  %-14s %6" PRIu32 "us/step\n", names[i], timerTicks2usec(ticksPerStep));
+    }
 }
 
 } // namespace
+
+// Reached exactly once, after every result has been logged: the breakpoint a host-side gdb session sets before
+// letting the ARM9 run (melonDS's GDB stub, see melonDS.toml [Instance0.Gdb]), since results live in g_report.
+[[gnu::noinline]] void TestsDone()
+{
+    asm volatile("" ::: "memory");
+}
 
 int main()
 {
     consoleDemoInit();
     Log("NekoPhysics DS test\n");
-    const bool hooksOk = CheckMathHooks();
-    const bool pileOk = RunFallingPile();
+    g_report.hooksOk = CheckMathHooks();
+    g_report.pileOk = RunFallingPile();
     RunHeavyPile();
-    Log("DONE %s\n", hooksOk && pileOk ? "OK" : "FAIL");
+    RunHeavyPileProfile();
+    Log("DONE %s\n", g_report.hooksOk && g_report.pileOk ? "OK" : "FAIL");
+    TestsDone();
 
     while (pmMainLoop())
     {

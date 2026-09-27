@@ -164,6 +164,10 @@ public:
 	[[nodiscard]] Vec2f gravity() const { return config_.gravity; }
 	[[nodiscard]] Scalar dt() const { return config_.dt; }
     [[nodiscard]] const ArrayList<TouchingPair>& touchingPairs() const { return touchingPairs_; }
+    /**
+     * @brief Number of pairs whose AABBs overlap, found by the broadphase during the last ResolveBroadphase
+     */
+    [[nodiscard]] std::size_t broadphasePairCount() const { return Broadphase().GetPossiblePairs().size(); }
 
     /**
      * @brief Copies the simulation state (bodies, colliders, shapes, touching pairs), not the listener nor the BSH.
@@ -177,6 +181,10 @@ public:
 private:
     void NotifyContactChanges() const;
     [[nodiscard]] BoundingSurfaceHierarchy& Broadphase() { return bsh_ != nullptr ? *bsh_ : defaultBroadphase_; }
+    [[nodiscard]] const BoundingSurfaceHierarchy& Broadphase() const
+    {
+        return bsh_ != nullptr ? static_cast<const BoundingSurfaceHierarchy&>(*bsh_) : defaultBroadphase_;
+    }
     [[nodiscard]] Aabbf GetAabb(const Collider& collider) const;
 
     PhysicsWorldConfig config_;

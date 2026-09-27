@@ -8,6 +8,7 @@
 #include <type_traits>
 
 #include "core/platform.h"
+#include "core/step_profile.h"
 #include "math/vec2.h"
 #include "physics/contact_solver.h"
 
@@ -321,13 +322,18 @@ void PhysicsWorld::ResolveNarrowphase()
         const bool isTrigger = collider1.isTrigger || collider2.isTrigger;
         // Contacts only live during this step, so their pointers never outlive the containers
         Contact contact{};
-        if(!DetectContact(body1, collider1, body2, collider2, &contact))
+        const auto tDetectStart = StepProfileNow();
+        const bool doesIntersect = DetectContact(body1, collider1, body2, collider2, &contact);
+        StepProfileMark(StepPhase::DetectContact, tDetectStart);
+        if(!doesIntersect)
         {
             continue;
         }
         if(!isTrigger)
         {
+            const auto tResolveStart = StepProfileNow();
             contact.Resolve();
+            StepProfileMark(StepPhase::Resolve, tResolveStart);
         }
         if(newTouchingPairs_.size() < config_.maxTouchingPairs)
         {
@@ -338,9 +344,11 @@ void PhysicsWorld::ResolveNarrowphase()
             assert(false && "PhysicsWorldConfig::maxTouchingPairs reached");
         }
     }
+    const auto tSortStart = StepProfileNow();
     std::sort(newTouchingPairs_.begin(), newTouchingPairs_.end(),
         [](const TouchingPair& a, const TouchingPair& b) { return a.pair < b.pair; });
     NotifyContactChanges();
+    StepProfileMark(StepPhase::SortAndNotify, tSortStart);
     std::swap(touchingPairs_, newTouchingPairs_);
 }
 
@@ -457,6 +465,7 @@ void PhysicsWorld::Step()
     NEKO_PROFILE_FUNCTION();
     const auto dt = config_.dt;
 
+    const auto tIntegrationStart = StepProfileNow();
     for (auto& body : bodies_)
     {
 		if(!body.isActive)
@@ -483,11 +492,10 @@ void PhysicsWorld::Step()
         }
 
     }
+    StepProfileMark(StepPhase::Integration, tIntegrationStart);
 
     ResolveBroadphase();
     ResolveNarrowphase();
-
-    
 }
 
 void PhysicsWorld::Clear()
@@ -513,6 +521,7 @@ Aabbf PhysicsWorld::GetAabb(const Collider& collider) const
 void PhysicsWorld::ResolveBroadphase()
 {
     NEKO_PROFILE_FUNCTION();
+    const auto tBroadphaseStart = StepProfileNow();
     auto& broadphase = Broadphase();
     broadphase.Clear();
 
@@ -551,6 +560,7 @@ void PhysicsWorld::ResolveBroadphase()
         }
     }
     broadphase.CalculatePairs();
+    StepProfileMark(StepPhase::Broadphase, tBroadphaseStart);
 }
 
 void PhysicsWorld::CopyFrom(const PhysicsWorld& physicsWorld)
