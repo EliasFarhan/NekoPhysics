@@ -10,9 +10,7 @@
 #include "math/vec2.h"
 #include "physics/contact_solver.h"
 
-#ifdef TRACY_ENABLE
-#include <tracy/Tracy.hpp>
-#endif
+#include "core/profile.h"
 
 
 
@@ -298,9 +296,7 @@ bool PhysicsWorld::DetectContact(
 
 void PhysicsWorld::ResolveNarrowphase()
 {
-#ifdef TRACY_ENABLE
-    ZoneScoped;
-#endif
+    NEKO_PROFILE_FUNCTION();
     newTouchingPairs_.clear();
     for(const auto& pair : Broadphase().GetPossiblePairs())
     {
@@ -457,9 +453,7 @@ void PhysicsWorld::RemoveCollider(ColliderIndex index)
 
 void PhysicsWorld::Step()
 {
-#ifdef TRACY_ENABLE
-    ZoneScoped;
-#endif
+    NEKO_PROFILE_FUNCTION();
     const auto dt = config_.dt;
 
     for (auto& body : bodies_)
@@ -517,9 +511,7 @@ Aabbf PhysicsWorld::GetAabb(const Collider& collider) const
 
 void PhysicsWorld::ResolveBroadphase()
 {
-#ifdef TRACY_ENABLE
-    ZoneScoped;
-#endif
+    NEKO_PROFILE_FUNCTION();
     auto& broadphase = Broadphase();
     broadphase.Clear();
 

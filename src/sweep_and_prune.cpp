@@ -3,9 +3,7 @@
 #include <algorithm>
 #include <cassert>
 
-#ifdef TRACY_ENABLE
-#include <tracy/Tracy.hpp>
-#endif
+#include "core/profile.h"
 
 namespace neko
 {
@@ -34,9 +32,7 @@ void SweepAndPrune::Insert(const ColliderAabb& colliderAabb)
 
 void SweepAndPrune::CalculatePairs()
 {
-#ifdef TRACY_ENABLE
-    ZoneScoped;
-#endif
+    NEKO_PROFILE_FUNCTION();
     // std::sort doesn't allocate; the order is total, so every implementation gives the same result
     std::sort(colliders_.begin(), colliders_.end(), [](const ColliderAabb& a, const ColliderAabb& b)
     {

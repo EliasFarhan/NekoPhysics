@@ -2,9 +2,7 @@
 
 #include <cassert>
 
-#ifdef TRACY_ENABLE
-#include <tracy/Tracy.hpp>
-#endif
+#include "core/profile.h"
 
 namespace neko
 {
@@ -42,9 +40,7 @@ QuadTree::QuadTree(std::size_t maxColliders, std::size_t maxPairs, std::size_t m
 
 void QuadTree::Insert(const ColliderAabb& colliderAabb)
 {
-#ifdef TRACY_ENABLE
-    ZoneScoped;
-#endif
+    NEKO_PROFILE_FUNCTION();
     if (entries_.size() >= maxColliders_)
     {
         assert(false && "QuadTree: maxColliders reached");
@@ -56,17 +52,13 @@ void QuadTree::Insert(const ColliderAabb& colliderAabb)
 
 void QuadTree::CalculatePairs()
 {
-#ifdef TRACY_ENABLE
-    ZoneScoped;
-#endif
+    NEKO_PROFILE_FUNCTION();
     AddPairs(ROOT);
 }
 
 void QuadTree::Clear()
 {
-#ifdef TRACY_ENABLE
-    ZoneScoped;
-#endif
+    NEKO_PROFILE_FUNCTION();
     entries_.clear();
     possiblePairs_.clear();
     usedNodes_ = 1;
