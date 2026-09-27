@@ -11,6 +11,26 @@
 
 namespace neko
 {
+namespace detail
+{
+/**
+ * @brief Square that can't overflow: Q32.32 in 64 bits for Fixed16 (16.16 overflows past ~181), T otherwise
+ */
+template<typename T>
+[[nodiscard]] constexpr auto WideSquare(T value) noexcept
+{
+    if constexpr (std::is_same_v<T, Fixed16>)
+    {
+        const auto raw = static_cast<std::int64_t>(value.underlyingValue());
+        return static_cast<std::uint64_t>(raw * raw);
+    }
+    else
+    {
+        return value * value;
+    }
+}
+} // namespace detail
+
 template<typename T>
 struct Vec2
 {
@@ -125,12 +145,7 @@ struct Vec2
         if constexpr (std::is_same_v<T, Fixed16>)
         {
             // Sum of squares in Q32.32: SquareLength() overflows past ~181 and rounds to zero below ~1/256
-            const auto square = [](T v)
-            {
-                const auto raw = static_cast<std::int64_t>(v.underlyingValue());
-                return static_cast<std::uint64_t>(raw * raw);
-            };
-            const auto root = detail::ISqrt64(square(x) + square(y));
+            const auto root = detail::ISqrt64(detail::WideSquare(x) + detail::WideSquare(y));
             constexpr auto maxRaw = static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max());
             return T::fromUnderlyingValue(static_cast<std::int32_t>(root > maxRaw ? maxRaw : root));
         }
@@ -166,6 +181,22 @@ struct Vec2
 		return x != other.x || y != other.y;
 	}
 };
+
+/**
+ * @brief Compares the length of v with length (>= 0) without computing a square root or overflowing
+ * @return negative if |v| < length, 0 if equal, positive if |v| > length
+ */
+template<typename T>
+[[nodiscard]] constexpr int CompareLength(Vec2<T> v, T length) noexcept
+{
+    const auto squareLength = detail::WideSquare(v.x) + detail::WideSquare(v.y);
+    const auto lengthSquare = detail::WideSquare(length);
+    if (squareLength < lengthSquare)
+    {
+        return -1;
+    }
+    return lengthSquare < squareLength ? 1 : 0;
+}
 
 template<typename T>
 constexpr Vec2<T> operator*(Scalar f, Vec2<T> other)

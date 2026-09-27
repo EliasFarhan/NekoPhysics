@@ -37,6 +37,26 @@ TEST(Aabb, WithCircle)
     EXPECT_FALSE(neko::Intersect(aabb1, circle5));
 }
 
+// The old test checked two edge midpoints instead of the four corners (review S2.2)
+TEST(Aabb, WithCircleOverCorner)
+{
+    const neko::Aabbf aabb = neko::Aabbf::FromCenter({}, neko::Vec2f::one());
+    constexpr neko::Scalar radius{ 0.8f };
+    // 0.707 from each corner
+    EXPECT_TRUE(neko::Intersect(aabb, neko::Circlef{ neko::Vec2f{neko::Scalar{-1.5f}, neko::Scalar{1.5f}}, radius }));
+    EXPECT_TRUE(neko::Intersect(aabb, neko::Circlef{ neko::Vec2f{neko::Scalar{1.5f}, neko::Scalar{-1.5f}}, radius }));
+    EXPECT_TRUE(neko::Intersect(aabb, neko::Circlef{ neko::Vec2f{neko::Scalar{1.5f}, neko::Scalar{1.5f}}, radius }));
+    EXPECT_TRUE(neko::Intersect(aabb, neko::Circlef{ neko::Vec2f{neko::Scalar{-1.5f}, neko::Scalar{-1.5f}}, radius }));
+    // 0.849 from the corner
+    EXPECT_FALSE(neko::Intersect(aabb, neko::Circlef{ neko::Vec2f{neko::Scalar{-1.6f}, neko::Scalar{1.6f}}, radius }));
+}
+
+TEST(Aabb, WithCircleFarAway)
+{
+    const neko::Aabbf aabb = neko::Aabbf::FromCenter({}, neko::Vec2f::one());
+    EXPECT_FALSE(neko::Intersect(aabb, neko::Circlef{ neko::Vec2f{neko::Scalar{257}, neko::Scalar{0}}, neko::Scalar{1} }));
+}
+
 int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc, argv);

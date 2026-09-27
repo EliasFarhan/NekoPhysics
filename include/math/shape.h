@@ -2,7 +2,6 @@
 
 #include "physics/physics_type.h"
 #include "vec2.h"
-#include <array>
 namespace neko
 {
 
@@ -41,7 +40,7 @@ struct Circle
     }
     [[nodiscard]] constexpr bool Contains(Vec2<T> point) const noexcept
     {
-        return (point - position).SquareLength() < radius * radius;
+        return CompareLength(point - position, radius) < 0;
     }
 };
 
@@ -55,40 +54,24 @@ constexpr bool Intersect(const Aabb<T>& a, const Aabb<T>& b)
 }
 
 template<typename T>
-constexpr static bool Intersect(const Circle<T>& c1, const Circle<T>& c2)
+[[nodiscard]] constexpr bool Intersect(const Circle<T>& c1, const Circle<T>& c2)
 {
-    const auto r = c1.radius + c2.radius;
-    return r * r >= (c1.position - c2.position).SquareLength();
+    return CompareLength(c1.position - c2.position, c1.radius + c2.radius) <= 0;
 }
-template<typename T>
-constexpr bool Intersect(const Circle<T>& circle, const Aabb<T>& aabb)
-{
 
-    const Aabb<T> aabb1{ {aabb.minBound.x-circle.radius, aabb.minBound.y}, {aabb.maxBound.x+circle.radius, aabb.maxBound.y} };
-    const Aabb<T> aabb2{ {aabb.minBound.x, aabb.minBound.y-circle.radius}, {aabb.maxBound.x, aabb.maxBound.y+circle.radius} };
-    if (aabb1.Contains(circle.position))
-    {
-        return true;
-    }
-    if(aabb2.Contains(circle.position))
-    {
-        return true;
-    }
-    const std::array<Vec2<T>, 4> edges =
-    {
-        aabb.minBound,
-        aabb.maxBound,
-        aabb.GetCenter()+Vec2<T>::up()*aabb.GetHalfSize().y,
-        aabb.GetCenter()+Vec2<T>::right()*aabb.GetHalfSize().x,
-    };
-    for(auto edge: edges)
-    {
-        if((edge-circle.position).SquareLength() < circle.radius*circle.radius)
-        {
-            return true;
-        }
-    }
-    return false;
+/**
+ * @brief Point of the box closest to point (point itself when it is inside)
+ */
+template<typename T>
+[[nodiscard]] constexpr Vec2<T> ClosestPoint(const Aabb<T>& aabb, Vec2<T> point)
+{
+    return Vec2<T>::Clamp(point, aabb.minBound, aabb.maxBound);
+}
+
+template<typename T>
+[[nodiscard]] constexpr bool Intersect(const Circle<T>& circle, const Aabb<T>& aabb)
+{
+    return CompareLength(circle.position - ClosestPoint(aabb, circle.position), circle.radius) <= 0;
 }
 
 template<typename T>
