@@ -195,7 +195,7 @@ void TriggersSample::FixedUpdate()
 #ifdef TRACY_ENABLE
     ZoneScoped;
 #endif
-    world_.Step(fixedDeltaTime);
+    world_.Step();
     
 }
 

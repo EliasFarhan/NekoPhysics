@@ -24,7 +24,7 @@ private:
         int count = 0;
         Scalar circleRadius{ 0.0f };
     };
-    PhysicsWorld world_;
+    PhysicsWorld world_{ {.dt = fixedDeltaTime} };
     QuadTree quadTree_;
     std::vector<TriggeredBody> bodies_;
     std::vector<SDL_Vertex> vertices_;

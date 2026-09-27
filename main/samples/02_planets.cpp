@@ -68,7 +68,7 @@ void PlanetSample::Begin()
     }
 }
 
-void PlanetSample::Update(float dt)
+void PlanetSample::FixedUpdate()
 {
     for(std::size_t i = 0; i < circleCount; i++)
     {
@@ -77,7 +77,11 @@ void PlanetSample::Update(float dt)
         const auto force = G * blackHoleMass / (delta.SquareLength() * body.inverseMass);
         body.force += force * (-delta).Normalized();
     }
-    world_.Step(Scalar{ dt });
+    world_.Step();
+}
+
+void PlanetSample::Update([[maybe_unused]] float dt)
+{
     for (std::size_t i = 0; i < circleCount; i++)
     {
         const auto& body = world_.body({ static_cast<int>(i) });

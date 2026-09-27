@@ -56,9 +56,13 @@ void KinematicSample::Begin()
     }
 }
 
-void KinematicSample::Update(float dt)
+void KinematicSample::FixedUpdate()
 {
-    world_.Step(Scalar{ dt });
+    world_.Step();
+}
+
+void KinematicSample::Update([[maybe_unused]] float dt)
+{
     for (std::size_t i = 0; i < circleCount; i++)
     {
         auto& body = world_.body({static_cast<int>(i)});

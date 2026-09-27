@@ -21,9 +21,9 @@ struct Contact
     Vec2f contactPoint{};
     Scalar restitution{1};
     Scalar penetration{};
-    void ResolveInterpenetration(Scalar dt) const;
-    void Resolve(Scalar dt);
-    Scalar CalculateSeparateVelocity() const;
-    void ResolveVelocity(Scalar dt) const;
+    void ResolveInterpenetration() const;
+    void Resolve();
+    [[nodiscard]] Scalar CalculateSeparateVelocity() const;
+    void ResolveVelocity() const;
 };
 } // namespace neko

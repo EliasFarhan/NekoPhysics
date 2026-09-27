@@ -192,7 +192,7 @@ void GroundSample::FixedUpdate()
 #ifdef TRACY_ENABLE
     ZoneScoped;
 #endif
-    world_.Step(fixedDeltaTime);
+    world_.Step();
 	Body& body = world_.body(circleBodyIndex_);
 	fmt::print("Player Pos: {}, Player Velocity: {}\n", (float)body.position.y, (float)body.velocity.y);
 

@@ -43,7 +43,7 @@ public:
 	void FixedUpdate() override;
 private:
 #ifndef USE_BOX2D
-	PhysicsWorld world_{ Vec2f{Scalar{0.0f}, Scalar{9.81f}} };
+	PhysicsWorld world_{ {.gravity = Vec2f{Scalar{0.0f}, Scalar{9.81f}}, .dt = fixedDeltaTime} };
 	QuadTree quadTree_;
 
 	BodyIndex staticBodyIndex = INVALID_BODY_INDEX;

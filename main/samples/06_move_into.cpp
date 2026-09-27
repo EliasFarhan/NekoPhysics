@@ -354,7 +354,7 @@ void MoveIntoSample::FixedUpdate()
 #ifdef USE_BOX2D
 	b2World_.Step((float)fixedDeltaTime, 10, 3);
 #else
-	world_.Step(fixedDeltaTime);
+	world_.Step();
 #endif
 
 }

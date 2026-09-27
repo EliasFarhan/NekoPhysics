@@ -29,7 +29,7 @@ public:
 
 TEST(PhysicsWorld, TwoBodiesOneFrame)
 {
-    neko::PhysicsWorld world{neko::Vec2f::zero()};
+    neko::PhysicsWorld world{ {.gravity = neko::Vec2f::zero(), .dt = neko::Scalar{ 0.1f }} };
 
     const auto b1 = world.AddBody();
     {
@@ -86,7 +86,7 @@ TEST(PhysicsWorld, TwoBodiesOneFrame)
     world.SetContactListener(&contactListener);
 
     //Actual Action
-    world.Step(neko::Scalar{ 0.1f });
+    world.Step();
 }
 
 int main(int argc, char** argv)

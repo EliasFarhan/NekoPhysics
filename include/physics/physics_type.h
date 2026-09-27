@@ -33,7 +33,6 @@ enum class ShapeType : short
 {
     AABB,
     CIRCLE,
-    PLANE,
     NONE
 };
 

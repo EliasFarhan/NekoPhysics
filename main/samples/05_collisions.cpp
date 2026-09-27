@@ -131,7 +131,7 @@ void CollisionsSample::End()
 
 void CollisionsSample::FixedUpdate()
 {
-    world_.Step(fixedDeltaTime);
+    world_.Step();
 }
 
 void CollisionsSample::OnCollisionEnter(const ColliderPair &p)

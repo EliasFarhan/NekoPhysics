@@ -69,32 +69,35 @@ struct AabbCollider
 
 [[nodiscard]] std::uint32_t GenerateChecksum(const AabbCollider& collider);
 
-struct PlaneCollider
+struct PhysicsWorldConfig
 {
-    Vec2f normal{ Vec2f::zero() };
+    Vec2f gravity{ Scalar{0.0f}, Scalar{-9.81f} };
+    /**
+     * @brief Duration of one Step. Fixed, so that every peer and every rollback resimulation uses the same value
+     */
+    Scalar dt{ 1.0f / 60.0f };
 };
-
-[[nodiscard]] std::uint32_t GenerateChecksum(const PlaneCollider& collider);
 
 class PhysicsWorld
 {
 public:
-    PhysicsWorld() = default;
-    explicit PhysicsWorld(Vec2f gravity);
+    explicit PhysicsWorld(const PhysicsWorldConfig& config = {});
     BodyIndex AddBody();
     void RemoveBody(BodyIndex index);
     bool DetectContact(Body& body1, Collider& collider1, Body& body2, Collider& collider2, Contact* contact);
-    void Step(Scalar dt);
+    /**
+     * @brief Advances the world by config.dt
+     */
+    void Step();
     void Clear();
     void ResolveBroadphase();
-    void ResolveNarrowphase(Scalar dt);
+    void ResolveNarrowphase();
 
     [[nodiscard]] Body& body(BodyIndex index) { return bodies_[static_cast<size_t>(index.index)]; }
     [[nodiscard]] const Body& body(BodyIndex index) const { return bodies_[static_cast<size_t>(index.index)]; }
 
 	ColliderIndex AddCircleCollider(BodyIndex body);
 	ColliderIndex AddAabbCollider(BodyIndex body);
-	ColliderIndex AddPlaneCollider(BodyIndex body);
 
 	[[nodiscard]] Collider& collider(ColliderIndex colliderIndex) { return colliders_[static_cast<size_t>(colliderIndex.index)]; }
 	[[nodiscard]] const Collider& collider(ColliderIndex colliderIndex) const { return colliders_[static_cast<size_t>(colliderIndex.index)]; }
@@ -106,12 +109,12 @@ public:
     
     void RemoveAabbCollider(ColliderIndex index);
     void RemoveCircleCollider(ColliderIndex index);
-    void RemovePlaneCollider(ColliderIndex index);
 
     void SetBSH(BoundingSurfaceHierarchy* boundingSurfaceHierarchy) { bsh_ = boundingSurfaceHierarchy; }
     void SetContactListener(ContactListener* contactListener) { contactListener_ = contactListener; }
 
-	[[nodiscard]] Vec2f gravity() const {return gravity_; }
+	[[nodiscard]] Vec2f gravity() const { return config_.gravity; }
+	[[nodiscard]] Scalar dt() const { return config_.dt; }
 
 	void CopyFrom(const PhysicsWorld& physicsWorld);
 private:
@@ -119,17 +122,15 @@ private:
     ArrayList<Body> bodies_{StandardAllocator<Body>{heapAllocator_}};
     ArrayList<AabbCollider> aabbs_{StandardAllocator<AabbCollider>{heapAllocator_}};
     ArrayList<CircleCollider> circles_{StandardAllocator<CircleCollider>{heapAllocator_}};
-    ArrayList<PlaneCollider> planes_{StandardAllocator<PlaneCollider>{heapAllocator_}};
     ArrayList<Collider> colliders_{StandardAllocator<Collider>{heapAllocator_}};
     ankerl::unordered_dense::map<ColliderPair, std::optional<Contact>, ColliderHash, std::equal_to<>, StandardAllocator<std::pair<ColliderPair, std::optional<Contact>>>>
         manifold_{manifoldBaseSize, StandardAllocator<std::pair<ColliderPair, std::optional<Contact>>>{heapAllocator_}};
 
-    static constexpr Vec2f defaultGravity{Scalar{0.0f}, Scalar{ -9.81f }};
     static constexpr auto manifoldBaseSize = 1000;
 
     ContactListener* contactListener_ = nullptr;
     BoundingSurfaceHierarchy* bsh_ = nullptr;
-    Vec2f gravity_ = defaultGravity;
+    PhysicsWorldConfig config_;
 
 };
 

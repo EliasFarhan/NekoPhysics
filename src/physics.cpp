@@ -90,14 +90,7 @@ std::uint32_t GenerateChecksum(const AabbCollider& collider)
     return checksum.Get();
 }
 
-std::uint32_t GenerateChecksum(const PlaneCollider& collider)
-{
-    Checksum checksum;
-    checksum.Add(collider.normal);
-    return checksum.Get();
-}
-
-PhysicsWorld::PhysicsWorld(Vec2f gravity): gravity_(gravity)
+PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config): config_(config)
 {
 }
 
@@ -272,7 +265,7 @@ bool PhysicsWorld::DetectContact(
     return doesIntersect;
 }
 
-void PhysicsWorld::ResolveNarrowphase(Scalar dt)
+void PhysicsWorld::ResolveNarrowphase()
 {
 #ifdef TRACY_ENABLE
     ZoneScoped;
@@ -331,7 +324,7 @@ void PhysicsWorld::ResolveNarrowphase(Scalar dt)
             {
                 if(!collider1.isTrigger && !collider2.isTrigger)
                 {
-                    it->second->Resolve(dt);
+                    it->second->Resolve();
                 }
             }
         }
@@ -349,7 +342,7 @@ void PhysicsWorld::ResolveNarrowphase(Scalar dt)
                 }
                 else
                 {
-                    newContact.Resolve(dt);
+                    newContact.Resolve();
                     contactListener_->OnCollisionEnter(newColliderPair);
 					newPairs.emplace_back(newColliderPair, newContact);
                 }
@@ -446,47 +439,6 @@ ColliderIndex PhysicsWorld::AddAabbCollider(BodyIndex body)
     return collider.colliderIndex;
 }
 
-ColliderIndex PhysicsWorld::AddPlaneCollider(BodyIndex body)
-{
-    const auto it = std::find_if(colliders_.begin(), colliders_.end(), [](const Collider& collider)
-        {
-            return collider.type == ShapeType::NONE;
-        });
-    int index = -1;
-    if (it != colliders_.end())
-    {
-        it->type = ShapeType::PLANE;
-        index = static_cast<int>(std::distance(colliders_.begin(), it));
-    }
-    else
-    {
-        index = static_cast<int>(colliders_.size());
-        colliders_.push_back({});
-    }
-    auto& collider = colliders_[index];
-    collider.bodyIndex = body;
-    collider.colliderIndex.index = index;
-    collider.type = ShapeType::PLANE;
-
-    const auto planeIt = std::find_if(planes_.begin(), planes_.end(), [](const auto& plane)
-        {
-            return plane.normal == Vec2f::zero();
-        });
-    int shapeIndex;
-    if (planeIt != planes_.end())
-    {
-        planeIt->normal = Vec2f::zero();
-        shapeIndex = static_cast<int>(std::distance(planes_.begin(), planeIt));
-    }
-    else
-    {
-        shapeIndex = static_cast<int>(planes_.size());
-        planes_.push_back({});
-    }
-    collider.shapeIndex = { shapeIndex };
-    return collider.colliderIndex;
-}
-
 void PhysicsWorld::RemoveAabbCollider(ColliderIndex index)
 {
     auto& collider = colliders_[index.index];
@@ -505,20 +457,12 @@ void PhysicsWorld::RemoveCircleCollider(ColliderIndex index)
     collider.type = ShapeType::NONE;
 }
 
-void PhysicsWorld::RemovePlaneCollider(ColliderIndex index)
-{
-    auto& collider = colliders_[index.index];
-    auto& plane = planes_[collider.shapeIndex.index];
-    plane.normal = Vec2f::zero();
-
-    collider.type = ShapeType::NONE;
-}
-
-void PhysicsWorld::Step(Scalar dt)
+void PhysicsWorld::Step()
 {
 #ifdef TRACY_ENABLE
     ZoneScoped;
 #endif
+    const auto dt = config_.dt;
 
     for (auto& body : bodies_)
     {
@@ -530,7 +474,7 @@ void PhysicsWorld::Step(Scalar dt)
         {
         case BodyType::DYNAMIC:
         {
-            body.force += gravity_ / body.inverseMass;
+            body.force += config_.gravity / body.inverseMass;
 
             body.velocity += body.force * body.inverseMass * dt;
 
@@ -549,7 +493,7 @@ void PhysicsWorld::Step(Scalar dt)
     }
 
     ResolveBroadphase();
-    ResolveNarrowphase(dt);
+    ResolveNarrowphase();
 
     
 }
@@ -559,7 +503,6 @@ void PhysicsWorld::Clear()
     bodies_.clear();
     aabbs_.clear();
     circles_.clear();
-    planes_.clear();
     colliders_.clear();
     manifold_.clear();
 }
@@ -584,7 +527,6 @@ void PhysicsWorld::ResolveBroadphase()
         {
         case ShapeType::AABB:
         case ShapeType::CIRCLE:
-        case ShapeType::PLANE:
         {
             const auto center = body(collider.bodyIndex).position + collider.offset;
             if (worldBox.minBound.x > center.x)
@@ -651,7 +593,6 @@ void PhysicsWorld::CopyFrom(const PhysicsWorld& physicsWorld)
 	bodies_ = physicsWorld.bodies_;
 	aabbs_ = physicsWorld.aabbs_;
 	circles_ = physicsWorld.circles_;
-	planes_ = physicsWorld.planes_;
 	colliders_ = physicsWorld.colliders_;
 	manifold_ = physicsWorld.manifold_;
 }

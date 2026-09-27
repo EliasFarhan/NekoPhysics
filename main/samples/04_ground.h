@@ -17,7 +17,7 @@ public:
     void OnCollisionEnter(const ColliderPair& p) override;
     void OnCollisionExit(const ColliderPair& p) override;
 private:
-    PhysicsWorld world_{ Vec2f{Scalar{0.0f}, Scalar{9.81f}} };
+    PhysicsWorld world_{ {.gravity = Vec2f{Scalar{0.0f}, Scalar{9.81f}}, .dt = fixedDeltaTime} };
     QuadTree quadTree_;
     std::vector<SDL_Vertex> vertices_;
     std::vector<int> indices_;
