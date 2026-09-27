@@ -242,7 +242,9 @@ NEKO_HOT bool PhysicsWorld::DetectContact(
 			if(boxToCircle != Vec2f::zero())
 			{
 				const auto distance = boxToCircle.Length();
-				contact->contactNormal = -boxToCircle.Normalized();
+				// One reciprocal and two multiplies instead of Normalized()'s two divisions
+				const auto invDistance = Scalar{1} / distance;
+				contact->contactNormal = -(boxToCircle * invDistance);
 				contact->contactPoint = closestPoint;
 				contact->penetration = circle.radius - distance;
 				break;
@@ -288,8 +290,10 @@ NEKO_HOT bool PhysicsWorld::DetectContact(
             {
                 const auto midline = c1.position - c2.position;
                 const auto distance = midline.Length();
-                // Same position: any direction separates them, pick a deterministic one
-                contact->contactNormal = distance == Scalar{0} ? Vec2f::up() : midline / distance;
+                // Same position: any direction separates them, pick a deterministic one. Otherwise one
+                // reciprocal and two multiplies instead of dividing both components by distance.
+                contact->contactNormal =
+                    distance == Scalar{0} ? Vec2f::up() : midline * (Scalar{1} / distance);
                 contact->contactPoint = c1.position - midline * Scalar{0.5f};
                 contact->penetration = c1.radius + c2.radius - distance;
             }
