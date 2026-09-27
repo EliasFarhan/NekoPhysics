@@ -73,16 +73,17 @@ inline void BuildFallingPile(PhysicsWorld& world)
 /**
  * @brief Golden checksums of BuildFallingPile with Scalar = Fixed16, shared by tests/scene_test.cpp and the DS test
  * ROM (nds/main.cpp) so there is one source to re-pin when the simulation changes on purpose.
- * They were the same with MSVC 14.51 (/O2) and GCC 15.2 (-O0 and -O2, -fno-exceptions -fno-rtti) on 2026-09-27; the
- * DS test ROM must print the same values.
+ * Re-pinned on 2026-09-27 for the Contact::Resolve reciprocal change (one division instead of two): verified with
+ * GCC 15.2 (-O2, -fno-exceptions -fno-rtti) and the DS test ROM on melonDS; not re-checked against MSVC.
+ * The DS test ROM must print the same values.
  */
 inline constexpr std::pair<int, std::uint32_t> FALLING_PILE_GOLDEN_CHECKSUMS[] = {
     { 0, 0x61c2e799u },
     { 1, 0xfa00ce4cu },
-    { 60, 0xbee5c5bau },
-    { 120, 0x2cc11c14u },
-    { 300, 0xe2ff67d3u },
-    { 600, 0xa68114abu },
+    { 60, 0xf642d270u },
+    { 120, 0x8613fcc0u },
+    { 300, 0xf39b6d16u },
+    { 600, 0x27723100u },
 };
 
 } // namespace neko::scenes
