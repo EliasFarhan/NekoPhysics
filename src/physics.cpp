@@ -160,15 +160,15 @@ bool PhysicsWorld::DetectContact(
         {
         case ShapeType::AABB:
         {
-            const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider1.offset, aabbs_[collider1.shapeIndex.index].halfSize);
-            const Aabbf aabb2 = Aabbf::FromCenter(body2.position + collider2.offset, aabbs_[collider2.shapeIndex.index].halfSize);
-            doesIntersect = Intersect(aabb1, aabb2);
-			if(collision)
+            const auto center1 = body1.position + collider1.offset;
+            const auto center2 = body2.position + collider2.offset;
+            const auto half1 = aabbs_[collider1.shapeIndex.index].halfSize;
+            const auto half2 = aabbs_[collider2.shapeIndex.index].halfSize;
+            doesIntersect = Intersect(Aabbf::FromCenter(center1, half1), Aabbf::FromCenter(center2, half2));
+			if(collision && doesIntersect)
 			{
-				const auto delta = aabb1.GetCenter()-aabb2.GetCenter();
-				contact->contactPoint = aabb1.GetCenter()+delta*neko::Scalar {0.5f};
-				const auto half1 = aabb1.GetHalfSize();
-				const auto half2 = aabb2.GetHalfSize();
+				const auto delta = center1 - center2;
+				contact->contactPoint = center1 - delta * Scalar{0.5f};
 
 				const auto penetrationX = half1.x+half2.x-Abs(delta.x);
 				const auto penetrationY = half1.y+half2.y-Abs(delta.y);
@@ -187,38 +187,44 @@ bool PhysicsWorld::DetectContact(
         }
         case ShapeType::CIRCLE:
         {
-			const Aabbf aabb1 = Aabbf::FromCenter(body1.position + collider1.offset, aabbs_[collider1.shapeIndex.index].halfSize);
+            const auto center = body1.position + collider1.offset;
+            const auto halfSize = aabbs_[collider1.shapeIndex.index].halfSize;
+			const Aabbf aabb1 = Aabbf::FromCenter(center, halfSize);
 			const Circlef circle = Circlef{ body2.position + collider2.offset, circles_[collider2.shapeIndex.index].radius };
-			if(collision)
+			doesIntersect = Intersect(circle, aabb1);
+			if(!collision || !doesIntersect)
 			{
-
-				const auto delta = circle.position - aabb1.GetCenter();
-				const auto halfSize = aabb1.GetHalfSize();
-
-				Vec2f closestPoint = Vec2f::Clamp(delta, -halfSize, halfSize);
-
-				Scalar dist = (closestPoint - delta).Length();
-				doesIntersect = dist <= circle.radius;
-				if (!doesIntersect)
-				{
-					break;
-				}
-				const auto closestPointWorld = aabb1.GetCenter() + closestPoint;
-				auto circleToRect = (circle.position - closestPointWorld);
-				if(circleToRect.Length() < Scalar{0.001f})
-				{
-					circleToRect = Vec2f::up();
-				}
-				contact->contactNormal = -circleToRect.Normalized();
-				contact->contactPoint = closestPointWorld;
-				contact->penetration = circle.radius - dist;
-
+				break;
+			}
+			// The normal points from the circle (body 2) to the box (body 1)
+			const auto closestPoint = ClosestPoint(aabb1, circle.position);
+			const auto boxToCircle = circle.position - closestPoint;
+			if(boxToCircle != Vec2f::zero())
+			{
+				const auto distance = boxToCircle.Length();
+				contact->contactNormal = -boxToCircle.Normalized();
+				contact->contactPoint = closestPoint;
+				contact->penetration = circle.radius - distance;
+				break;
+			}
+			// The circle center is inside the box: push it out through the nearest face
+			const auto delta = circle.position - center;
+			const auto distanceX = halfSize.x - Abs(delta.x);
+			const auto distanceY = halfSize.y - Abs(delta.y);
+			if(distanceX < distanceY)
+			{
+				const auto outward = delta.x < Scalar{0} ? Vec2f::left() : Vec2f::right();
+				contact->contactNormal = -outward;
+				contact->contactPoint = { center.x + outward.x * halfSize.x, circle.position.y };
+				contact->penetration = circle.radius + distanceX;
 			}
 			else
 			{
-				doesIntersect = Intersect(aabb1, circle);
+				const auto outward = delta.y < Scalar{0} ? Vec2f::down() : Vec2f::up();
+				contact->contactNormal = -outward;
+				contact->contactPoint = { circle.position.x, center.y + outward.y * halfSize.y };
+				contact->penetration = circle.radius + distanceY;
 			}
-
             break;
         }
         default: break;
@@ -237,23 +243,15 @@ bool PhysicsWorld::DetectContact(
             const Circlef c1 = { body1.position + collider1.offset, circles_[collider1.shapeIndex.index].radius };
             const Circlef c2 = { body2.position + collider2.offset, circles_[collider2.shapeIndex.index].radius };
 
-            if(collision)
+            doesIntersect = Intersect(c1, c2);
+            if(collision && doesIntersect)
             {
                 const auto midline = c1.position - c2.position;
-                const auto size = midline.Length();
-                if(size >= c1.radius+c2.radius)
-                {
-                    doesIntersect = false;
-                    break;
-                }
-                doesIntersect = true;
-                contact->contactNormal = midline / size;
-                contact->contactPoint = c1.position + midline * Scalar {0.5f};
-                contact->penetration = c1.radius + c2.radius - size;
-            }
-            else
-            {
-                doesIntersect = Intersect(c1, c2);
+                const auto distance = midline.Length();
+                // Same position: any direction separates them, pick a deterministic one
+                contact->contactNormal = distance == Scalar{0} ? Vec2f::up() : midline / distance;
+                contact->contactPoint = c1.position - midline * Scalar{0.5f};
+                contact->penetration = c1.radius + c2.radius - distance;
             }
             break;
         }
@@ -270,7 +268,7 @@ void PhysicsWorld::ResolveNarrowphase()
 #ifdef TRACY_ENABLE
     ZoneScoped;
 #endif
-    if(contactListener_ == nullptr || bsh_ == nullptr)
+    if(bsh_ == nullptr)
     {
         return;
     }
@@ -303,26 +301,35 @@ void PhysicsWorld::ResolveNarrowphase()
         const auto it = manifold_.find(newColliderPair);
 
 
+        const bool isTrigger = collider1.isTrigger || collider2.isTrigger;
         if (it != manifold_.end())
         {
+            if (!isTrigger && !it->second.has_value())
+            {
+                // The pair was stored as a trigger and one collider became solid since
+                it->second.emplace();
+            }
 			Contact newContact{};
-			const bool doesIntersect = DetectContact(body1, collider1, body2, collider2, collider1.isTrigger || collider2.isTrigger? &newContact : &it->second.value());
+			const bool doesIntersect = DetectContact(body1, collider1, body2, collider2, isTrigger ? &newContact : &it->second.value());
 			if (!doesIntersect)
             {
-                if (collider1.isTrigger || collider2.isTrigger)
+                if (contactListener_ != nullptr)
                 {
-                    contactListener_->OnTriggerExit(newColliderPair);
-                }
-                else
-                {
-                    contactListener_->OnCollisionExit(newColliderPair);
+                    if (isTrigger)
+                    {
+                        contactListener_->OnTriggerExit(newColliderPair);
+                    }
+                    else
+                    {
+                        contactListener_->OnCollisionExit(newColliderPair);
+                    }
                 }
                 //manifold_.erase(it);
                 removePairs.push_back(it->first);
             }
 			else
             {
-                if(!collider1.isTrigger && !collider2.isTrigger)
+                if(!isTrigger)
                 {
                     it->second->Resolve();
                 }
@@ -335,15 +342,21 @@ void PhysicsWorld::ResolveNarrowphase()
 
 			if (doesIntersect)
             {
-                if (collider1.isTrigger || collider2.isTrigger)
+                if (isTrigger)
                 {
-                    contactListener_->OnTriggerEnter(newColliderPair);
+                    if (contactListener_ != nullptr)
+                    {
+                        contactListener_->OnTriggerEnter(newColliderPair);
+                    }
 					newPairs.emplace_back(newColliderPair, std::nullopt);
                 }
                 else
                 {
                     newContact.Resolve();
-                    contactListener_->OnCollisionEnter(newColliderPair);
+                    if (contactListener_ != nullptr)
+                    {
+                        contactListener_->OnCollisionEnter(newColliderPair);
+                    }
 					newPairs.emplace_back(newColliderPair, newContact);
                 }
                 //manifold_.insert(newColliderPair);
@@ -474,9 +487,8 @@ void PhysicsWorld::Step()
         {
         case BodyType::DYNAMIC:
         {
-            body.force += config_.gravity / body.inverseMass;
-
-            body.velocity += body.force * body.inverseMass * dt;
+            // Gravity is an acceleration: no division by the inverse mass
+            body.velocity += (config_.gravity + body.force * body.inverseMass) * dt;
 
             body.position += body.velocity * dt;
             body.force = Vec2f::zero();
@@ -512,7 +524,7 @@ void PhysicsWorld::ResolveBroadphase()
 #ifdef TRACY_ENABLE
     ZoneScoped;
 #endif
-    if (contactListener_ == nullptr || bsh_ == nullptr)
+    if (bsh_ == nullptr)
     {
         return;
     }
