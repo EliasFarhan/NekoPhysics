@@ -3,51 +3,31 @@
 
 #include "generated/sin_const.h"
 #include "generated/cos_const.h"
-#include "generated/sqrt_const.h"
 
-extern int sqrt_table[];
 extern int sin_table[];
 extern int cos_table[];
 
 namespace neko
 {
-template<>
-Fixed16 Sqrt(Fixed16 value)
+namespace
 {
-    constexpr Fixed16 minValue = Fixed16::fromUnderlyingValue(sqrt_min);
-    constexpr Fixed16 maxValue = Fixed16::fromUnderlyingValue(sqrt_max);
-    Fixed16 result{ 1 };
-    while(maxValue < value)
+// Wraps an angle in radians into [0, 2*pi)
+Fixed16 WrapAngle(Fixed16 value)
+{
+    const auto twoPi = Pi<Fixed16>().underlyingValue() * 2;
+    auto raw = value.underlyingValue() % twoPi;
+    if (raw < 0)
     {
-        result *= Sqrt(maxValue);
-        value /= maxValue;
+        raw += twoPi;
     }
-    constexpr Fixed16 delta = maxValue-minValue;
-    const auto index = (value - minValue) / (delta) * Fixed16 { sqrt_len }; // v = a + (b-a)*t; <=> (v-a)/(b-a)
-    const auto intIndex = static_cast<int>(index);
-    const auto ratio = index - Fixed16{intIndex};
-    if (intIndex == sqrt_len && ratio == Fixed{0})
-    {
-        return Fixed16::fromUnderlyingValue(sqrt_table[sqrt_len - 1]);
-    }
-    const auto v1 = Fixed16::fromUnderlyingValue(sqrt_table[intIndex]);
-    const auto v2 = Fixed16::fromUnderlyingValue(sqrt_table[intIndex + 1]);
-    return (v1 + (v2 - v1) * ratio) * result;
-
+    return Fixed16::fromUnderlyingValue(raw);
 }
+} // namespace
 
 template<>
 Fixed16 Sin(Fixed16 value)
 {
-    if (value < Fixed16{0})
-    {
-        value.underlyingValue() = (value.underlyingValue() % (pi.underlyingValue() * 2)) + (pi.underlyingValue() * 2);
-    }
-
-    if(value >= pi * Fixed16{2})
-    {
-        value.underlyingValue() = value.underlyingValue() % (pi.underlyingValue() * 2);
-    }
+    value = WrapAngle(value);
     constexpr Fixed16 minValue = Fixed16::fromUnderlyingValue(0);
     constexpr Fixed16 maxValue = Pi<Fixed16>() * Fixed16{2};
     const auto index = (value-minValue)/(maxValue-minValue) * Fixed16 { sin_len }; // v = a + (b-a)*t; <=> (v-a)/(b-a)
@@ -65,16 +45,7 @@ Fixed16 Sin(Fixed16 value)
 template<>
 Fixed16 Cos(Fixed16 value)
 {
-    if (value < Fixed16{0})
-    {
-        value.underlyingValue() = (value.underlyingValue() % (pi.underlyingValue() * 2)) + (pi.underlyingValue() * 2);
-    }
-
-    if (value >= pi * Fixed16{2})
-    {
-        value.underlyingValue() = value.underlyingValue() % (pi.underlyingValue() * 2);
-    }
-
+    value = WrapAngle(value);
     constexpr Fixed16 minValue = Fixed16::fromUnderlyingValue(0);
     constexpr Fixed16 maxValue = Pi<Fixed16>() * Fixed16{2};
     const auto index = (value-minValue)/(maxValue-minValue) * Fixed16 { cos_len }; // v = a + (b-a)*t; <=> (v-a)/(b-a)

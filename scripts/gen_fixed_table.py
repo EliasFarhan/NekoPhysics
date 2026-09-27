@@ -2,27 +2,6 @@ import math
 import os
 
 
-def gen_sqrt_tables(min_value: float, max_value: float, resolution: float):
-    resolution = float(int(resolution*(1 << 16)))/(1<<16)
-    results = []
-    current_value = min_value
-    while current_value <= max_value:
-        results.append(math.sqrt(current_value))
-        current_value += resolution
-    with open('src/generated/sqrt_tables.cpp', 'w') as f:
-        f.write("""int sqrt_table[] = {{ {0} }};
-        """
-                .format(",".join(str(int(x * (1 << 16))) for x in results)))
-    with open('src/generated/sqrt_const.h', 'w') as f:
-        f.write("""#pragma once\nnamespace neko\n{{
-        constexpr int sqrt_min = {0}; constexpr int sqrt_max = {1}; 
-        constexpr int sqrt_len = {2}; constexpr int sqrt_resolution = {3};
-        }}""".format(int(min_value*(1<<16)),
-                    int(max_value*(1<<16)),
-                    len(results),
-                    int(resolution*(1<<16))))
-
-
 def gen_cos_tables(resolution: float):
     results = []
     pi_fixed = int(math.pi * (1 << 16))
@@ -61,7 +40,6 @@ def gen_sin_tables(resolution: float):
 def main():
     if not os.path.isdir('src/generated'):
         os.mkdir("src/generated")
-    gen_sqrt_tables(0.0, 100.0, 0.0125)
     gen_cos_tables(0.0075)
     gen_sin_tables(0.0075)
 

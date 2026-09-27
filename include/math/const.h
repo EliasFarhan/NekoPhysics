@@ -51,13 +51,13 @@ constexpr T Exp()
 template<>
 constexpr Fixed16 Pi()
 {
-    return pi;
+    return Fixed16::fromUnderlyingValue(205887);
 }
 
 template<>
 constexpr Fixed16 Exp()
 {
-	return exp;
+    return Fixed16::fromUnderlyingValue(178145);
 }
 
 }

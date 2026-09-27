@@ -159,14 +159,29 @@ TEST(Vec2f, Normalized)
     
     EXPECT_NEAR(float{ result.Length() }, 1.0f, 0.0125f);
 
-    if constexpr (std::is_floating_point_v<neko::Scalar>)
-    {
-        constexpr neko::Vec2f v2{};
-        const auto tmp = v2.Normalized();
-        // Division by zero is guarded in Vec2::operator/ and returns max()
-        EXPECT_EQ(float{ tmp.x }, std::numeric_limits<float>::max());
-        EXPECT_EQ(float{ tmp.y }, std::numeric_limits<float>::max());
-    }
+    // A zero vector has no direction: Normalized() returns zero instead of dividing by zero
+    constexpr neko::Vec2f v2{};
+    EXPECT_EQ(v2.Normalized(), neko::Vec2f::zero());
+}
+
+// Past ~181 the squared length no longer fits in 16.16 (DS review D1.6)
+TEST(Vec2f, LengthOfLongVector)
+{
+    constexpr neko::Vec2f v{ neko::Scalar{300}, neko::Scalar{400} };
+    EXPECT_NEAR(float{ v.Length() }, 500.0f, 1e-3f);
+    const auto n = v.Normalized();
+    EXPECT_NEAR(float{ n.x }, 0.6f, 1e-4f);
+    EXPECT_NEAR(float{ n.y }, 0.8f, 1e-4f);
+}
+
+// Below ~1/256 the squared length rounds to zero in 16.16 (DS review D1.6)
+TEST(Vec2f, NormalizedOfTinyVector)
+{
+    constexpr neko::Vec2f v{ neko::Scalar{3.0f / 65536.0f}, neko::Scalar{4.0f / 65536.0f} };
+    EXPECT_NEAR(float{ v.Length() }, 5.0f / 65536.0f, 1e-7f);
+    const auto n = v.Normalized();
+    EXPECT_NEAR(float{ n.x }, 0.6f, 1e-4f);
+    EXPECT_NEAR(float{ n.y }, 0.8f, 1e-4f);
 }
 
 TEST(Vec2f, Perpendicular)

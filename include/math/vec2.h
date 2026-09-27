@@ -3,6 +3,8 @@
 #include <type_traits>
 #include <cmath>
 #include <algorithm>
+#include <cstdint>
+#include <limits>
 
 #include "math/const.h"
 #include "math/fixed_lut.h"
@@ -120,11 +122,34 @@ struct Vec2
 
     [[nodiscard]] T Length() const
     {
-        return Sqrt(SquareLength());
+        if constexpr (std::is_same_v<T, Fixed16>)
+        {
+            // Sum of squares in Q32.32: SquareLength() overflows past ~181 and rounds to zero below ~1/256
+            const auto square = [](T v)
+            {
+                const auto raw = static_cast<std::int64_t>(v.underlyingValue());
+                return static_cast<std::uint64_t>(raw * raw);
+            };
+            const auto root = detail::ISqrt64(square(x) + square(y));
+            constexpr auto maxRaw = static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max());
+            return T::fromUnderlyingValue(static_cast<std::int32_t>(root > maxRaw ? maxRaw : root));
+        }
+        else
+        {
+            return Sqrt(SquareLength());
+        }
     }
+    /**
+     * @brief Unit vector with the same direction, or zero for a zero vector
+     */
     [[nodiscard]] Vec2 Normalized() const
     {
-        return *this / Length();
+        const auto length = Length();
+        if (length == T{ 0 })
+        {
+            return zero();
+        }
+        return { x / length, y / length };
     }
     [[nodiscard]] constexpr static Vec2 Clamp(Vec2 v, Vec2 minV, Vec2 maxV)
     {
