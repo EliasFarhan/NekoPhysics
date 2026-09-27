@@ -9,6 +9,7 @@
 #include "core/allocator.h"
 #include "contact_listener.h"
 #include "bsh/bsh.h"
+#include "bsh/sweep_and_prune.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -97,6 +98,10 @@ struct PhysicsWorldConfig
      */
     std::size_t maxTouchingPairs = 1024;
     /**
+     * @brief Maximum number of pairs whose AABBs overlap, for the default broadphase
+     */
+    std::size_t maxBroadphasePairs = 2048;
+    /**
      * @brief Must outlive the world. nullptr means DefaultAllocator()
      */
     Allocator* allocator = nullptr;
@@ -150,6 +155,9 @@ public:
 	[[nodiscard]] CircleCollider& circle(ShapeIndex shapeIndex) { return circles_[shapeIndex.index]; }
     [[nodiscard]] const CircleCollider& circle(ShapeIndex shapeIndex) const { return circles_[shapeIndex.index]; }
 
+    /**
+     * @brief Replaces the default broadphase (sort and sweep); nullptr restores it
+     */
     void SetBSH(BoundingSurfaceHierarchy* boundingSurfaceHierarchy) { bsh_ = boundingSurfaceHierarchy; }
     void SetContactListener(ContactListener* contactListener) { contactListener_ = contactListener; }
 
@@ -168,8 +176,11 @@ public:
     [[nodiscard]] std::uint32_t GenerateChecksum() const;
 private:
     void NotifyContactChanges() const;
+    [[nodiscard]] BoundingSurfaceHierarchy& Broadphase() { return bsh_ != nullptr ? *bsh_ : defaultBroadphase_; }
+    [[nodiscard]] Aabbf GetAabb(const Collider& collider) const;
 
     PhysicsWorldConfig config_;
+    SweepAndPrune defaultBroadphase_;
     ArrayList<Body> bodies_;
     ArrayList<AabbCollider> aabbs_;
     ArrayList<CircleCollider> circles_;

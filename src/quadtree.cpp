@@ -1,54 +1,43 @@
-#include <utility>
-
 #include "bsh/quadtree.h"
+
+#include <cassert>
+
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
 #endif
+
 namespace neko
 {
-
-template<typename T>
-constexpr T pow(T base, T exponent)
+namespace
 {
-    T result = 1;
-    for (T i = 0; i < exponent; ++i)
+/**
+ * @brief Number of nodes of a full tree: 1 + 4 + ... + 4^maxDepth
+ */
+constexpr std::size_t FullTreeNodeCount(std::size_t maxDepth)
+{
+    std::size_t count = 0;
+    std::size_t levelCount = 1;
+    for (std::size_t depth = 0; depth <= maxDepth; ++depth)
     {
-        result *= base;
+        count += levelCount;
+        levelCount *= 4;
     }
-    return result;
+    return count;
 }
-template<typename T>
-constexpr T quadCount(T n)
-{
-    T result = 1;
-    for (T i = 1; i < n; ++i)
-    {
-        result += pow<T>(4, i);
-    }
-    return result;
-}
+} // namespace
 
-
-QuadNode::QuadNode(Allocator& allocator) : colliders(StandardAllocator<ColliderAabb>(allocator))
+QuadTree::QuadTree(std::size_t maxColliders, std::size_t maxPairs, std::size_t maxDepth, std::size_t maxSize, Allocator& allocator) :
+    maxColliders_(maxColliders),
+    maxPairs_(maxPairs),
+    maxDepth_(maxDepth),
+    maxSize_(maxSize),
+    nodes_(FullTreeNodeCount(maxDepth), QuadNode{}, StandardAllocator<QuadNode>{allocator}),
+    entries_(StandardAllocator<Entry>{allocator}),
+    possiblePairs_(StandardAllocator<ColliderPair>{allocator})
 {
-}
-
-QuadTree::QuadTree(Allocator& allocator) : QuadTree(MAX_DEPTH, MAX_SIZE, allocator)
-{
-}
-
-QuadTree::QuadTree(std::size_t maxDepth, std::size_t maxSize, Allocator& allocator):
-    allocator_(&allocator),
-    possiblePairs_(StandardAllocator<ColliderPair>(allocator)),
-    nodes_(StandardAllocator<QuadNode>(allocator)),
-    maxDepth_(maxDepth), maxSize_(maxSize)
-{
-    possiblePairs_.reserve(pow(static_cast<std::size_t>(4), maxDepth_));
-    nodes_.resize(quadCount(maxDepth_), QuadNode{*allocator_});
-    for(auto& node : nodes_)
-    {
-        node.colliders.reserve(maxSize);
-    }
+    assert(nodes_.size() < QuadNode::NONE && maxColliders < QuadNode::NONE);
+    entries_.reserve(maxColliders_);
+    possiblePairs_.reserve(maxPairs_);
 }
 
 void QuadTree::Insert(const ColliderAabb& colliderAabb)
@@ -56,8 +45,13 @@ void QuadTree::Insert(const ColliderAabb& colliderAabb)
 #ifdef TRACY_ENABLE
     ZoneScoped;
 #endif
-    //Insert into root node
-    Insert(colliderAabb, &nodes_[0], static_cast<int>(maxDepth_));
+    if (entries_.size() >= maxColliders_)
+    {
+        assert(false && "QuadTree: maxColliders reached");
+        return;
+    }
+    entries_.push_back({ colliderAabb, QuadNode::NONE });
+    InsertEntry(static_cast<Index>(entries_.size() - 1), ROOT, 0);
 }
 
 void QuadTree::CalculatePairs()
@@ -65,7 +59,7 @@ void QuadTree::CalculatePairs()
 #ifdef TRACY_ENABLE
     ZoneScoped;
 #endif
-    GoDownTree(nodes_.data());
+    AddPairs(ROOT);
 }
 
 void QuadTree::Clear()
@@ -73,135 +67,145 @@ void QuadTree::Clear()
 #ifdef TRACY_ENABLE
     ZoneScoped;
 #endif
-    nodeAllocationIndex_ = 1;
+    entries_.clear();
     possiblePairs_.clear();
-    for(auto& node: nodes_)
-    {
-        node.colliders.clear();
-        std::fill(node.nodes.begin(), node.nodes.end(), nullptr);
-    }
+    usedNodes_ = 1;
+    nodes_[ROOT] = QuadNode{ nodes_[ROOT].aabb };
 }
 
 void QuadTree::SetWorldAabb(const Aabbf& worldAabb)
 {
-    nodes_[0].aabb = worldAabb;
+    nodes_[ROOT].aabb = worldAabb;
 }
 
-void QuadTree::Insert(const ColliderAabb& colliderAabb, QuadNode* node, int depth)
+void QuadTree::InsertEntry(Index entry, Index node, std::size_t depth)
 {
-#ifdef TRACY_ENABLE
-    ZoneScoped;
-#endif
-    if(node->nodes[0] == nullptr && depth != 0)
+    const auto& quadNode = nodes_[node];
+    if (quadNode.IsLeaf())
     {
-       if(node->colliders.size() >= maxSize_ && nodeAllocationIndex_ < nodes_.size())
-       {
-           //Break into 4 new nodes
-#ifdef TRACY_ENABLE
-           ZoneNamedN(Break4, "BreakNode", true);
-#endif
-           constexpr static std::array<Vec2f, 4> direction
-           {
-               Vec2f{Scalar{-1}, Scalar{-1}},
-               Vec2f{Scalar{-1}, Scalar{1} },
-               Vec2f{Scalar{1},  Scalar{-1} },
-               Vec2f{Scalar{1},  Scalar{1} },
-           };
-           for(std::size_t i = 0; i < direction.size(); i++)
-           {
-               node->nodes[i] = &nodes_[nodeAllocationIndex_+i];
-               node->nodes[i]->aabb = Aabbf::FromCenter(
-                   node->aabb.GetCenter() + direction[i] * node->aabb.GetHalfSize()*Scalar{0.5f},
-                   node->aabb.GetHalfSize()*Scalar{0.5f});
-           }
-           std::array<ColliderAabb, MAX_SIZE> tmp;
-           for(std::size_t i = 0; i < MAX_SIZE; ++i)
-           {
-               tmp[i] = node->colliders[i];
-           }
-           node->colliders.clear();
-           nodeAllocationIndex_ += 4; // node index for quad node linear allocation
-           for(const auto& localAabb: tmp)
-           {
-               Insert(localAabb, node, depth);
-           }
-           Insert(colliderAabb, node, depth);
-       }
-       else
-       {
-           node->colliders.push_back(colliderAabb);
-       }
-    }
-    else
-    {
-        //If I have children
-        int count = 0;
-        QuadNode* insertNode = nullptr;
-        for(const auto& childNode: node->nodes)
+        if (depth < maxDepth_ && quadNode.entryCount >= maxSize_ && usedNodes_ + 4 <= nodes_.size())
         {
-            if(childNode == nullptr)
-                continue;
-            if(Intersect(colliderAabb.aabb, childNode->aabb))
-            {
-                count++;
-                insertNode = childNode;
-            }
-        }
-        if(count > 1 || depth == 0)
-        {
-            node->colliders.push_back(colliderAabb);
+            Split(node, depth);
+            InsertEntry(entry, node, depth);
         }
         else
         {
-            Insert(colliderAabb, insertNode, depth-1);
+            PushEntry(entry, node);
         }
+        return;
+    }
+    // Go down only when a single child overlaps the collider, otherwise it stays in this node
+    const auto& aabb = entries_[entry].colliderAabb.aabb;
+    Index target = QuadNode::NONE;
+    int overlapCount = 0;
+    for (Index child = quadNode.firstChild; child < quadNode.firstChild + 4; ++child)
+    {
+        if (Intersect(aabb, nodes_[child].aabb))
+        {
+            ++overlapCount;
+            target = child;
+        }
+    }
+    if (overlapCount == 1)
+    {
+        InsertEntry(entry, target, depth + 1);
+    }
+    else
+    {
+        PushEntry(entry, node);
     }
 }
 
-void QuadTree::GoDownTree(const QuadNode* node)
+void QuadTree::PushEntry(Index entry, Index node)
 {
-#ifdef TRACY_ENABLE
-    ZoneScoped;
-#endif
-    for (std::size_t i = 0; i < node->colliders.size(); ++i)
+    auto& quadNode = nodes_[node];
+    entries_[entry].next = quadNode.firstEntry;
+    quadNode.firstEntry = entry;
+    ++quadNode.entryCount;
+}
+
+void QuadTree::Split(Index node, std::size_t depth)
+{
+    const std::size_t firstChild = usedNodes_;
+    usedNodes_ += 4;
+    // Exact quadrants: no gap between children because of rounding
+    const auto [minBound, maxBound] = nodes_[node].aabb;
+    const auto center = nodes_[node].aabb.GetCenter();
+    nodes_[firstChild] = QuadNode{ {minBound, center} };
+    nodes_[firstChild + 1] = QuadNode{ {{center.x, minBound.y}, {maxBound.x, center.y}} };
+    nodes_[firstChild + 2] = QuadNode{ {{minBound.x, center.y}, {center.x, maxBound.y}} };
+    nodes_[firstChild + 3] = QuadNode{ {center, maxBound} };
+
+    auto entry = nodes_[node].firstEntry;
+    nodes_[node].firstChild = static_cast<Index>(firstChild);
+    nodes_[node].firstEntry = QuadNode::NONE;
+    nodes_[node].entryCount = 0;
+    while (entry != QuadNode::NONE)
     {
-        const auto colliderIndex = node->colliders[i].colliderIndex;
-        for (std::size_t j = i + 1; j < node->colliders.size(); ++j)
+        const auto next = entries_[entry].next;
+        InsertEntry(entry, node, depth);
+        entry = next;
+    }
+}
+
+void QuadTree::AddPairs(Index node)
+{
+    const auto& quadNode = nodes_[node];
+    for (auto entry = quadNode.firstEntry; entry != QuadNode::NONE; entry = entries_[entry].next)
+    {
+        for (auto other = entries_[entry].next; other != QuadNode::NONE; other = entries_[other].next)
         {
-            possiblePairs_.push_back({ colliderIndex, node->colliders[j].colliderIndex });
+            AddPair(entry, other);
         }
-        if (node->nodes[0] != nullptr)
+        if (!quadNode.IsLeaf())
         {
-            for (const auto* childNode : node->nodes)
+            for (Index child = quadNode.firstChild; child < quadNode.firstChild + 4; ++child)
             {
-                InsertPairs(childNode, colliderIndex);
+                AddPairsWithSubtree(entry, child);
             }
         }
     }
-    if (node->nodes[0] != nullptr)
+    if (!quadNode.IsLeaf())
     {
-        for (const auto* childNode : node->nodes)
+        for (Index child = quadNode.firstChild; child < quadNode.firstChild + 4; ++child)
         {
-            GoDownTree(childNode);
+            AddPairs(child);
         }
     }
 }
 
-void QuadTree::InsertPairs(const QuadNode* node, ColliderIndex colliderIndex)
+void QuadTree::AddPairsWithSubtree(Index entry, Index node)
 {
-#ifdef TRACY_ENABLE
-    ZoneScoped;
-#endif
-    for (auto& colliderAabb : node->colliders)
+    const auto& quadNode = nodes_[node];
+    for (auto other = quadNode.firstEntry; other != QuadNode::NONE; other = entries_[other].next)
     {
-        possiblePairs_.push_back({ colliderAabb.colliderIndex, colliderIndex });
+        AddPair(entry, other);
     }
-    if (node->nodes[0] != nullptr)
+    if (!quadNode.IsLeaf())
     {
-        for (const auto* childNode : node->nodes)
+        for (Index child = quadNode.firstChild; child < quadNode.firstChild + 4; ++child)
         {
-            InsertPairs(childNode, colliderIndex);
+            AddPairsWithSubtree(entry, child);
         }
     }
 }
+
+void QuadTree::AddPair(Index entry1, Index entry2)
+{
+    const auto& colliderAabb1 = entries_[entry1].colliderAabb;
+    const auto& colliderAabb2 = entries_[entry2].colliderAabb;
+    if (!Intersect(colliderAabb1.aabb, colliderAabb2.aabb))
+    {
+        return;
+    }
+    if (possiblePairs_.size() < maxPairs_)
+    {
+        possiblePairs_.emplace_back(colliderAabb1.colliderIndex, colliderAabb2.colliderIndex);
+    }
+    else
+    {
+        assert(false && "QuadTree: maxPairs reached");
+    }
+}
+
 }

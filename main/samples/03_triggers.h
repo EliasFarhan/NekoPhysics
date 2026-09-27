@@ -27,7 +27,7 @@ private:
     };
     static constexpr std::size_t circleCount = 1'000;
     PhysicsWorld world_{ {.dt = fixedDeltaTime, .maxBodies = circleCount, .maxColliders = circleCount, .maxTouchingPairs = circleCount * 8} };
-    QuadTree quadTree_;
+    QuadTree quadTree_{ circleCount, circleCount * 8 };
     std::vector<TriggeredBody> bodies_;
     std::vector<SDL_Vertex> vertices_;
     std::vector<int> indices_;

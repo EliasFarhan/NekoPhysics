@@ -140,6 +140,7 @@ std::uint32_t GenerateChecksum(const AabbCollider& collider)
 
 PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config) :
     config_(config),
+    defaultBroadphase_(config.maxColliders, config.maxBroadphasePairs, ConfigAllocator(config)),
     bodies_(MakeList<Body>(ConfigAllocator(config), config.maxBodies)),
     aabbs_(MakeList<AabbCollider>(ConfigAllocator(config), config.maxColliders)),
     circles_(MakeList<CircleCollider>(ConfigAllocator(config), config.maxColliders)),
@@ -300,12 +301,8 @@ void PhysicsWorld::ResolveNarrowphase()
 #ifdef TRACY_ENABLE
     ZoneScoped;
 #endif
-    if(bsh_ == nullptr)
-    {
-        return;
-    }
     newTouchingPairs_.clear();
-    for(const auto& pair : bsh_->GetPossiblePairs())
+    for(const auto& pair : Broadphase().GetPossiblePairs())
     {
         auto& collider1 = colliders_[pair.c1.index];
         auto& collider2 = colliders_[pair.c2.index];
@@ -508,85 +505,59 @@ void PhysicsWorld::Clear()
     newTouchingPairs_.clear();
 }
 
+Aabbf PhysicsWorld::GetAabb(const Collider& collider) const
+{
+    const auto center = bodies_[collider.bodyIndex.index].position + collider.offset;
+    if (collider.type == ShapeType::AABB)
+    {
+        return Aabbf::FromCenter(center, aabbs_[collider.shapeIndex.index].halfSize);
+    }
+    return Circlef{ center, circles_[collider.shapeIndex.index].radius }.GetAabb();
+}
+
 void PhysicsWorld::ResolveBroadphase()
 {
 #ifdef TRACY_ENABLE
     ZoneScoped;
 #endif
-    if (bsh_ == nullptr)
-    {
-        return;
-    }
-    bsh_->Clear();
+    auto& broadphase = Broadphase();
+    broadphase.Clear();
 
-    Aabbf worldBox{
-        {std::numeric_limits<Scalar>::max(), std::numeric_limits<Scalar>::max()},
-        {std::numeric_limits<Scalar>::lowest(), std::numeric_limits<Scalar>::lowest()} };
-    for(auto& collider: colliders_)
+    const auto isInserted = [this](const Collider& collider)
     {
-        switch (collider.type)
+        return collider.type != ShapeType::NONE && bodies_[collider.bodyIndex.index].isActive;
+    };
+    // World box from the collider extents, starting from the first one (no infinite bounds to overflow)
+    bool hasCollider = false;
+    Aabbf worldBox{};
+    for (const auto& collider : colliders_)
+    {
+        if (!isInserted(collider))
         {
-        case ShapeType::AABB:
-        case ShapeType::CIRCLE:
-        {
-            const auto center = body(collider.bodyIndex).position + collider.offset;
-            if (worldBox.minBound.x > center.x)
-            {
-                worldBox.minBound.x = center.x;
-            }
-            if (worldBox.maxBound.x < center.x)
-            {
-                worldBox.maxBound.x = center.x;
-            }
-            if (worldBox.minBound.y > center.y)
-            {
-                worldBox.minBound.y = center.y;
-            }
-            if (worldBox.maxBound.y < center.y)
-            {
-                worldBox.maxBound.y = center.y;
-            }
-            break;
-        }
-        case ShapeType::NONE: 
             continue;
-        default: 
-            break;
         }
-
+        const auto aabb = GetAabb(collider);
+        if (!hasCollider)
+        {
+            worldBox = aabb;
+            hasCollider = true;
+            continue;
+        }
+        worldBox.minBound = { Min(worldBox.minBound.x, aabb.minBound.x), Min(worldBox.minBound.y, aabb.minBound.y) };
+        worldBox.maxBound = { Max(worldBox.maxBound.x, aabb.maxBound.x), Max(worldBox.maxBound.y, aabb.maxBound.y) };
     }
-    bsh_->SetWorldAabb(worldBox);
-
-    for(const auto& collider : colliders_)
+    if (hasCollider)
     {
-		if(collider.type == ShapeType::NONE || !bodies_[collider.bodyIndex.index].isActive)
-		{
-			continue;
-		}
-        switch(collider.type)
+        broadphase.SetWorldAabb(worldBox);
+        for (const auto& collider : colliders_)
         {
-        case ShapeType::AABB:
-        {
-            const auto aabbCollider = Aabbf::FromCenter(
-                bodies_[collider.bodyIndex.index].position + collider.offset, 
-                aabbs_[collider.shapeIndex.index].halfSize);
-            bsh_->Insert({ aabbCollider, collider.colliderIndex });
-            break;
-        }
-        case ShapeType::CIRCLE:
-        {
-            const auto circleCollider = Circlef{
-                bodies_[collider.bodyIndex.index].position+collider.offset,
-                circles_[collider.shapeIndex.index].radius};
-            bsh_->Insert({ circleCollider.GetAabb(), collider.colliderIndex });
-            break;
-        }
-        default: 
-            break;
+            if (isInserted(collider))
+            {
+                broadphase.Insert({ GetAabb(collider), collider.colliderIndex });
+            }
         }
     }
-    bsh_->CalculatePairs();
-
+    broadphase.CalculatePairs();
 }
 
 void PhysicsWorld::CopyFrom(const PhysicsWorld& physicsWorld)

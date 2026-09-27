@@ -132,9 +132,10 @@ void TriggersSample::Draw(SDL_Renderer* renderer)
     {
         SDL_Log("%s\n", SDL_GetError());
     }
-    std::function<void(const QuadNode*)> drawQuad = [renderer, &drawQuad](const QuadNode* node)
+    std::function<void(Index)> drawQuad = [this, renderer, &drawQuad](Index nodeIndex)
     {
-        const auto& aabb = node->aabb;
+        const auto& node = quadTree_.GetNode(nodeIndex);
+        const auto& aabb = node.aabb;
         const auto center = aabb.GetCenter();
         const auto halfSize = aabb.GetHalfSize();
         std::array<Vec2f, 4> pos
@@ -153,16 +154,16 @@ void TriggersSample::Draw(SDL_Renderer* renderer)
                 SDL_Log("%s\n", SDL_GetError());
             }
         }
-        if(node->nodes[0] != nullptr)
+        if(!node.IsLeaf())
         {
-            for(const auto childNode : node->nodes)
+            for(Index child = node.firstChild; child < node.firstChild + 4; ++child)
             {
-                drawQuad(childNode);
+                drawQuad(child);
             }
         }
     };
     SDL_SetRenderDrawColor(renderer, 255,255,255,255);
-    drawQuad(&quadTree_.GetRootNode());
+    drawQuad(QuadTree::ROOT);
 }
 
 void TriggersSample::End()

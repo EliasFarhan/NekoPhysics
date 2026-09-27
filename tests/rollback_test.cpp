@@ -23,45 +23,6 @@ public:
     int allocationCount = 0;
 };
 
-/**
- * @brief Brute-force broadphase whose pair list is reserved once, so only the world can allocate in Step
- */
-class AllPairs final : public neko::BoundingSurfaceHierarchy
-{
-public:
-    explicit AllPairs(neko::Allocator& allocator)
-        : colliders_(neko::StandardAllocator<neko::ColliderAabb>{allocator}),
-          pairs_(neko::StandardAllocator<neko::ColliderPair>{allocator})
-    {
-        colliders_.reserve(64);
-        pairs_.reserve(64 * 63 / 2);
-    }
-    void Insert(const neko::ColliderAabb& colliderAabb) override { colliders_.push_back(colliderAabb); }
-    void CalculatePairs() override
-    {
-        for (std::size_t i = 0; i < colliders_.size(); ++i)
-        {
-            for (std::size_t j = i + 1; j < colliders_.size(); ++j)
-            {
-                if (neko::Intersect(colliders_[i].aabb, colliders_[j].aabb))
-                {
-                    pairs_.emplace_back(colliders_[i].colliderIndex, colliders_[j].colliderIndex);
-                }
-            }
-        }
-    }
-    void Clear() override
-    {
-        colliders_.clear();
-        pairs_.clear();
-    }
-    void SetWorldAabb(const neko::Aabbf&) override {}
-    [[nodiscard]] const neko::ArrayList<neko::ColliderPair>& GetPossiblePairs() const override { return pairs_; }
-private:
-    neko::ArrayList<neko::ColliderAabb> colliders_;
-    neko::ArrayList<neko::ColliderPair> pairs_;
-};
-
 class CountingListener final : public neko::ContactListener
 {
 public:
@@ -165,17 +126,15 @@ TEST(Rollback, ResimulationIsIdentical)
     EXPECT_EQ(listener.events, events);
 }
 
-// Allocate at init only: Step and CopyFrom must never allocate (DS review D3.1)
+// Allocate at init only: Step (default broadphase included) and CopyFrom must never allocate (DS review D3.1)
 TEST(Rollback, StepAndCopyFromDoNotAllocate)
 {
     CountingAllocator allocator;
     auto worldConfig = config;
     worldConfig.allocator = &allocator;
-    AllPairs broadphase{ allocator };
     CountingListener listener;
     neko::PhysicsWorld world{ worldConfig };
     neko::PhysicsWorld snapshot{ worldConfig };
-    world.SetBSH(&broadphase);
     world.SetContactListener(&listener);
     BuildScene(world);
     world.Step();
