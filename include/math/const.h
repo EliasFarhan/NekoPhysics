@@ -1,7 +1,7 @@
 #pragma once
 
 #include "math/fixed.h"
-#ifdef NEKO_USE_SIXIT
+#ifdef NEKO_SCALAR_SIXIT
 #include "math/sixit_float.h"
 #endif
 #include <cmath>
@@ -10,16 +10,18 @@
 namespace neko
 {
 
-#ifdef NEKO_USE_SIXIT
+#if defined(NEKO_SCALAR_SIXIT)
 using Scalar = sixit::dmath::ieee_float_inline_asm;
-#else
+#elif defined(NEKO_SCALAR_FLOAT)
 using Scalar = float;
+#else
+using Scalar = Fixed16;
 #endif
 
 template<typename T>
 constexpr T Pi()
 {
-#ifdef NEKO_USE_SIXIT
+#ifdef NEKO_SCALAR_SIXIT
     if constexpr (std::is_same_v<T, sixit::dmath::ieee_float_inline_asm>)
     {
         return sixit::dmath::ieee_float_inline_asm(std::numbers::pi_v<float>);
@@ -34,7 +36,7 @@ constexpr T Pi()
 template<typename T>
 constexpr T Exp()
 {
-#ifdef NEKO_USE_SIXIT
+#ifdef NEKO_SCALAR_SIXIT
     if constexpr (std::is_same_v<T, sixit::dmath::ieee_float_inline_asm>)
     {
         return sixit::dmath::ieee_float_inline_asm(std::numbers::e_v<float>);

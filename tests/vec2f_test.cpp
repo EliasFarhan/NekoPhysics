@@ -112,8 +112,11 @@ TEST(Vec2f, Div)
     constexpr neko::Scalar f{3.141f};
 
     auto result = v1 / f;
-    EXPECT_FLOAT_EQ(float{ result.x }, float{ v1.x * (neko::Scalar{1} / f) });
-    EXPECT_FLOAT_EQ(float{ result.y }, float{ v1.y * (neko::Scalar{1} / f) });
+    EXPECT_FLOAT_EQ(float{ result.x }, float{ v1.x / f });
+    EXPECT_FLOAT_EQ(float{ result.y }, float{ v1.y / f });
+    // v1 * (1 / f) rounds twice in fixed point, so only compare with the exact value
+    EXPECT_NEAR(float{ result.x }, 1.0f / 3.141f, 1e-4f);
+    EXPECT_NEAR(float{ result.y }, 2.125f / 3.141f, 1e-4f);
 
     auto tmp = v1;
     tmp /= f;

@@ -11,7 +11,7 @@
       "cacheVariables": {
         "USE_SAMPLES": "ON",
         "USE_TESTING": "ON",
-        "USE_SIXIT": "OFF"
+        "NEKO_SCALAR": "FIXED16"
       }
     },
     {
@@ -19,6 +19,12 @@
       "displayName": "Debug (samples + tests)",
       "inherits": "base",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "debug-float",
+      "displayName": "Debug, float Scalar (samples + tests)",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "NEKO_SCALAR": "FLOAT" }
     },
     {
       "name": "release",
@@ -35,6 +41,7 @@
   ],
   "buildPresets": [
     { "name": "debug", "configurePreset": "debug" },
+    { "name": "debug-float", "configurePreset": "debug-float" },
     { "name": "release", "configurePreset": "release" },
     { "name": "relwithdebinfo", "configurePreset": "relwithdebinfo" }
   ],
@@ -42,6 +49,11 @@
     {
       "name": "debug",
       "configurePreset": "debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "debug-float",
+      "configurePreset": "debug-float",
       "output": { "outputOnFailure": true }
     },
     {

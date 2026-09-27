@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-NekoPhysics is a small deterministic 2D physics library in C++20 with a quadtree broadphase and circle/AABB colliders. `neko::Scalar` is `sixit::dmath::ieee_float_inline_asm` (deterministic float, `externals/sixit`) when `USE_SIXIT=ON` (default), else plain `float`. The older 16.16 fixed-point `neko::Fixed16` (with lookup tables for `Sin`/`Cos`/`Sqrt`) is still in the tree but only used by `tests/fixed_test.cpp`. `main/` holds SDL3/ImGui samples; `tests/` holds GoogleTest executables (one per file).
+NekoPhysics is a small deterministic 2D physics library in C++20 with a quadtree broadphase and circle/AABB colliders. The end goal is to run it on the Nintendo DS (devkitPro/devkitARM, ARM946E-S, no FPU) with rollback netcode. `neko::Scalar` is chosen by the CMake cache variable `NEKO_SCALAR`: `FIXED16` (default, 16.16 fixed point `neko::Fixed16`, the DS type), `FLOAT` (plain `float`, PC convenience) or `SIXIT` (`sixit::dmath::ieee_float_inline_asm`, x86 only, `externals/sixit`). Tests must pass with both `FIXED16` and `FLOAT`. `main/` holds SDL3/ImGui samples; `tests/` holds GoogleTest executables (one per file).
 
 ## Reviews, discussions and plans live in the Obsidian vault
 
@@ -12,19 +12,21 @@ NekoPhysics is a small deterministic 2D physics library in C++20 with a quadtree
 
 - `NekoPhysics review.md`: code review from 2026-09-18 (verified on `fd65db2`), findings S1–S5 with block ids (`^s1-1` …) and effort sizes.
 - `NekoPhysics review tasks.md`: sortable findings table. Mark items 🟢 there when fixed (with the commit hash).
-- `Plans/`: implementation plans.
+- `NekoPhysics DS review.md`: Nintendo DS review from 2026-09-27 (verified on `49fbd8f`), findings D1–D5.
+- `Plans/`: implementation plans. `Plans/NekoPhysics DS port plan.md` is the current roadmap (phases 0–6); update its status table as steps land.
 
 ## Build
 
-vcpkg manifest; optional features are toggled by CMake options: `USE_SAMPLES`, `USE_TESTING`, `ENABLE_PROFILING` (Tracy), `USE_SIXIT`. Submodules are required: `git submodule update --init --recursive`.
+vcpkg manifest; optional features are toggled by CMake options: `USE_SAMPLES`, `USE_TESTING`, `ENABLE_PROFILING` (Tracy), plus `NEKO_SCALAR` (see above). Submodules are required: `git submodule update --init --recursive`.
 
 ```
-cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=<vcpkg>/scripts/buildsystems/vcpkg.cmake -DUSE_TESTING=ON -DUSE_SIXIT=OFF
-cmake --build build
-ctest --test-dir build
+cmake --preset debug          # FIXED16; needs VCPKG_ROOT
+cmake --build --preset debug
+ctest --preset debug
+cmake --preset debug-float    # same with NEKO_SCALAR=FLOAT
 ```
 
-As of 2026-09-18 the default `USE_SIXIT=ON` build fails with MSVC 14.51 and clang (sixit's bundled fmt, non-constexpr `Scalar`); see finding S1.8 in the vault review. Use `USE_SIXIT=OFF` until fixed.
+As of 2026-09-18 `NEKO_SCALAR=SIXIT` fails to build with MSVC 14.51 and clang (sixit's bundled fmt, non-constexpr `Scalar`); see finding S1.8 in the vault review.
 
 Configure runs `scripts/gen_fixed_table.py` (Python 3 required), which rewrites `src/generated/`.
 
