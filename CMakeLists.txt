@@ -58,6 +58,12 @@ neko_set_project_warnings(NekoPhysics)
 if (MSVC)
     target_compile_definitions(NekoPhysics PRIVATE _USE_MATH_DEFINES=1)
 endif()
+# devkitPro's NDS.cmake sets CMAKE_SYSTEM_NAME to NintendoDS (and NINTENDO_DS, ARM9 or ARM7)
+if(CMAKE_SYSTEM_NAME STREQUAL "NintendoDS")
+    target_compile_definitions(NekoPhysics PUBLIC NEKO_PLATFORM_NDS)
+    # In Thumb mode a Fixed16 multiply is a __aeabi_lmul call, in ARM mode it is an inline SMULL
+    target_compile_options(NekoPhysics PRIVATE -marm)
+endif()
 
 #install(TARGETS NekoPhysics FILE_SET HEADERS)
 
