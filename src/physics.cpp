@@ -7,6 +7,7 @@
 #include <optional>
 #include <type_traits>
 
+#include "core/platform.h"
 #include "math/vec2.h"
 #include "physics/contact_solver.h"
 
@@ -167,7 +168,7 @@ void PhysicsWorld::RemoveBody(BodyIndex index)
     }
 }
 
-bool PhysicsWorld::DetectContact(
+NEKO_HOT bool PhysicsWorld::DetectContact(
     Body& body1, 
     Collider& collider1,
     Body& body2, 

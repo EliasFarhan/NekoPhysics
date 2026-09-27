@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 
+#include "core/platform.h"
 #include "core/profile.h"
 
 namespace neko
@@ -30,7 +31,7 @@ void SweepAndPrune::Insert(const ColliderAabb& colliderAabb)
     }
 }
 
-void SweepAndPrune::CalculatePairs()
+NEKO_HOT void SweepAndPrune::CalculatePairs()
 {
     NEKO_PROFILE_FUNCTION();
     // std::sort doesn't allocate; the order is total, so every implementation gives the same result

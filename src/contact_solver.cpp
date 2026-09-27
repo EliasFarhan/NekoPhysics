@@ -2,6 +2,8 @@
 
 #include "physics/physics.h"
 
+#include "core/platform.h"
+
 namespace neko
 {
 namespace
@@ -13,7 +15,7 @@ Scalar InverseMass(const Body& body)
 }
 } // namespace
 
-void Contact::Resolve()
+NEKO_HOT void Contact::Resolve()
 {
     ResolveVelocity();
     ResolveInterpenetration();
@@ -25,7 +27,7 @@ Scalar Contact::CalculateSeparateVelocity() const
     return Vec2f::Dot(relativeVelocity, contactNormal);
 }
 
-void Contact::ResolveVelocity() const
+NEKO_HOT void Contact::ResolveVelocity() const
 {
     const auto separatingVelocity = CalculateSeparateVelocity();
     if (separatingVelocity > Scalar{0})
@@ -47,7 +49,7 @@ void Contact::ResolveVelocity() const
     bodies[1].body->velocity -= impulsePerIMass * inverseMass2;
 }
 
-void Contact::ResolveInterpenetration() const
+NEKO_HOT void Contact::ResolveInterpenetration() const
 {
     // If we don't have any penetration, skip this step.
     if (penetration <= Scalar{0}) return;
