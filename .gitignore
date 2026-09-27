@@ -2,3 +2,4 @@
 **/.DS_Store
 [bB]uild/
 cmake-build-*/
+.idea/

@@ -1,6 +1,8 @@
 #include "math/vec2.h"
 #include <gtest/gtest.h>
 
+#include <limits>
+
 
 
 TEST(Vec2f, Const)
@@ -158,8 +160,9 @@ TEST(Vec2f, Normalized)
     {
         constexpr neko::Vec2f v2{};
         const auto tmp = v2.Normalized();
-        EXPECT_TRUE(std::isnan(float{ tmp.x }));
-        EXPECT_TRUE(std::isnan(float{ tmp.y }));
+        // Division by zero is guarded in Vec2::operator/ and returns max()
+        EXPECT_EQ(float{ tmp.x }, std::numeric_limits<float>::max());
+        EXPECT_EQ(float{ tmp.y }, std::numeric_limits<float>::max());
     }
 }
 
