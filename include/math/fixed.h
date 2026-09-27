@@ -5,6 +5,10 @@
 #include <limits>
 #include <type_traits>
 
+#if defined(NEKO_PLATFORM_NDS)
+#include <nds/arm9/math.h>
+#endif
+
 namespace neko
 {
 
@@ -14,7 +18,7 @@ namespace detail
  * @brief Floor of the square root of a 64-bit integer, computed bit by bit.
  * Exact, so it matches the DS hardware square root unit (REG_SQRTCNT, 64-bit mode).
  */
-[[nodiscard]] constexpr std::uint32_t ISqrt64(std::uint64_t value) noexcept
+[[nodiscard]] constexpr std::uint32_t ISqrt64Portable(std::uint64_t value) noexcept
 {
     std::uint64_t result = 0;
     std::uint64_t bit = std::uint64_t{ 1 } << 62;
@@ -36,6 +40,51 @@ namespace detail
         bit >>= 2;
     }
     return static_cast<std::uint32_t>(result);
+}
+
+/**
+ * @brief 64/32 signed division, truncated toward zero, keeping the low 32 bits of the quotient. den must not be 0.
+ */
+[[nodiscard]] constexpr std::int32_t Div64Portable(std::int64_t num, std::int32_t den) noexcept
+{
+    return static_cast<std::int32_t>(num / den);
+}
+
+// DS hardware math hooks: the divider and the square root unit are shared memory-mapped registers, so the physics
+// must not run inside IRQ handlers (an interrupted operation would return the handler's result).
+// Constant evaluation keeps the portable path, and both paths give bit-exact results.
+
+/**
+ * @brief Floor of the square root of a 64-bit integer (REG_SQRTCNT 64-bit mode on the DS).
+ */
+[[nodiscard]] constexpr std::uint32_t ISqrt64(std::uint64_t value) noexcept
+{
+#if defined(NEKO_PLATFORM_NDS)
+    // From 2^62 up (roots >= 2^31), melonDS 1.1 returns the root + 1; not checked on hardware, so these inputs
+    // (only vector lengths >= 32768) stay on the portable path
+    if !consteval
+    {
+        if (value < (std::uint64_t{ 1 } << 62))
+        {
+            return sqrt64(static_cast<long long>(value));
+        }
+    }
+#endif
+    return ISqrt64Portable(value);
+}
+
+/**
+ * @brief Same as Div64Portable (REG_DIVCNT 64/32 mode on the DS). den must not be 0.
+ */
+[[nodiscard]] constexpr std::int32_t Div64(std::int64_t num, std::int32_t den) noexcept
+{
+#if defined(NEKO_PLATFORM_NDS)
+    if !consteval
+    {
+        return div64(num, den);
+    }
+#endif
+    return Div64Portable(num, den);
 }
 } // namespace detail
 
@@ -144,9 +193,16 @@ public:
             }
             return fromUnderlyingValue(underlyingValue_ > 0 ? std::numeric_limits<T>::max() : std::numeric_limits<T>::min());
         }
-        // DS port: this 64/32 division is what the hardware divider does (REG_DIVCNT, 64/32 mode)
         const MulT numerator = static_cast<MulT>(underlyingValue_) * static_cast<MulT>(one);
-        return fromUnderlyingValue(static_cast<T>(numerator / static_cast<MulT>(other.underlyingValue_)));
+        if constexpr (std::is_same_v<T, std::int32_t> && std::is_same_v<MulT, std::int64_t>)
+        {
+            // Hardware divider on the DS
+            return fromUnderlyingValue(detail::Div64(numerator, other.underlyingValue_));
+        }
+        else
+        {
+            return fromUnderlyingValue(static_cast<T>(numerator / static_cast<MulT>(other.underlyingValue_)));
+        }
     }
 
     constexpr Fixed& operator/=(Fixed other) noexcept

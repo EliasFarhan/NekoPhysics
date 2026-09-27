@@ -34,6 +34,13 @@ static_assert(Fixed16{ 1 } / Fixed16{ 0 } == std::numeric_limits<Fixed16>::max()
 static_assert(Fixed16{ -1 } / Fixed16{ 0 } == std::numeric_limits<Fixed16>::lowest());
 static_assert(Fixed16{ 0 } / Fixed16{ 0 } == Fixed16{ 0 });
 
+// What the DS hardware hooks must reproduce (the ROM in nds/ compares them on the DS)
+static_assert(neko::detail::Div64(-7, 2) == -3);
+static_assert(neko::detail::Div64(std::int64_t{ 1 } << 40, 3) == 1431655765); // low 32 bits of 366503875925
+static_assert(neko::detail::Div64(std::int64_t{ -1 } << 47, 1) == 0);
+static_assert(neko::detail::ISqrt64(~std::uint64_t{ 0 }) == 0xFFFFFFFFu);
+static_assert(neko::detail::ISqrt64(99) == 9);
+
 // Conversions: from float rounds to nearest, to integer truncates toward zero (S4.2)
 static_assert(Fixed16{ 0.1f } == Raw(6554));
 static_assert(Fixed16{ -0.1f } == Raw(-6554));
