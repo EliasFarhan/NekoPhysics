@@ -11,7 +11,8 @@
       "cacheVariables": {
         "USE_SAMPLES": "ON",
         "USE_TESTING": "ON",
-        "NEKO_SCALAR": "FIXED16"
+        "NEKO_SCALAR": "FIXED16",
+        "NEKO_WARNINGS_AS_ERRORS": "ON"
       }
     },
     {

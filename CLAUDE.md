@@ -17,7 +17,7 @@ NekoPhysics is a small deterministic 2D physics library in C++20 with a quadtree
 
 ## Build
 
-vcpkg manifest; optional features are toggled by CMake options: `USE_SAMPLES`, `USE_TESTING`, `ENABLE_PROFILING` (Tracy), plus `NEKO_SCALAR` (see above). Submodules are required: `git submodule update --init --recursive`.
+vcpkg manifest; optional features are toggled by CMake options: `USE_SAMPLES`, `USE_TESTING`, `ENABLE_PROFILING` (Tracy), plus `NEKO_SCALAR` (see above). There are no submodules: `externals/sixit` is vendored.
 
 ```
 cmake --preset debug          # FIXED16; needs VCPKG_ROOT
@@ -32,4 +32,4 @@ Configure runs `scripts/gen_fixed_table.py` (Python 3 required), which rewrites 
 
 ## Warnings
 
-`cmake/CompilerWarnings.cmake` defines `neko_set_project_warnings(<target>)`, applied to the library, the samples and every test. New targets must call it. `NEKO_WARNINGS_AS_ERRORS` is OFF until the existing signed/unsigned conversion warnings (C4365 / `-Wsign-conversion`, from `std::int32_t` indices used as vector subscripts) are fixed; the goal is to turn it ON. Don't silence warnings with casts at call sites when the fix belongs in the index types.
+`cmake/CompilerWarnings.cmake` defines `neko_set_project_warnings(<target>)`, applied to the library, the samples and every test. New targets must call it. `NEKO_WARNINGS_AS_ERRORS` is ON (also forced by the presets): MSVC `/W4` + extras are clean for the library, tests and samples; the clang list is clean for the library and tests (checked with emsdk clang against the MSVC headers). The GCC-only flags have not been run yet. Don't silence warnings with casts at call sites when the fix belongs in the types (indices are `neko::Index` = `std::uint16_t`).

@@ -1,8 +1,7 @@
 # Warning set adapted from cpp-best-practices (Jason Turner).
 # Usage: neko_set_project_warnings(<target> [PRIVATE|INTERFACE])
 
-# TODO: flip to ON once the existing sign-conversion (C4365 / -Wsign-conversion) warnings are fixed.
-option(NEKO_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
+option(NEKO_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
 
 function(neko_set_project_warnings target)
     set(scope PRIVATE)
