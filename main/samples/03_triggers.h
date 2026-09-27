@@ -1,5 +1,6 @@
 #pragma once
 #include "physics/physics.h"
+#include "bsh/quadtree.h"
 #include "sample.h"
 
 namespace neko
@@ -24,7 +25,8 @@ private:
         int count = 0;
         Scalar circleRadius{ 0.0f };
     };
-    PhysicsWorld world_{ {.dt = fixedDeltaTime} };
+    static constexpr std::size_t circleCount = 1'000;
+    PhysicsWorld world_{ {.dt = fixedDeltaTime, .maxBodies = circleCount, .maxColliders = circleCount, .maxTouchingPairs = circleCount * 8} };
     QuadTree quadTree_;
     std::vector<TriggeredBody> bodies_;
     std::vector<SDL_Vertex> vertices_;

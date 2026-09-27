@@ -1,6 +1,7 @@
 #pragma once
 
 #include "physics/physics.h"
+#include "bsh/quadtree.h"
 #include "sample.h"
 
 #include <box2d/box2d.h>

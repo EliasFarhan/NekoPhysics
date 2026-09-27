@@ -20,8 +20,11 @@ struct QuadNode
 class QuadTree : public BoundingSurfaceHierarchy
 {
 public:
-    QuadTree();
-    QuadTree(size_t maxDepth, size_t maxSize);
+    explicit QuadTree(Allocator& allocator = DefaultAllocator());
+    QuadTree(std::size_t maxDepth, std::size_t maxSize, Allocator& allocator = DefaultAllocator());
+    // Nodes point to each other
+    QuadTree(const QuadTree&) = delete;
+    QuadTree& operator=(const QuadTree&) = delete;
     void Insert(const ColliderAabb& colliderAabb) override;
     void CalculatePairs() override;
     void Clear() override;
@@ -37,12 +40,12 @@ private:
     void GoDownTree(const QuadNode*);
     void InsertPairs(const QuadNode*, ColliderIndex);
     
-    HeapAllocator heapAllocator_;
-    ArrayList<ColliderPair> possiblePairs_{StandardAllocator<ColliderPair>{heapAllocator_}};
+    Allocator* allocator_;
+    ArrayList<ColliderPair> possiblePairs_;
     std::size_t nodeAllocationIndex_ = 1;
     ArrayList<QuadNode> nodes_;
-    size_t maxDepth_ = MAX_DEPTH;
-    size_t maxSize_ = MAX_SIZE;
+    std::size_t maxDepth_ = MAX_DEPTH;
+    std::size_t maxSize_ = MAX_SIZE;
 };
 
 }

@@ -30,11 +30,11 @@ static Vec2f staticRectPosition = worldCenter - Vec2f{ Scalar{ 2 }, Scalar{ 3 }}
 constexpr static auto maxForce = neko::Scalar{ 10.0f };
 
 #ifndef USE_BOX2D
-void MoveIntoSample::OnTriggerEnter(const ColliderPair& p)
+void MoveIntoSample::OnTriggerEnter([[maybe_unused]] const ColliderPair& p)
 {
 }
 
-void MoveIntoSample::OnTriggerExit(const ColliderPair& p)
+void MoveIntoSample::OnTriggerExit([[maybe_unused]] const ColliderPair& p)
 {
 }
 
@@ -53,7 +53,7 @@ void MoveIntoSample::OnCollisionEnter(const ColliderPair& p)
 	}
 }
 
-void MoveIntoSample::OnCollisionExit(const ColliderPair& p)
+void MoveIntoSample::OnCollisionExit([[maybe_unused]] const ColliderPair& p)
 {
 }
 #else
@@ -218,7 +218,7 @@ void MoveIntoSample::Begin()
 	}
 }
 
-void MoveIntoSample::Update(float dt)
+void MoveIntoSample::Update([[maybe_unused]] float dt)
 {
 }
 

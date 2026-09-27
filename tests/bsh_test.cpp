@@ -14,7 +14,7 @@ public:
     MOCK_METHOD(void, CalculatePairs, (), (override));
     MOCK_METHOD(void, Clear, (), (override));
     MOCK_METHOD(void, SetWorldAabb, (const neko::Aabbf&), (override) );
-    MOCK_METHOD(const ArrayList<neko::ColliderPair>&, GetPossiblePairs,(), (const, override));
+    MOCK_METHOD(const neko::ArrayList<neko::ColliderPair>&, GetPossiblePairs,(), (const, override));
 private:
 };
 
@@ -55,7 +55,7 @@ TEST(PhysicsWorld, TwoBodiesOneFrame)
     }
 
     neko::HeapAllocator allocator_;
-    ArrayList<neko::ColliderPair> pairs((neko::StandardAllocator<neko::ColliderPair>(allocator_)));
+    neko::ArrayList<neko::ColliderPair> pairs((neko::StandardAllocator<neko::ColliderPair>(allocator_)));
 	pairs.emplace_back(c1, c2);
 
     MockBSH bsh;

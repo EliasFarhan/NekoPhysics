@@ -1,6 +1,7 @@
 #pragma once
 
-#include <cstdlib>
+#include <cstddef>
+#include <limits>
 #include <vector>
 
 namespace neko
@@ -28,53 +29,62 @@ public:
 };
 
 /**
- * \brief Custom proxy allocator respecting allocator_traits
+ * @brief Process-wide heap allocator used when none is given
+ */
+[[nodiscard]] Allocator& DefaultAllocator() noexcept;
+
+namespace detail
+{
+/**
+ * @brief Throws std::bad_alloc, or aborts when exceptions are disabled (usual on the DS)
+ */
+[[noreturn]] void OnAllocationFailure();
+} // namespace detail
+
+/**
+ * \brief Proxy allocator respecting allocator_traits. Holds a pointer, so containers can be copied and moved freely
+ * as long as the Allocator outlives them.
  */
 template<typename T>
 class StandardAllocator
 {
 public:
     using value_type = T;
-    explicit StandardAllocator(Allocator& allocator);
+    StandardAllocator() noexcept : allocator_(&DefaultAllocator()) {}
+    explicit StandardAllocator(Allocator& allocator) noexcept : allocator_(&allocator) {}
     template <class U>
-    explicit StandardAllocator(const StandardAllocator<U>& allocator) noexcept : allocator_(allocator.GetAllocator()) {}
-    T* allocate(std::size_t n);
-    void deallocate(T* ptr, std::size_t n);
-    [[nodiscard]] Allocator& GetAllocator() const { return allocator_; }
-protected:
-    Allocator& allocator_;
+    StandardAllocator(const StandardAllocator<U>& allocator) noexcept : allocator_(&allocator.GetAllocator()) {}
+
+    [[nodiscard]] T* allocate(std::size_t n)
+    {
+        if (n > std::numeric_limits<std::size_t>::max() / sizeof(T))
+        {
+            detail::OnAllocationFailure();
+        }
+        auto* ptr = allocator_->Allocate(n, sizeof(T));
+        if (ptr == nullptr && n != 0)
+        {
+            detail::OnAllocationFailure();
+        }
+        return static_cast<T*>(ptr);
+    }
+
+    void deallocate(T* ptr, [[maybe_unused]] std::size_t n) noexcept
+    {
+        allocator_->Deallocate(ptr);
+    }
+
+    [[nodiscard]] Allocator& GetAllocator() const noexcept { return *allocator_; }
+
+    template <class U>
+    [[nodiscard]] bool operator==(const StandardAllocator<U>& other) const noexcept
+    {
+        return allocator_ == &other.GetAllocator();
+    }
+private:
+    Allocator* allocator_;
 };
 
-
-template <class T, class U>
-constexpr bool operator== (const StandardAllocator<T>&, const StandardAllocator<U>&) noexcept
-{
-    return true;
-}
-
-template <class T, class U>
-constexpr bool operator!= (const StandardAllocator<T>&, const StandardAllocator<U>&) noexcept
-{
-    return false;
-}
-
-template <typename T>
-StandardAllocator<T>::StandardAllocator(Allocator& allocator) : allocator_(allocator)
-{
-}
-
-template <typename T>
-T* StandardAllocator<T>::allocate(std::size_t n)
-{
-    return static_cast<T*>(allocator_.Allocate(n * sizeof(T), alignof(T)));
-}
-
-template <typename T>
-void StandardAllocator<T>::deallocate(T* ptr, [[maybe_unused]] std::size_t n)
-{
-    allocator_.Deallocate(ptr);
-}
-}
-
 template<typename T>
-using ArrayList = std::vector<T, neko::StandardAllocator<T>>;
+using ArrayList = std::vector<T, StandardAllocator<T>>;
+}

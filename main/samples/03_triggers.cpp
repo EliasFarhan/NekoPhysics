@@ -1,6 +1,7 @@
 #include "03_triggers.h"
 
 #include <SDL3/SDL_log.h>
+#include <functional>
 
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
@@ -12,7 +13,6 @@ namespace neko
 {
 
 
-constexpr static std::size_t circleCount = 1'000;
 constexpr static std::size_t circleResolution = 30;
 constexpr static Scalar maxSpeed = Scalar{ 4 };
 constexpr static Scalar maxCircleRadius = Scalar{ 0.02f };
@@ -82,7 +82,7 @@ void TriggersSample::Update([[maybe_unused]]float dt)
 #endif
     for (std::size_t i = 0; i < circleCount; i++)
     {
-        auto& body = world_.body({ static_cast<int>(i) });
+        auto& body = world_.body({ static_cast<Index>(i) });
         if ((body.velocity.x > Scalar{0.0f}&& body.position.x > Scalar{12.8f}) || (body.velocity.x < Scalar{0.0f}&& body.position.x < Scalar{0.0f}))
         {
             body.velocity.x = -body.velocity.x;
@@ -144,7 +144,7 @@ void TriggersSample::Draw(SDL_Renderer* renderer)
             center+Vec2f(halfSize.x, -halfSize.y),
             center+Vec2f(halfSize.x, halfSize.y),
         };
-        for(int i = 0; i < 4; i++)
+        for(std::size_t i = 0; i < 4; i++)
         {
             const auto pos1 = pos[i]*pixelPerMeter;
             const auto pos2 = pos[(i+1)%4]*pixelPerMeter;

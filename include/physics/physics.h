@@ -8,14 +8,10 @@
 #include "contact_solver.h"
 #include "core/allocator.h"
 #include "contact_listener.h"
-#include "bsh/quadtree.h"
-#include <ankerl/unordered_dense.h>
+#include "bsh/bsh.h"
 
-#include <vector>
-#include <string>
-#include <numeric>
-#include <bit>
-#include <type_traits>
+#include <cstddef>
+#include <cstdint>
 
 
 namespace neko
@@ -46,15 +42,18 @@ struct Collider
 {
 	const void* userData = nullptr;
     Vec2f offset{};
+    Scalar restitution{ 1 };
     BodyIndex bodyIndex{};
     ColliderIndex colliderIndex{};
     ShapeIndex shapeIndex{};
-    Scalar restitution{ 1 };
     ShapeType type = ShapeType::NONE;
     bool isTrigger = true;
 };
 [[nodiscard]] std::uint32_t GenerateChecksum(const Collider& collider);
 
+/**
+ * @brief A negative radius marks a free slot
+ */
 struct CircleCollider
 {
     Scalar radius{ -1 };
@@ -62,12 +61,24 @@ struct CircleCollider
 
 [[nodiscard]] std::uint32_t GenerateChecksum(const CircleCollider& collider);
 
+/**
+ * @brief A negative half size marks a free slot
+ */
 struct AabbCollider
 {
     Vec2f halfSize{ Scalar {-1}, Scalar {-1} };
 };
 
 [[nodiscard]] std::uint32_t GenerateChecksum(const AabbCollider& collider);
+
+/**
+ * @brief Pair of colliders that touched at the end of the last step, used to send enter and exit events
+ */
+struct TouchingPair
+{
+    ColliderPair pair{};
+    bool isTrigger = false;
+};
 
 struct PhysicsWorldConfig
 {
@@ -76,13 +87,41 @@ struct PhysicsWorldConfig
      * @brief Duration of one Step. Fixed, so that every peer and every rollback resimulation uses the same value
      */
     Scalar dt{ 1.0f / 60.0f };
+    /**
+     * @brief Capacities are allocated once, at construction: Step and CopyFrom never allocate
+     */
+    std::size_t maxBodies = 256;
+    std::size_t maxColliders = 256;
+    /**
+     * @brief Maximum number of touching pairs tracked for enter/exit events
+     */
+    std::size_t maxTouchingPairs = 1024;
+    /**
+     * @brief Must outlive the world. nullptr means DefaultAllocator()
+     */
+    Allocator* allocator = nullptr;
 };
 
 class PhysicsWorld
 {
 public:
     explicit PhysicsWorld(const PhysicsWorldConfig& config = {});
+    /**
+     * @brief Copies would allocate: rollback snapshots use CopyFrom into an existing world instead
+     */
+    PhysicsWorld(const PhysicsWorld&) = delete;
+    PhysicsWorld& operator=(const PhysicsWorld&) = delete;
+    PhysicsWorld(PhysicsWorld&&) = default;
+    PhysicsWorld& operator=(PhysicsWorld&&) = default;
+    ~PhysicsWorld() = default;
+
+    /**
+     * @brief Returns INVALID_BODY_INDEX when maxBodies are in use
+     */
     BodyIndex AddBody();
+    /**
+     * @brief Removes the body and all its colliders
+     */
     void RemoveBody(BodyIndex index);
     bool DetectContact(Body& body1, Collider& collider1, Body& body2, Collider& collider2, Contact* contact);
     /**
@@ -93,45 +132,53 @@ public:
     void ResolveBroadphase();
     void ResolveNarrowphase();
 
-    [[nodiscard]] Body& body(BodyIndex index) { return bodies_[static_cast<size_t>(index.index)]; }
-    [[nodiscard]] const Body& body(BodyIndex index) const { return bodies_[static_cast<size_t>(index.index)]; }
+    [[nodiscard]] Body& body(BodyIndex index) { return bodies_[index.index]; }
+    [[nodiscard]] const Body& body(BodyIndex index) const { return bodies_[index.index]; }
 
+    /**
+     * @brief Return INVALID_COLLIDER_INDEX when maxColliders are in use
+     */
 	ColliderIndex AddCircleCollider(BodyIndex body);
 	ColliderIndex AddAabbCollider(BodyIndex body);
+    void RemoveCollider(ColliderIndex index);
 
-	[[nodiscard]] Collider& collider(ColliderIndex colliderIndex) { return colliders_[static_cast<size_t>(colliderIndex.index)]; }
-	[[nodiscard]] const Collider& collider(ColliderIndex colliderIndex) const { return colliders_[static_cast<size_t>(colliderIndex.index)]; }
+	[[nodiscard]] Collider& collider(ColliderIndex colliderIndex) { return colliders_[colliderIndex.index]; }
+	[[nodiscard]] const Collider& collider(ColliderIndex colliderIndex) const { return colliders_[colliderIndex.index]; }
 
-	[[nodiscard]] AabbCollider& aabb(ShapeIndex shapeIndex) { return aabbs_[static_cast<size_t>(shapeIndex.index)]; }
-	[[nodiscard]] const AabbCollider& aabb(ShapeIndex shapeIndex) const { return aabbs_[static_cast<size_t>(shapeIndex.index)]; }
-	[[nodiscard]] CircleCollider& circle(ShapeIndex shapeIndex) { return circles_[static_cast<size_t>(shapeIndex.index)]; }
-    [[nodiscard]] const CircleCollider& circle(ShapeIndex shapeIndex) const { return circles_[static_cast<size_t>(shapeIndex.index)]; }
-    
-    void RemoveAabbCollider(ColliderIndex index);
-    void RemoveCircleCollider(ColliderIndex index);
+	[[nodiscard]] AabbCollider& aabb(ShapeIndex shapeIndex) { return aabbs_[shapeIndex.index]; }
+	[[nodiscard]] const AabbCollider& aabb(ShapeIndex shapeIndex) const { return aabbs_[shapeIndex.index]; }
+	[[nodiscard]] CircleCollider& circle(ShapeIndex shapeIndex) { return circles_[shapeIndex.index]; }
+    [[nodiscard]] const CircleCollider& circle(ShapeIndex shapeIndex) const { return circles_[shapeIndex.index]; }
 
     void SetBSH(BoundingSurfaceHierarchy* boundingSurfaceHierarchy) { bsh_ = boundingSurfaceHierarchy; }
     void SetContactListener(ContactListener* contactListener) { contactListener_ = contactListener; }
 
 	[[nodiscard]] Vec2f gravity() const { return config_.gravity; }
 	[[nodiscard]] Scalar dt() const { return config_.dt; }
+    [[nodiscard]] const ArrayList<TouchingPair>& touchingPairs() const { return touchingPairs_; }
 
+    /**
+     * @brief Copies the simulation state (bodies, colliders, shapes, touching pairs), not the listener nor the BSH.
+     * Doesn't allocate when both worlds have the same config.
+     */
 	void CopyFrom(const PhysicsWorld& physicsWorld);
+    /**
+     * @brief Hash of the whole simulation state, to detect desyncs between peers
+     */
+    [[nodiscard]] std::uint32_t GenerateChecksum() const;
 private:
-    HeapAllocator heapAllocator_;
-    ArrayList<Body> bodies_{StandardAllocator<Body>{heapAllocator_}};
-    ArrayList<AabbCollider> aabbs_{StandardAllocator<AabbCollider>{heapAllocator_}};
-    ArrayList<CircleCollider> circles_{StandardAllocator<CircleCollider>{heapAllocator_}};
-    ArrayList<Collider> colliders_{StandardAllocator<Collider>{heapAllocator_}};
-    ankerl::unordered_dense::map<ColliderPair, std::optional<Contact>, ColliderHash, std::equal_to<>, StandardAllocator<std::pair<ColliderPair, std::optional<Contact>>>>
-        manifold_{manifoldBaseSize, StandardAllocator<std::pair<ColliderPair, std::optional<Contact>>>{heapAllocator_}};
+    void NotifyContactChanges() const;
 
-    static constexpr auto manifoldBaseSize = 1000;
+    PhysicsWorldConfig config_;
+    ArrayList<Body> bodies_;
+    ArrayList<AabbCollider> aabbs_;
+    ArrayList<CircleCollider> circles_;
+    ArrayList<Collider> colliders_;
+    ArrayList<TouchingPair> touchingPairs_;
+    ArrayList<TouchingPair> newTouchingPairs_;
 
     ContactListener* contactListener_ = nullptr;
     BoundingSurfaceHierarchy* bsh_ = nullptr;
-    PhysicsWorldConfig config_;
-
 };
 
 } // namespace neko

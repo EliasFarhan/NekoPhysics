@@ -10,7 +10,6 @@ namespace neko
 
 constexpr static auto G = Scalar{ 10.0f };
 constexpr static auto blackHoleMass = Scalar{ 10.0f };
-constexpr static std::size_t circleCount = 1'000;
 constexpr static std::size_t circleResolution = 10;
 constexpr static auto circleRadius = Scalar{ 10.0f };
 constexpr static auto pixelPerMeter = Scalar{ 100.0f };
@@ -72,7 +71,7 @@ void PlanetSample::FixedUpdate()
 {
     for(std::size_t i = 0; i < circleCount; i++)
     {
-        auto& body = world_.body({ static_cast<int>(i) });
+        auto& body = world_.body({ static_cast<Index>(i) });
         const auto delta = body.position - worldCenter;
         const auto force = G * blackHoleMass / (delta.SquareLength() * body.inverseMass);
         body.force += force * (-delta).Normalized();
@@ -84,7 +83,7 @@ void PlanetSample::Update([[maybe_unused]] float dt)
 {
     for (std::size_t i = 0; i < circleCount; i++)
     {
-        const auto& body = world_.body({ static_cast<int>(i) });
+        const auto& body = world_.body({ static_cast<Index>(i) });
 
         for (std::size_t j = 0; j < circleResolution + 1; j++)
         {

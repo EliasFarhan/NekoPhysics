@@ -1,6 +1,10 @@
 #include "physics/physics.h"
 
+#include <algorithm>
 #include <bit>
+#include <cassert>
+#include <limits>
+#include <optional>
 #include <type_traits>
 
 #include "math/vec2.h"
@@ -17,21 +21,23 @@ namespace neko
 namespace
 {
 /**
- * @brief FNV-1a over the bytes of each 32-bit field: order-dependent, so equal or swapped fields don't cancel out
+ * @brief FNV-1a over the bytes of each 32-bit word: order-dependent, so equal or swapped fields don't cancel out
  */
 class Checksum
 {
 public:
-    template<typename T>
-    requires (sizeof(T) == sizeof(std::uint32_t) && std::is_trivially_copyable_v<T>)
-    void Add(T value) noexcept
+    void Add(std::uint32_t word) noexcept
     {
-        const auto word = std::bit_cast<std::uint32_t>(value);
         for (int shift = 0; shift < 32; shift += 8)
         {
             hash_ ^= (word >> shift) & 0xFFu;
             hash_ *= prime;
         }
+    }
+    void Add(Scalar value) noexcept
+    {
+        static_assert(sizeof(Scalar) == sizeof(std::uint32_t));
+        Add(std::bit_cast<std::uint32_t>(value));
     }
     void Add(Vec2f value) noexcept
     {
@@ -42,6 +48,9 @@ public:
     template<typename E>
     requires std::is_enum_v<E>
     void Add(E value) noexcept { Add(static_cast<std::uint32_t>(value)); }
+    template<typename I>
+    requires std::is_same_v<decltype(I::index), Index>
+    void Add(I value) noexcept { Add(static_cast<std::uint32_t>(value.index)); }
 
     [[nodiscard]] std::uint32_t Get() const noexcept { return hash_; }
 private:
@@ -49,6 +58,45 @@ private:
     static constexpr std::uint32_t prime = 16777619u;
     std::uint32_t hash_ = offsetBasis;
 };
+
+/**
+ * @brief Reuses the first free slot, or appends one while under capacity
+ * @return the slot index, or std::nullopt when the list is full
+ */
+template<typename T, typename IsFree>
+std::optional<Index> AcquireSlot(ArrayList<T>& list, std::size_t capacity, IsFree isFree)
+{
+    const auto it = std::find_if(list.begin(), list.end(), isFree);
+    if (it != list.end())
+    {
+        *it = T{};
+        return static_cast<Index>(it - list.begin());
+    }
+    if (list.size() >= capacity)
+    {
+        return std::nullopt;
+    }
+    list.emplace_back();
+    return static_cast<Index>(list.size() - 1);
+}
+
+template<typename T>
+ArrayList<T> MakeList(Allocator& allocator, std::size_t capacity)
+{
+    ArrayList<T> list{ StandardAllocator<T>{allocator} };
+    list.reserve(capacity);
+    return list;
+}
+
+Allocator& ConfigAllocator(const PhysicsWorldConfig& config)
+{
+    return config.allocator != nullptr ? *config.allocator : DefaultAllocator();
+}
+
+constexpr bool IsFreeBody(const Body& body) { return body.type == BodyType::NONE; }
+constexpr bool IsFreeCollider(const Collider& collider) { return collider.type == ShapeType::NONE; }
+constexpr bool IsFreeCircle(const CircleCollider& circle) { return circle.radius < Scalar{0}; }
+constexpr bool IsFreeAabb(const AabbCollider& aabb) { return aabb.halfSize.x < Scalar{0}; }
 } // namespace
 
 std::uint32_t GenerateChecksum(const Body& body)
@@ -90,49 +138,33 @@ std::uint32_t GenerateChecksum(const AabbCollider& collider)
     return checksum.Get();
 }
 
-PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config): config_(config)
+PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config) :
+    config_(config),
+    bodies_(MakeList<Body>(ConfigAllocator(config), config.maxBodies)),
+    aabbs_(MakeList<AabbCollider>(ConfigAllocator(config), config.maxColliders)),
+    circles_(MakeList<CircleCollider>(ConfigAllocator(config), config.maxColliders)),
+    colliders_(MakeList<Collider>(ConfigAllocator(config), config.maxColliders)),
+    touchingPairs_(MakeList<TouchingPair>(ConfigAllocator(config), config.maxTouchingPairs)),
+    newTouchingPairs_(MakeList<TouchingPair>(ConfigAllocator(config), config.maxTouchingPairs))
 {
+    assert(config.maxBodies <= std::numeric_limits<Index>::max() && config.maxColliders <= std::numeric_limits<Index>::max());
 }
 
 BodyIndex PhysicsWorld::AddBody()
 {
-    const auto it = std::find_if(bodies_.begin(), bodies_.end(), [](const auto& body)
-    {
-        return body.type == BodyType::NONE;
-    });
-    if(it != bodies_.end())
-    {
-        it->type = BodyType::DYNAMIC;
-        return { static_cast<int>(std::distance(bodies_.begin(), it)) };
-    }
-    const BodyIndex index{ static_cast<int>(bodies_.size())};
-    bodies_.push_back({});
-    return index;
+    const auto slot = AcquireSlot(bodies_, config_.maxBodies, IsFreeBody);
+    return slot.has_value() ? BodyIndex{ *slot } : INVALID_BODY_INDEX;
 }
 
 void PhysicsWorld::RemoveBody(BodyIndex index)
 {
     bodies_[index.index].type = BodyType::NONE;
-    //remove all colliders attached to this body
-    auto it = std::find_if(colliders_.begin(), colliders_.end(), [&index](const auto& collider)
-        {
-            return collider.bodyIndex == index;
-        });
-    while(it != colliders_.end())
+    for (const auto& collider : colliders_)
     {
-        if(it->type == ShapeType::AABB)
+        if (collider.bodyIndex == index && collider.type != ShapeType::NONE)
         {
-            RemoveAabbCollider(it->colliderIndex);
+            RemoveCollider(collider.colliderIndex);
         }
-        else if(it->type == ShapeType::CIRCLE)
-        {
-            RemoveCircleCollider(it->colliderIndex);
-        }
-        it = std::find_if(colliders_.begin(), colliders_.end(), 
-            [&index](const auto& collider)
-            {
-                return collider.bodyIndex == index;
-            });
     }
 }
 
@@ -272,17 +304,11 @@ void PhysicsWorld::ResolveNarrowphase()
     {
         return;
     }
-    const auto& newPossiblePairs = bsh_->GetPossiblePairs();
-    ArrayList<std::pair<ColliderPair, std::optional<Contact>>> newPairs{
-        StandardAllocator<std::pair<ColliderPair, std::optional<Contact>>>{heapAllocator_} };
-    ArrayList<ColliderPair> removePairs{ StandardAllocator<ColliderPair>{heapAllocator_} };
-    for(const auto& newColliderPair : newPossiblePairs)
+    newTouchingPairs_.clear();
+    for(const auto& pair : bsh_->GetPossiblePairs())
     {
-#ifdef TRACY_ENABLE
-        ZoneNamedN(newColliderPairCheck, "Check New Collider Pair", true);
-#endif
-        auto& collider1 = colliders_[newColliderPair.c1.index];
-        auto& collider2 = colliders_[newColliderPair.c2.index];
+        auto& collider1 = colliders_[pair.c1.index];
+        auto& collider2 = colliders_[pair.c2.index];
 
         auto& body1 = bodies_[collider1.bodyIndex.index];
         auto& body2 = bodies_[collider2.bodyIndex.index];
@@ -298,176 +324,138 @@ void PhysicsWorld::ResolveNarrowphase()
 		{
 			continue;
 		}
-        const auto it = manifold_.find(newColliderPair);
-
-
         const bool isTrigger = collider1.isTrigger || collider2.isTrigger;
-        if (it != manifold_.end())
+        // Contacts only live during this step, so their pointers never outlive the containers
+        Contact contact{};
+        if(!DetectContact(body1, collider1, body2, collider2, &contact))
         {
-            if (!isTrigger && !it->second.has_value())
-            {
-                // The pair was stored as a trigger and one collider became solid since
-                it->second.emplace();
-            }
-			Contact newContact{};
-			const bool doesIntersect = DetectContact(body1, collider1, body2, collider2, isTrigger ? &newContact : &it->second.value());
-			if (!doesIntersect)
-            {
-                if (contactListener_ != nullptr)
-                {
-                    if (isTrigger)
-                    {
-                        contactListener_->OnTriggerExit(newColliderPair);
-                    }
-                    else
-                    {
-                        contactListener_->OnCollisionExit(newColliderPair);
-                    }
-                }
-                //manifold_.erase(it);
-                removePairs.push_back(it->first);
-            }
-			else
-            {
-                if(!isTrigger)
-                {
-                    it->second->Resolve();
-                }
-            }
+            continue;
+        }
+        if(!isTrigger)
+        {
+            contact.Resolve();
+        }
+        if(newTouchingPairs_.size() < config_.maxTouchingPairs)
+        {
+            newTouchingPairs_.push_back({ pair, isTrigger });
         }
         else
         {
-			Contact newContact{};
-			const bool doesIntersect = DetectContact(body1, collider1, body2, collider2, &newContact);
-
-			if (doesIntersect)
-            {
-                if (isTrigger)
-                {
-                    if (contactListener_ != nullptr)
-                    {
-                        contactListener_->OnTriggerEnter(newColliderPair);
-                    }
-					newPairs.emplace_back(newColliderPair, std::nullopt);
-                }
-                else
-                {
-                    newContact.Resolve();
-                    if (contactListener_ != nullptr)
-                    {
-                        contactListener_->OnCollisionEnter(newColliderPair);
-                    }
-					newPairs.emplace_back(newColliderPair, newContact);
-                }
-                //manifold_.insert(newColliderPair);
-            }
+            assert(false && "PhysicsWorldConfig::maxTouchingPairs reached");
         }
     }
-    for (auto pair : removePairs)
+    std::sort(newTouchingPairs_.begin(), newTouchingPairs_.end(),
+        [](const TouchingPair& a, const TouchingPair& b) { return a.pair < b.pair; });
+    NotifyContactChanges();
+    std::swap(touchingPairs_, newTouchingPairs_);
+}
+
+void PhysicsWorld::NotifyContactChanges() const
+{
+    if(contactListener_ == nullptr)
     {
-        manifold_.erase(pair);
+        return;
     }
-    manifold_.insert(newPairs.begin(), newPairs.end());
+    const auto enter = [this](const TouchingPair& touchingPair)
+    {
+        if(touchingPair.isTrigger)
+        {
+            contactListener_->OnTriggerEnter(touchingPair.pair);
+        }
+        else
+        {
+            contactListener_->OnCollisionEnter(touchingPair.pair);
+        }
+    };
+    const auto exit = [this](const TouchingPair& touchingPair)
+    {
+        if(touchingPair.isTrigger)
+        {
+            contactListener_->OnTriggerExit(touchingPair.pair);
+        }
+        else
+        {
+            contactListener_->OnCollisionExit(touchingPair.pair);
+        }
+    };
+    // Both lists are sorted: merging them gives the events in a deterministic order
+    auto oldIt = touchingPairs_.begin();
+    auto newIt = newTouchingPairs_.begin();
+    while(oldIt != touchingPairs_.end() || newIt != newTouchingPairs_.end())
+    {
+        if(newIt == newTouchingPairs_.end() || (oldIt != touchingPairs_.end() && oldIt->pair < newIt->pair))
+        {
+            exit(*oldIt);
+            ++oldIt;
+        }
+        else if(oldIt == touchingPairs_.end() || newIt->pair < oldIt->pair)
+        {
+            enter(*newIt);
+            ++newIt;
+        }
+        else
+        {
+            // Still touching: a trigger that became solid (or the reverse) ends one kind of contact and starts the other
+            if(oldIt->isTrigger != newIt->isTrigger)
+            {
+                exit(*oldIt);
+                enter(*newIt);
+            }
+            ++oldIt;
+            ++newIt;
+        }
+    }
 }
 
 ColliderIndex PhysicsWorld::AddCircleCollider(BodyIndex body)
 {
-    const auto it = std::find_if(colliders_.begin(), colliders_.end(), [](const Collider& collider)
-        {
-            return collider.type == ShapeType::NONE;
-        });
-    int index = -1;
-    if (it != colliders_.end())
+    const auto colliderSlot = AcquireSlot(colliders_, config_.maxColliders, IsFreeCollider);
+    const auto shapeSlot = colliderSlot.has_value() ? AcquireSlot(circles_, config_.maxColliders, IsFreeCircle) : std::nullopt;
+    if(!colliderSlot.has_value() || !shapeSlot.has_value())
     {
-        it->type = ShapeType::CIRCLE;
-        index = static_cast<int>(std::distance(colliders_.begin(), it));
+        return INVALID_COLLIDER_INDEX;
     }
-    else
-    {
-        index = static_cast<int>(colliders_.size());
-        colliders_.push_back({});
-    }
-    auto& collider = colliders_[index];
+    circles_[*shapeSlot].radius = Scalar{ 0 };
+    auto& collider = colliders_[*colliderSlot];
     collider.bodyIndex = body;
-    collider.colliderIndex.index = index;
+    collider.colliderIndex = { *colliderSlot };
+    collider.shapeIndex = { *shapeSlot };
     collider.type = ShapeType::CIRCLE;
-
-    const auto circleIt = std::find_if(circles_.begin(), circles_.end(), [](const auto& circle)
-    {
-        return circle.radius < Scalar{0};
-    });
-    int shapeIndex;
-    if(circleIt != circles_.end())
-    {
-        circleIt->radius = Scalar{ 0 };
-        shapeIndex = static_cast<int>(std::distance(circles_.begin(), circleIt));
-    }
-    else
-    {
-        shapeIndex = static_cast<int>(circles_.size());
-        circles_.push_back({});
-    }
-    collider.shapeIndex = { shapeIndex };
     return collider.colliderIndex;
 }
 
 ColliderIndex PhysicsWorld::AddAabbCollider(BodyIndex body)
 {
-    const auto it = std::find_if(colliders_.begin(), colliders_.end(), [](const Collider& collider)
-        {
-            return collider.type == ShapeType::NONE;
-        });
-    int index = -1;
-    if (it != colliders_.end())
+    const auto colliderSlot = AcquireSlot(colliders_, config_.maxColliders, IsFreeCollider);
+    const auto shapeSlot = colliderSlot.has_value() ? AcquireSlot(aabbs_, config_.maxColliders, IsFreeAabb) : std::nullopt;
+    if(!colliderSlot.has_value() || !shapeSlot.has_value())
     {
-        it->type = ShapeType::AABB;
-        index = static_cast<int>(std::distance(colliders_.begin(), it));
+        return INVALID_COLLIDER_INDEX;
     }
-    else
-    {
-        index = static_cast<int>(colliders_.size());
-        colliders_.push_back({});
-    }
-    auto& collider = colliders_[index];
+    aabbs_[*shapeSlot].halfSize = Vec2f::zero();
+    auto& collider = colliders_[*colliderSlot];
     collider.bodyIndex = body;
-    collider.colliderIndex.index = index;
+    collider.colliderIndex = { *colliderSlot };
+    collider.shapeIndex = { *shapeSlot };
     collider.type = ShapeType::AABB;
-
-    const auto aabbIt = std::find_if(aabbs_.begin(), aabbs_.end(), [](const auto& aabb)
-        {
-            return aabb.halfSize.x < Scalar{-1};
-        });
-    int shapeIndex;
-    if (aabbIt != aabbs_.end())
-    {
-        aabbIt->halfSize.x = Scalar{ 0 };
-        shapeIndex = static_cast<int>(std::distance(aabbs_.begin(), aabbIt));
-    }
-    else
-    {
-        shapeIndex = static_cast<int>(aabbs_.size());
-        aabbs_.push_back({});
-    }
-    collider.shapeIndex = { shapeIndex };
     return collider.colliderIndex;
 }
 
-void PhysicsWorld::RemoveAabbCollider(ColliderIndex index)
+void PhysicsWorld::RemoveCollider(ColliderIndex index)
 {
     auto& collider = colliders_[index.index];
-    auto& [halfSize] = aabbs_[collider.shapeIndex.index];
-    halfSize = Vec2f{ Scalar{-1},Scalar{-1} };
-
-    collider.type = ShapeType::NONE;
-}
-
-void PhysicsWorld::RemoveCircleCollider(ColliderIndex index)
-{
-    auto& collider = colliders_[index.index];
-    auto& circle = circles_[collider.shapeIndex.index];
-    circle.radius = Scalar{ -1 };
-
-    collider.type = ShapeType::NONE;
+    switch (collider.type)
+    {
+    case ShapeType::AABB:
+        aabbs_[collider.shapeIndex.index] = AabbCollider{};
+        break;
+    case ShapeType::CIRCLE:
+        circles_[collider.shapeIndex.index] = CircleCollider{};
+        break;
+    default:
+        break;
+    }
+    collider = Collider{};
 }
 
 void PhysicsWorld::Step()
@@ -516,7 +504,8 @@ void PhysicsWorld::Clear()
     aabbs_.clear();
     circles_.clear();
     colliders_.clear();
-    manifold_.clear();
+    touchingPairs_.clear();
+    newTouchingPairs_.clear();
 }
 
 void PhysicsWorld::ResolveBroadphase()
@@ -570,7 +559,7 @@ void PhysicsWorld::ResolveBroadphase()
 
     for(const auto& collider : colliders_)
     {
-		if(!bodies_[collider.bodyIndex.index].isActive)
+		if(collider.type == ShapeType::NONE || !bodies_[collider.bodyIndex.index].isActive)
 		{
 			continue;
 		}
@@ -602,10 +591,39 @@ void PhysicsWorld::ResolveBroadphase()
 
 void PhysicsWorld::CopyFrom(const PhysicsWorld& physicsWorld)
 {
+    // Assignment reuses the reserved capacity: no allocation when both worlds share a config
 	bodies_ = physicsWorld.bodies_;
 	aabbs_ = physicsWorld.aabbs_;
 	circles_ = physicsWorld.circles_;
 	colliders_ = physicsWorld.colliders_;
-	manifold_ = physicsWorld.manifold_;
+	touchingPairs_ = physicsWorld.touchingPairs_;
+}
+
+std::uint32_t PhysicsWorld::GenerateChecksum() const
+{
+    Checksum checksum;
+    for (const auto& body : bodies_)
+    {
+        checksum.Add(neko::GenerateChecksum(body));
+    }
+    for (const auto& collider : colliders_)
+    {
+        checksum.Add(neko::GenerateChecksum(collider));
+    }
+    for (const auto& aabb : aabbs_)
+    {
+        checksum.Add(neko::GenerateChecksum(aabb));
+    }
+    for (const auto& circle : circles_)
+    {
+        checksum.Add(neko::GenerateChecksum(circle));
+    }
+    for (const auto& touchingPair : touchingPairs_)
+    {
+        checksum.Add(touchingPair.pair.c1);
+        checksum.Add(touchingPair.pair.c2);
+        checksum.Add(touchingPair.isTrigger);
+    }
+    return checksum.Get();
 }
 } // namespace neko

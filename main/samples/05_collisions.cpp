@@ -70,7 +70,7 @@ void CollisionsSample::Update([[maybe_unused]] float dt)
 {
     for (std::size_t i = 0; i < circleCount; i++)
     {
-        auto& body = world_.body({ static_cast<int>(i) });
+        auto& body = world_.body({ static_cast<Index>(i) });
         if ((body.velocity.x > Scalar{0.0f}&& body.position.x > Scalar{12.8f}) || (body.velocity.x < Scalar{0.0f}&& body.position.x < Scalar{0.0f}))
         {
             body.velocity.x = -body.velocity.x;

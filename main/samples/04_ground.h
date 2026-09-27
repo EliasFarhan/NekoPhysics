@@ -1,5 +1,6 @@
 #pragma once
 #include "physics/physics.h"
+#include "bsh/quadtree.h"
 #include "sample.h"
 
 namespace neko

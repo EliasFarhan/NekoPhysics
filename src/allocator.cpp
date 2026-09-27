@@ -1,5 +1,8 @@
 #include "core/allocator.h"
 
+#include <cstdlib>
+#include <new>
+
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
 #endif
@@ -24,4 +27,22 @@ void HeapAllocator::Deallocate(void *ptr)
 #endif
     std::free(ptr);
 }
+
+Allocator& DefaultAllocator() noexcept
+{
+    static HeapAllocator allocator;
+    return allocator;
+}
+
+namespace detail
+{
+void OnAllocationFailure()
+{
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
+    throw std::bad_alloc();
+#else
+    std::abort();
+#endif
+}
+} // namespace detail
 }

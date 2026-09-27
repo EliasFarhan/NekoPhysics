@@ -50,7 +50,6 @@ endif()
 file(GLOB_RECURSE SRC_FILES src/*.cpp include/*.h)
 
 add_library(NekoPhysics ${SRC_FILES} )
-target_link_libraries(NekoPhysics PUBLIC unordered_dense)
 target_include_directories(NekoPhysics PUBLIC include/)
 target_include_directories(NekoPhysics SYSTEM PUBLIC externals/)
 link_directories(${CMAKE_BINARY_DIR})

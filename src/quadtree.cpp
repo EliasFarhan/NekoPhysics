@@ -33,24 +33,18 @@ QuadNode::QuadNode(Allocator& allocator) : colliders(StandardAllocator<ColliderA
 {
 }
 
-QuadTree::QuadTree() : nodes_(StandardAllocator<QuadNode>(heapAllocator_))
+QuadTree::QuadTree(Allocator& allocator) : QuadTree(MAX_DEPTH, MAX_SIZE, allocator)
 {
-#ifdef TRACY_ENABLE
-    ZoneScoped;
-#endif
-    possiblePairs_.reserve(pow(static_cast<std::size_t>(4), MAX_DEPTH));
-    nodes_.resize(quadCount(MAX_DEPTH), QuadNode{heapAllocator_});
-    for(auto& node : nodes_)
-    {
-        node.colliders.reserve(MAX_SIZE);
-    }
 }
 
-QuadTree::QuadTree(size_t maxDepth, size_t maxSize): nodes_(StandardAllocator<QuadNode>(heapAllocator_)),
+QuadTree::QuadTree(std::size_t maxDepth, std::size_t maxSize, Allocator& allocator):
+    allocator_(&allocator),
+    possiblePairs_(StandardAllocator<ColliderPair>(allocator)),
+    nodes_(StandardAllocator<QuadNode>(allocator)),
     maxDepth_(maxDepth), maxSize_(maxSize)
 {
     possiblePairs_.reserve(pow(static_cast<std::size_t>(4), maxDepth_));
-    nodes_.resize(quadCount(maxDepth_), QuadNode{heapAllocator_});
+    nodes_.resize(quadCount(maxDepth_), QuadNode{*allocator_});
     for(auto& node : nodes_)
     {
         node.colliders.reserve(maxSize);

@@ -6,7 +6,6 @@
 namespace neko
 {
 
-constexpr static std::size_t circleCount = 1'000;
 constexpr static std::size_t circleResolution = 10;
 constexpr static auto maxSpeed = Scalar{ 10.0f };
 constexpr static auto circleRadius = Scalar{10.0f };
@@ -65,7 +64,7 @@ void KinematicSample::Update([[maybe_unused]] float dt)
 {
     for (std::size_t i = 0; i < circleCount; i++)
     {
-        auto& body = world_.body({static_cast<int>(i)});
+        auto& body = world_.body({ static_cast<Index>(i) });
         if ((body.velocity.x > Scalar{0.0f}&& body.position.x > Scalar{12.8f}) || (body.velocity.x < Scalar{0.0f}&& body.position.x < Scalar{0.0f}))
         {
             body.velocity.x = -body.velocity.x;
