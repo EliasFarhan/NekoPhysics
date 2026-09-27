@@ -1,6 +1,7 @@
 #include "physics/physics.h"
 
-#include <iostream>
+#include <bit>
+#include <type_traits>
 
 #include "math/vec2.h"
 #include "physics/contact_solver.h"
@@ -13,56 +14,87 @@
 
 namespace neko
 {
+namespace
+{
+/**
+ * @brief FNV-1a over the bytes of each 32-bit field: order-dependent, so equal or swapped fields don't cancel out
+ */
+class Checksum
+{
+public:
+    template<typename T>
+    requires (sizeof(T) == sizeof(std::uint32_t) && std::is_trivially_copyable_v<T>)
+    void Add(T value) noexcept
+    {
+        const auto word = std::bit_cast<std::uint32_t>(value);
+        for (int shift = 0; shift < 32; shift += 8)
+        {
+            hash_ ^= (word >> shift) & 0xFFu;
+            hash_ *= prime;
+        }
+    }
+    void Add(Vec2f value) noexcept
+    {
+        Add(value.x);
+        Add(value.y);
+    }
+    void Add(bool value) noexcept { Add(static_cast<std::uint32_t>(value)); }
+    template<typename E>
+    requires std::is_enum_v<E>
+    void Add(E value) noexcept { Add(static_cast<std::uint32_t>(value)); }
+
+    [[nodiscard]] std::uint32_t Get() const noexcept { return hash_; }
+private:
+    static constexpr std::uint32_t offsetBasis = 2166136261u;
+    static constexpr std::uint32_t prime = 16777619u;
+    std::uint32_t hash_ = offsetBasis;
+};
+} // namespace
+
 std::uint32_t GenerateChecksum(const Body& body)
 {
-    std::uint32_t result = 0;
-    result ^= *(reinterpret_cast<const uint32_t*>(&body.position.x));
-    result ^= *(reinterpret_cast<const uint32_t*>(&body.position.y));
-    result ^= *(reinterpret_cast<const uint32_t*>(&body.velocity.x));
-    result ^= *(reinterpret_cast<const uint32_t*>(&body.velocity.y));
-    result ^= *(reinterpret_cast<const uint32_t*>(&body.force.x));
-    result ^= *(reinterpret_cast<const uint32_t*>(&body.force.y));
-    result ^= *(reinterpret_cast<const uint32_t*>(&body.inverseMass));
-    result ^= static_cast<std::uint32_t>(body.type);
-    result ^= static_cast<std::uint32_t>(body.isActive);
-    return result;
+    Checksum checksum;
+    checksum.Add(body.position);
+    checksum.Add(body.velocity);
+    checksum.Add(body.force);
+    checksum.Add(body.inverseMass);
+    checksum.Add(body.type);
+    checksum.Add(body.isActive);
+    return checksum.Get();
 }
 
 std::uint32_t GenerateChecksum(const Collider& collider)
 {
-    std::uint32_t result = 0;
-    result ^= *reinterpret_cast<const std::uint32_t*>(&collider.offset.x);
-    result ^= *reinterpret_cast<const std::uint32_t*>(&collider.offset.y);
-    result ^= *reinterpret_cast<const std::uint32_t*>(&collider.restitution);
-    result ^= std::bit_cast<std::uint32_t>(collider.bodyIndex);
-    result ^= std::bit_cast<std::uint32_t>(collider.colliderIndex);
-    result ^= std::bit_cast<std::uint32_t>(collider.shapeIndex);
-    result ^= static_cast<std::uint32_t>(collider.type);
-    result ^= static_cast<std::uint32_t>(collider.isTrigger);
-    return result;
+    Checksum checksum;
+    checksum.Add(collider.offset);
+    checksum.Add(collider.restitution);
+    checksum.Add(collider.bodyIndex);
+    checksum.Add(collider.colliderIndex);
+    checksum.Add(collider.shapeIndex);
+    checksum.Add(collider.type);
+    checksum.Add(collider.isTrigger);
+    return checksum.Get();
 }
 
 std::uint32_t GenerateChecksum(const CircleCollider& collider)
 {
-    std::uint32_t result = 0;
-    result ^= *reinterpret_cast<const std::uint32_t*>(&collider.radius);
-    return result;
+    Checksum checksum;
+    checksum.Add(collider.radius);
+    return checksum.Get();
 }
 
 std::uint32_t GenerateChecksum(const AabbCollider& collider)
 {
-    std::uint32_t result = 0;
-    result ^= *reinterpret_cast<const std::uint32_t*>(&collider.halfSize.x);
-    result ^= *reinterpret_cast<const std::uint32_t*>(&collider.halfSize.y);
-    return result;
+    Checksum checksum;
+    checksum.Add(collider.halfSize);
+    return checksum.Get();
 }
 
 std::uint32_t GenerateChecksum(const PlaneCollider& collider)
 {
-    std::uint32_t result = 0;
-    result ^= *reinterpret_cast<const std::uint32_t*>(&collider.normal.x);
-    result ^= *reinterpret_cast<const std::uint32_t*>(&collider.normal.y);
-    return result;
+    Checksum checksum;
+    checksum.Add(collider.normal);
+    return checksum.Get();
 }
 
 PhysicsWorld::PhysicsWorld(Vec2f gravity): gravity_(gravity)
