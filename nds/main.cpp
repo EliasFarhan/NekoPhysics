@@ -25,16 +25,6 @@ __attribute__((format(printf, 1, 2))) void Log(const char* format, ...)
     nocashMessage(line);
 }
 
-// Same values as tests/scene_test.cpp
-constexpr std::pair<int, std::uint32_t> GOLDEN_CHECKSUMS[] = {
-    { 0, 0x61c2e799u },
-    { 1, 0xfa00ce4cu },
-    { 60, 0xbee5c5bau },
-    { 120, 0x2cc11c14u },
-    { 300, 0xe2ff67d3u },
-    { 600, 0xa68114abu },
-};
-
 struct Timing
 {
     std::uint64_t total = 0;
@@ -156,7 +146,7 @@ bool RunFallingPile()
     Timing timing;
     bool ok = true;
     int step = 0;
-    for (const auto& [expectedStep, expected] : GOLDEN_CHECKSUMS)
+    for (const auto& [expectedStep, expected] : neko::scenes::FALLING_PILE_GOLDEN_CHECKSUMS)
     {
         while (step < expectedStep)
         {
