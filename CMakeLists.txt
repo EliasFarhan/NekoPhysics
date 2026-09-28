@@ -67,8 +67,9 @@ endif()
 
 #install(TARGETS NekoPhysics FILE_SET HEADERS)
 
-# The DS builds the samples library without USE_SAMPLES: the nds preset keeps it OFF to avoid vcpkg's SDL
-if(USE_SAMPLES OR CMAKE_SYSTEM_NAME STREQUAL "NintendoDS")
+# The DS builds the samples library without USE_SAMPLES: the nds preset keeps it OFF to avoid vcpkg's SDL.
+# tests/samples_test.cpp links it too.
+if(USE_SAMPLES OR USE_TESTING OR CMAKE_SYSTEM_NAME STREQUAL "NintendoDS")
     add_subdirectory(main/samples)
 endif()
 
@@ -96,6 +97,9 @@ if(USE_TESTING)
         get_filename_component(TEST_NAME ${TEST_FILE} NAME_WE )
         add_executable(${TEST_NAME} ${TEST_FILE})
         target_link_libraries(${TEST_NAME} NekoPhysics GTest::gtest GTest::gmock)
+        if(TEST_NAME STREQUAL "samples_test")
+            target_link_libraries(${TEST_NAME} NekoPhysicsSamples)
+        endif()
         target_include_directories(${TEST_NAME} PRIVATE include/ tests/)
         neko_set_project_warnings(${TEST_NAME})
         set_target_properties (${TEST_NAME} PROPERTIES FOLDER Tests/)

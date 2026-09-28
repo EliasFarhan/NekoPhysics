@@ -47,6 +47,8 @@ public:
 
 	void End() override;
 
+	[[nodiscard]] std::uint32_t GenerateChecksum() const override;
+
 	void FixedUpdate() override;
 private:
 #ifndef NEKO_SAMPLE_BOX2D

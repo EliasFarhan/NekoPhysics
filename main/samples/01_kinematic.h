@@ -18,6 +18,7 @@ public:
     void FixedUpdate() override;
     void Draw(DrawList& drawList) const override;
     void End() override;
+    [[nodiscard]] std::uint32_t GenerateChecksum() const override { return world_.GenerateChecksum(); }
 
 private:
     static constexpr Index circleCount = sample_config::KINEMATIC_COUNT;

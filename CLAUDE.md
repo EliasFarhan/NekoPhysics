@@ -4,7 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-NekoPhysics is a small deterministic 2D physics library in C++20 with a quadtree broadphase and circle/AABB colliders. The end goal is to run it on the Nintendo DS (devkitPro/devkitARM, ARM946E-S, no FPU) with rollback netcode. `neko::Scalar` is chosen by the CMake cache variable `NEKO_SCALAR`: `FIXED16` (default, 16.16 fixed point `neko::Fixed16`, the DS type), `FLOAT` (plain `float`, PC convenience) or `SIXIT` (`sixit::dmath::ieee_float_inline_asm`, x86 only, `externals/sixit`). Tests must pass with both `FIXED16` and `FLOAT`. `main/` holds SDL3/ImGui samples; `tests/` holds GoogleTest executables (one per file).
+NekoPhysics is a small deterministic 2D physics library in C++20 with a quadtree broadphase and circle/AABB colliders. The end goal is to run it on the Nintendo DS (devkitPro/devkitARM, ARM946E-S, no FPU) with rollback netcode. `neko::Scalar` is chosen by the CMake cache variable `NEKO_SCALAR`: `FIXED16` (default, 16.16 fixed point `neko::Fixed16`, the DS type), `FLOAT` (plain `float`, PC convenience) or `SIXIT` (`sixit::dmath::ieee_float_inline_asm`, x86 only, `externals/sixit`). Tests must pass with both `FIXED16` and `FLOAT`. Layout:
+- `main/samples/`: `NekoPhysicsSamples`, the six samples as a platform-neutral static library (no SDL, ImGui or fmt). A sample simulates only in `FixedUpdate` and describes itself in a world-space `DrawList` (`draw_list.h`, palette colors). Scenes come from a fixed-seed `SampleRng` and integer `Ratio`s (no float, deterministic), and bounds and body counts come from `sample_config.h` (per platform, `NEKO_PLATFORM_NDS`). Built on PC and for the DS.
+- `main/sdl/`: the PC host (`Sample` exe): SDL3 window, ImGui menu, fixed-step accumulator, `SdlSampleDrawer`.
+- `nds/`: the DS test ROM (`NekoPhysicsDsTest`, golden checksums and timings) and `nds/samples/`, the DS samples ROM (`NekoPhysicsDsSamples`: `NdsSampleDrawer` with hardware sprites plus a BG3 8bpp bitmap, and a menu and stats console on the bottom screen). Nothing on the DS samples path may link soft-float: check the ELF for `__aeabi_f*`/`__aeabi_d*` and print with `iprintf`/`sniprintf`.
+- `tests/`: GoogleTest executables, one per file, each with its own `main`. `samples_test` also links `NekoPhysicsSamples` (sample determinism).
 
 ## Reviews, discussions and plans live in the Obsidian vault
 
@@ -24,7 +28,7 @@ cmake --preset debug          # FIXED16; needs VCPKG_ROOT
 cmake --build --preset debug
 ctest --preset debug
 cmake --preset debug-float    # same with NEKO_SCALAR=FLOAT
-cmake --preset nds            # DS test ROM (build/nds/nds/NekoPhysicsDsTest.nds); needs DEVKITPRO, no vcpkg
+cmake --preset nds            # DS ROMs (build/nds/nds/NekoPhysicsDsTest.nds, build/nds/nds/samples/NekoPhysicsDsSamples.nds); needs DEVKITPRO, no vcpkg
 cmake --build --preset nds
 ```
 

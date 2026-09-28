@@ -5,6 +5,7 @@
 #include "math/shape.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <vector>
@@ -45,6 +46,10 @@ public:
     virtual void FixedUpdate() = 0;
     virtual void Draw(DrawList& drawList) const = 0;
     virtual void End() = 0;
+    /**
+     * @brief Hash of the simulation state, to check that a sample is deterministic
+     */
+    [[nodiscard]] virtual std::uint32_t GenerateChecksum() const = 0;
 
     static constexpr auto fixedDeltaTime = Scalar{ 1.0f / 60.0f };
 };

@@ -15,6 +15,7 @@ public:
     void Begin(const SampleContext& context) override;
     void Draw(DrawList& drawList) const override;
     void End() override;
+    [[nodiscard]] std::uint32_t GenerateChecksum() const override { return world_.GenerateChecksum(); }
     void OnTriggerEnter(const ColliderPair& p) override;
     void OnTriggerExit(const ColliderPair& p) override;
     void FixedUpdate() override;

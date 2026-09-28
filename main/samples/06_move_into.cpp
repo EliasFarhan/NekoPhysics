@@ -213,6 +213,16 @@ void MoveIntoSample::End()
 	dynamicBodyOnGround_ = false;
 }
 
+std::uint32_t MoveIntoSample::GenerateChecksum() const
+{
+#ifdef NEKO_SAMPLE_BOX2D
+	// Box2D isn't checked for determinism
+	return 0;
+#else
+	return world_.GenerateChecksum();
+#endif
+}
+
 void MoveIntoSample::FixedUpdate()
 {
 	NEKO_PROFILE_FUNCTION();
