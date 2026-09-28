@@ -1,8 +1,6 @@
 #include "02_planets.h"
 #include "math/fixed_trig.h"
 
-#include <SDL3/SDL_log.h>
-
 #include "random_utils.h"
 
 namespace neko
@@ -10,18 +8,15 @@ namespace neko
 
 constexpr static auto G = Scalar{ 10.0f };
 constexpr static auto blackHoleMass = Scalar{ 10.0f };
-constexpr static std::size_t circleResolution = 10;
-constexpr static auto circleRadius = Scalar{ 10.0f };
-constexpr static auto pixelPerMeter = Scalar{ 100.0f };
+constexpr static auto circleRadius = Scalar{ 0.1f };
 constexpr static auto innerRadius =  1.0f ;
 constexpr static auto outerRadius =  6.0f ;
 constexpr static auto speedDisturbanceFactor = Scalar{ 2.0f };
 constexpr static Vec2f worldCenter = { Scalar{12.8f / 2.0f}, Scalar{7.2f / 2.0f} };
 
-void PlanetSample::Begin()
+void PlanetSample::Begin([[maybe_unused]] const SampleContext& context)
 {
-    indices_.reserve(circleCount * (circleResolution * 3));
-    vertices_.reserve(circleCount * (circleResolution + 1));
+    colors_.reserve(circleCount);
     for (std::size_t i = 0; i < circleCount; i++)
     {
         const auto index = world_.AddBody();
@@ -33,37 +28,7 @@ void PlanetSample::Begin()
         const auto speed = Sqrt(force * body.inverseMass * delta.Length());
         body.velocity = speed * delta.Perpendicular().Normalized();
         body.velocity += Scalar{RandomRange(-1.0f, 1.0f)} *speedDisturbanceFactor* body.velocity.Perpendicular().Normalized();
-        
-
-        const SDL_FColor color{
-            static_cast<float>(RandomRange(100u,255u))/255.0f,
-            static_cast<float>(RandomRange(100u,255u))/255.0f,
-            static_cast<float>(RandomRange(100u,255u))/255.0f,
-            1.0f
-        };
-
-        for (std::size_t j = 0; j < circleResolution + 1; j++)
-        {
-            auto pos = body.position * pixelPerMeter;
-            SDL_Vertex vertex{};
-            vertex.color = color;
-
-            if (j != 0)
-            {
-                pos += (Vec2f::up() * circleRadius).Rotate(Scalar{ 2.0f } * Pi<Scalar>() * Scalar(j - 1) / Scalar(circleResolution));
-            }
-            vertex.position.x = float{pos.x};
-            vertex.position.y = float{pos.y};
-            vertices_.push_back(vertex);
-        }
-
-        const auto firstIndex = i * (circleResolution + 1);
-        for (std::size_t j = 0; j < circleResolution; j++)
-        {
-            indices_.push_back(static_cast<int>(firstIndex));
-            indices_.push_back(static_cast<int>(firstIndex + j + 1ull));
-            indices_.push_back(static_cast<int>(firstIndex + (j == circleResolution - 1ull ? 1ull : 2ull + j)));
-        }
+        colors_.push_back(static_cast<ColorId>(RandomRange(int{ sample_color::FIRST_BRIGHT }, int{ sample_color::LAST_BRIGHT })));
     }
 }
 
@@ -79,42 +44,18 @@ void PlanetSample::FixedUpdate()
     world_.Step();
 }
 
-void PlanetSample::Update([[maybe_unused]] float dt)
+void PlanetSample::Draw(DrawList& drawList) const
 {
-    for (std::size_t i = 0; i < circleCount; i++)
+    for (std::size_t i = 0; i < colors_.size(); i++)
     {
         const auto& body = world_.body({ static_cast<Index>(i) });
-
-        for (std::size_t j = 0; j < circleResolution + 1; j++)
-        {
-            auto pos = body.position * pixelPerMeter;
-            auto& vertex = vertices_[i * (circleResolution + 1) + j];
-
-            if (j != 0)
-            {
-                pos += (Vec2f::up() * circleRadius).Rotate(Scalar{ 2 } * Pi<Scalar>() * Scalar(j - 1) / Scalar(circleResolution));
-            }
-            vertex.position.x = float{pos.x};
-            vertex.position.y = float{pos.y};
-        }
-    }
-}
-
-void PlanetSample::Draw(SDL_Renderer* renderer)
-{
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    if (SDL_RenderGeometry(renderer, nullptr,
-        vertices_.data(), static_cast<int>(vertices_.size()),
-        indices_.data(), static_cast<int>(indices_.size())))
-    {
-        SDL_Log("%s\n", SDL_GetError());
+        drawList.circles.push_back({ body.position, circleRadius, colors_[i] });
     }
 }
 
 void PlanetSample::End()
 {
-    indices_.clear();
-    vertices_.clear();
+    colors_.clear();
     world_.Clear();
 }
 } // namespace neko

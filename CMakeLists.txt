@@ -67,16 +67,17 @@ endif()
 
 #install(TARGETS NekoPhysics FILE_SET HEADERS)
 
+# The DS builds the samples library without USE_SAMPLES: the nds preset keeps it OFF to avoid vcpkg's SDL
+if(USE_SAMPLES OR CMAKE_SYSTEM_NAME STREQUAL "NintendoDS")
+    add_subdirectory(main/samples)
+endif()
+
 if(USE_SAMPLES)
     find_package(box2d CONFIG REQUIRED)
     find_package(SDL3 CONFIG REQUIRED)
     find_package(imgui CONFIG REQUIRED)
-    find_package(fmt CONFIG REQUIRED)
-    file(GLOB_RECURSE MAIN_FILES main/*cpp main/*.h)
-    add_executable(Sample ${MAIN_FILES})
-    target_include_directories(Sample PRIVATE include/ main/ ${OPENGL_INCLUDE_DIR})
-    target_link_libraries(Sample PRIVATE NekoPhysics ${OPENGL_LIBRARIES} fmt::fmt-header-only SDL3::SDL3
-            imgui::imgui box2d::box2d)
+    add_executable(Sample main/main.cpp)
+    target_link_libraries(Sample PRIVATE NekoPhysicsSamples SDL3::SDL3 imgui::imgui box2d::box2d)
     neko_set_project_warnings(Sample)
     if(MSVC)
         target_link_libraries(Sample PRIVATE opengl32)

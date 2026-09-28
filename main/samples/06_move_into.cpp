@@ -4,32 +4,23 @@
 
 #include "06_move_into.h"
 
-#include <SDL3/SDL_log.h>
-#include <fmt/format.h>
-#include <box2d/box2d.h>
-#ifdef TRACY_ENABLE
-#include <tracy/Tracy.hpp>
-#endif
+#include "core/profile.h"
 
 namespace neko
 {
 
 constexpr static Vec2f groundHalfSize = Vec2f{ Scalar{ 5 }, Scalar{ 1 }};
 constexpr static Vec2f rectHalfSize = Vec2f{ Scalar{ 0.5f }, Scalar{ 0.5f }};
-constexpr static std::size_t quadResolution = 2;
-constexpr static std::size_t quadVertexCount = 4;
-constexpr static Scalar pixelPerMeter = Scalar{ 100.0f };
-
-constexpr static SDL_FColor groundColor{ 0, 1, 0, 1 };
-constexpr static SDL_FColor inAirColor{ 0, 0, 1, 1 };
-constexpr static SDL_FColor onGroundColor{ 1, 0, 1, 1 };
+constexpr static ColorId groundColor = sample_color::GREEN;
+constexpr static ColorId inAirColor = sample_color::BLUE;
+constexpr static ColorId onGroundColor = sample_color::MAGENTA;
 constexpr static Vec2f worldCenter = { Scalar{ 12.8f / 2.0f }, Scalar{ 7.2f / 2.0f }};
 static Vec2f groundPosition = worldCenter + Vec2f{ Scalar{ 0 }, Scalar{ 3 }};
 static Vec2f dynamicRectPosition = worldCenter - Vec2f{ Scalar{ -2 }, Scalar{ 3 }};
 static Vec2f staticRectPosition = worldCenter - Vec2f{ Scalar{ 2 }, Scalar{ 3 }};
 constexpr static auto maxForce = neko::Scalar{ 10.0f };
 
-#ifndef USE_BOX2D
+#ifndef NEKO_SAMPLE_BOX2D
 void MoveIntoSample::OnTriggerEnter([[maybe_unused]] const ColliderPair& p)
 {
 }
@@ -82,12 +73,9 @@ void MoveIntoSample::EndContact(b2Contact* contact)
 {
 }
 #endif
-void MoveIntoSample::Begin()
+void MoveIntoSample::Begin([[maybe_unused]] const SampleContext& context)
 {
-
-	indices_.reserve(quadResolution * 3);
-	vertices_.reserve(quadVertexCount);
-#ifndef USE_BOX2D
+#ifndef NEKO_SAMPLE_BOX2D
 	world_.SetContactListener(this);
 	world_.SetBSH(&quadTree_);
 #else
@@ -95,7 +83,7 @@ void MoveIntoSample::Begin()
 #endif
 	//Implement ground
 	{
-#ifndef USE_BOX2D
+#ifndef NEKO_SAMPLE_BOX2D
 		groundBodyIndex_ = world_.AddBody();
 		Body& body = world_.body(groundBodyIndex_);
 		body.position = groundPosition;
@@ -124,31 +112,9 @@ void MoveIntoSample::Begin()
 		fixtureDef.userData.pointer = reinterpret_cast<uintptr_t>(b2groundBody_);
 		b2groundBody_->CreateFixture(&fixtureDef);
 #endif
-		std::array<Vec2f, 4> vertices =
-			{
-				Vec2f{ -groundHalfSize.x, -groundHalfSize.y },
-				Vec2f{ -groundHalfSize.x, groundHalfSize.y },
-				Vec2f{ groundHalfSize.x, -groundHalfSize.y },
-				Vec2f{ groundHalfSize.x, groundHalfSize.y },
-			};
-		for (const auto vertexOffset : vertices)
-		{
-			const auto [x, y] = (groundPosition + vertexOffset) * pixelPerMeter;
-			SDL_Vertex vertex{};
-			vertex.color = groundColor;
-			vertex.position.x = float{ x };
-			vertex.position.y = float{ y };
-			vertices_.push_back(vertex);
-		}
-		constexpr std::array<int, 6> indices = { 0, 1, 2, 1, 2, 3 };
-		for (const auto index : indices)
-		{
-			indices_.push_back(index);
-		}
-
 	}
 	{
-#ifndef USE_BOX2D
+#ifndef NEKO_SAMPLE_BOX2D
 		//rect ball
 		staticBodyIndex = world_.AddBody();
 		Body& body = world_.body(staticBodyIndex);
@@ -183,7 +149,7 @@ void MoveIntoSample::Begin()
 	}
 
 	{
-#ifndef USE_BOX2D
+#ifndef NEKO_SAMPLE_BOX2D
 		//rect ball
 		dynamicBodyIndex = world_.AddBody();
 		Body& body = world_.body(dynamicBodyIndex);
@@ -218,84 +184,46 @@ void MoveIntoSample::Begin()
 	}
 }
 
-void MoveIntoSample::Update([[maybe_unused]] float dt)
+void MoveIntoSample::Draw(DrawList& drawList) const
 {
-}
-
-void MoveIntoSample::Draw(SDL_Renderer* renderer)
-{
-	if (SDL_RenderGeometry(renderer, nullptr,
-		vertices_.data(), static_cast<int>(vertices_.size()),
-		indices_.data(), static_cast<int>(indices_.size())))
+#ifdef NEKO_SAMPLE_BOX2D
+	const auto position = [](const b2Body* body)
 	{
-		SDL_Log("%s\n", SDL_GetError());
-	}
-	{
-#ifdef USE_BOX2D
-		const auto pos = b2staticBody_->GetPosition();
-		const Vec2f bodyPosition{ pos.x, pos.y };
-		const auto rect = SDL_Rect{ (int)((bodyPosition.x - rectHalfSize.x) * pixelPerMeter),
-									(int)((bodyPosition.y - rectHalfSize.y) * pixelPerMeter),
-									(int)(neko::Scalar{ 2 } * rectHalfSize.x * pixelPerMeter),
-									(int)(neko::Scalar{ 2 } * rectHalfSize.y * pixelPerMeter)
-		};
+		const auto pos = body->GetPosition();
+		return Vec2f{ Scalar{ pos.x }, Scalar{ pos.y } };
+	};
+	const Vec2f groundCenter = position(b2groundBody_);
+	const Vec2f staticPosition = position(b2staticBody_);
+	const Vec2f dynamicPosition = position(b2dynamicBody_);
 #else
-		const auto& body = world_.body(staticBodyIndex);
-
-		const auto rect = SDL_FRect{ float{(body.position.x-rectHalfSize.x) * pixelPerMeter},
-									float{(body.position.y-rectHalfSize.y) * pixelPerMeter},
-									float{neko::Scalar{ 2 } * rectHalfSize.x * pixelPerMeter},
-									float{neko::Scalar{ 2 } * rectHalfSize.y * pixelPerMeter}
-		};
+	const Vec2f groundCenter = world_.body(groundBodyIndex_).position;
+	const Vec2f staticPosition = world_.body(staticBodyIndex).position;
+	const Vec2f dynamicPosition = world_.body(dynamicBodyIndex).position;
 #endif
-		const auto color = staticBodyOnGround_ ? onGroundColor : inAirColor;
-		SDL_SetRenderDrawColorFloat(renderer, color.r, color.g, color.b, color.a);
-		SDL_RenderFillRect(renderer, &rect);
-	}
-	{
-#ifdef USE_BOX2D
-		const auto pos = b2dynamicBody_->GetPosition();
-		const Vec2f bodyPosition{ pos.x, pos.y };
-		const auto rect = SDL_Rect{ (int)((bodyPosition.x - rectHalfSize.x) * pixelPerMeter),
-									(int)((bodyPosition.y - rectHalfSize.y) * pixelPerMeter),
-									(int)(neko::Scalar{ 2 } * rectHalfSize.x * pixelPerMeter),
-									(int)(neko::Scalar{ 2 } * rectHalfSize.y * pixelPerMeter)
-		};
-#else
-		const auto& body = world_.body(dynamicBodyIndex);
-		const auto rect = SDL_FRect{ float{(body.position.x - rectHalfSize.x) * pixelPerMeter},
-									float{(body.position.y - rectHalfSize.y) * pixelPerMeter},
-									float{neko::Scalar{ 2 } * rectHalfSize.x * pixelPerMeter},
-									float{neko::Scalar{ 2 } * rectHalfSize.y * pixelPerMeter}
-		};
-#endif
-		const auto color = dynamicBodyOnGround_ ? onGroundColor : inAirColor;
-		SDL_SetRenderDrawColorFloat(renderer, color.r, color.g, color.b, color.a);
-		SDL_RenderFillRect(renderer, &rect);
-	}
+	drawList.boxes.push_back({ groundCenter, groundHalfSize, groundColor });
+	drawList.boxes.push_back({ staticPosition, rectHalfSize, staticBodyOnGround_ ? onGroundColor : inAirColor });
+	drawList.boxes.push_back({ dynamicPosition, rectHalfSize, dynamicBodyOnGround_ ? onGroundColor : inAirColor });
 }
 
 void MoveIntoSample::End()
 {
-#ifdef USE_BOX2D
+#ifdef NEKO_SAMPLE_BOX2D
 	b2World_ = b2World{{0.0f, -9.81f}};
 #else
 	world_.Clear();
 	quadTree_.Clear();
 #endif
-	vertices_.clear();
-	indices_.clear();
+	staticBodyOnGround_ = false;
+	dynamicBodyOnGround_ = false;
 }
 
 void MoveIntoSample::FixedUpdate()
 {
-#ifdef TRACY_ENABLE
-	ZoneScoped;
-#endif
+	NEKO_PROFILE_FUNCTION();
 
 	if (dynamicBodyOnGround_)
 	{
-#ifdef USE_BOX2D
+#ifdef NEKO_SAMPLE_BOX2D
 		const Scalar mass = (Scalar)b2dynamicBody_->GetMass();
 		const Vec2f velocity {b2dynamicBody_->GetLinearVelocity()};
 		constexpr neko::Vec2f wantedVelocity{ Scalar{ -1 }, Scalar{}};
@@ -315,16 +243,11 @@ void MoveIntoSample::FixedUpdate()
 			force = force.Normalized() * maxForce;
 		}
 		dynamicBody.force += force;
-
-		fmt::print("Dynamic Player Pos: {}, Player Velocity: {}, Player Force: {}\n",
-			float{dynamicBody.position.x},
-			float{dynamicBody.velocity.x},
-			float{dynamicBody.force.x});
 #endif
 	}
 	if (staticBodyOnGround_)
 	{
-#ifdef USE_BOX2D
+#ifdef NEKO_SAMPLE_BOX2D
 		const Scalar mass = (Scalar)b2staticBody_->GetMass();
 		const Vec2f velocity {b2staticBody_->GetLinearVelocity()};
 		constexpr neko::Vec2f wantedVelocity{};
@@ -345,13 +268,9 @@ void MoveIntoSample::FixedUpdate()
 			force = force.Normalized() * maxForce;
 		}
 		staticBody.force += force;
-		fmt::print("Static Player Pos: {}, Player Velocity: {}, Player Force: {}\n",
-			float{staticBody.position.x},
-			float{staticBody.velocity.x},
-			float{staticBody.force.x});
 #endif
 	}
-#ifdef USE_BOX2D
+#ifdef NEKO_SAMPLE_BOX2D
 	b2World_.Step(float{fixedDeltaTime}, 10, 3);
 #else
 	world_.Step();

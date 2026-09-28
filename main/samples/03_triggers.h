@@ -3,14 +3,15 @@
 #include "bsh/quadtree.h"
 #include "sample.h"
 
+#include <vector>
+
 namespace neko
 {
 class TriggersSample : public Sample, public ContactListener
 {
 public:
-    void Begin() override;
-    void Update(float dt) override;
-    void Draw(SDL_Renderer* renderer) override;
+    void Begin(const SampleContext& context) override;
+    void Draw(DrawList& drawList) const override;
     void End() override;
     void OnTriggerEnter(const ColliderPair& p) override;
     void OnTriggerExit(const ColliderPair& p) override;
@@ -29,7 +30,5 @@ private:
     PhysicsWorld world_{ {.dt = fixedDeltaTime, .maxBodies = circleCount, .maxColliders = circleCount, .maxTouchingPairs = circleCount * 8} };
     QuadTree quadTree_{ circleCount, circleCount * 8 };
     std::vector<TriggeredBody> bodies_;
-    std::vector<SDL_Vertex> vertices_;
-    std::vector<int> indices_;
 };
 }

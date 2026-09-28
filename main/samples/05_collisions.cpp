@@ -1,4 +1,3 @@
-#include <SDL3/SDL_log.h>
 #include "05_collisions.h"
 #include "random_utils.h"
 
@@ -6,21 +5,17 @@ namespace neko
 {
 
 constexpr static std::size_t circleCount = 50;
-constexpr static std::size_t circleResolution = 30;
 constexpr static Scalar maxSpeed = Scalar{ 4 };
 constexpr static Scalar maxCircleRadius = Scalar{ 0.2f };
 constexpr static Scalar minCircleRadius = Scalar{ 0.1f };
-constexpr static Scalar pixelPerMeter = Scalar{ 100.0f };
-constexpr static SDL_FColor triggerColor{ 0,255,0,255 };
-constexpr static SDL_FColor untriggerColor{ 255,0,0,255 };
+constexpr static ColorId collidingColor = sample_color::GREEN;
+constexpr static ColorId notCollidingColor = sample_color::RED;
 
 
-void CollisionsSample::Begin()
+void CollisionsSample::Begin([[maybe_unused]] const SampleContext& context)
 {
     world_.SetContactListener(this);
     world_.SetBSH(&quadTree_);
-    indices_.reserve(circleCount * (circleResolution * 3));
-    vertices_.reserve(circleCount * (circleResolution + 1));
     bodies_.resize(circleCount);
     for (std::size_t i = 0; i < circleCount; i++)
     {
@@ -41,33 +36,31 @@ void CollisionsSample::Begin()
         auto& circleCollider = world_.circle(triggerCollider.shapeIndex);
         circleCollider.radius = triggerBody.circleRadius;
 
-        for (std::size_t j = 0; j < circleResolution + 1; j++)
-        {
-            auto pos = body.position * pixelPerMeter;
-            SDL_Vertex vertex{};
-            vertex.color = untriggerColor;
-
-            if (j != 0)
-            {
-                pos += (Vec2f::up() * circleRadius).Rotate(Scalar{ 2 } * Pi<Scalar>() * Scalar(j - 1) / Scalar (circleResolution)) * pixelPerMeter;
-            }
-            vertex.position.x = float{pos.x};
-            vertex.position.y = float{ pos.y };
-            vertices_.push_back(vertex);
-        }
-
-        const auto firstIndex = i * (circleResolution + 1);
-        for (std::size_t j = 0; j < circleResolution; j++)
-        {
-            indices_.push_back(static_cast<int>(firstIndex));
-            indices_.push_back(static_cast<int>(firstIndex + j + 1ull));
-            indices_.push_back(static_cast<int>(firstIndex + (j == circleResolution - 1ull ? 1ull : 2ull + j)));
-        }
     }
 }
 
-void CollisionsSample::Update([[maybe_unused]] float dt)
+void CollisionsSample::Draw(DrawList& drawList) const
 {
+    for (std::size_t i = 0; i < bodies_.size(); i++)
+    {
+        const auto& body = world_.body({ static_cast<Index>(i) });
+        const auto& collidingBody = bodies_[i];
+        drawList.circles.push_back({ body.position, collidingBody.circleRadius,
+            collidingBody.count == 0 ? notCollidingColor : collidingColor });
+    }
+}
+
+void CollisionsSample::End()
+{
+    world_.Clear();
+    bodies_.clear();
+    quadTree_.Clear();
+}
+
+
+void CollisionsSample::FixedUpdate()
+{
+    world_.Step();
     for (std::size_t i = 0; i < circleCount; i++)
     {
         auto& body = world_.body({ static_cast<Index>(i) });
@@ -80,58 +73,7 @@ void CollisionsSample::Update([[maybe_unused]] float dt)
         {
             body.velocity.y = -body.velocity.y;
         }
-
-        const auto& triggerBody = bodies_[i];
-
-        for (std::size_t j = 0; j < circleResolution + 1; j++)
-        {
-            auto pos = body.position * pixelPerMeter;
-            auto& vertex = vertices_[i * (circleResolution + 1) + j];
-
-            if (j != 0)
-            {
-                pos += (Vec2f::up() * triggerBody.circleRadius).Rotate(Scalar{ 2 } * Pi<Scalar>() * Scalar(j - 1) / Scalar(circleResolution)) * pixelPerMeter;
-            }
-            vertex.position.x = float{pos.x};
-            vertex.position.y = float{ pos.y };
-            vertex.color = triggerBody.count == 0 ? untriggerColor : triggerColor;
-        }
-
-        const auto firstIndex = i * (circleResolution + 1);
-        for (std::size_t j = 0; j < circleResolution; j++)
-        {
-            auto* indices = &indices_[i * circleResolution * 3 + j * 3];
-            indices[0] = (static_cast<int>(firstIndex));
-            indices[1] = (static_cast<int>(firstIndex + j + 1ull));
-            indices[2] = (static_cast<int>(firstIndex + (j == circleResolution - 1ull ? 1ull : 2ull + j)));
-        }
     }
-
-}
-
-void CollisionsSample::Draw(SDL_Renderer *renderer)
-{
-    if (SDL_RenderGeometry(renderer, nullptr,
-                           vertices_.data(), static_cast<int>(vertices_.size()),
-                           indices_.data(), static_cast<int>(indices_.size())))
-    {
-        SDL_Log("%s\n", SDL_GetError());
-    }
-}
-
-void CollisionsSample::End()
-{
-    world_.Clear();
-    bodies_.clear();
-    vertices_.clear();
-    indices_.clear();
-    quadTree_.Clear();
-}
-
-
-void CollisionsSample::FixedUpdate()
-{
-    world_.Step();
 }
 
 void CollisionsSample::OnCollisionEnter(const ColliderPair &p)

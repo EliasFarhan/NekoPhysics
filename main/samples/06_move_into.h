@@ -4,21 +4,24 @@
 #include "bsh/quadtree.h"
 #include "sample.h"
 
+// Box2D comparison, PC only: define USE_BOX2D (and link box2d::box2d to NekoPhysicsSamples) to enable it
+#if defined(USE_BOX2D) && !defined(NEKO_PLATFORM_NDS)
+#define NEKO_SAMPLE_BOX2D
 #include <box2d/box2d.h>
+#endif
 
 namespace neko
 {
 
-//#define USE_BOX2D
 class MoveIntoSample final : public Sample,
-#ifndef USE_BOX2D
+#ifndef NEKO_SAMPLE_BOX2D
 	public ContactListener
 #else
 	public b2ContactListener
 #endif
 {
 public:
-#ifndef USE_BOX2D
+#ifndef NEKO_SAMPLE_BOX2D
 	void OnTriggerEnter(const ColliderPair& p) override;
 
 	void OnTriggerExit(const ColliderPair& p) override;
@@ -33,17 +36,15 @@ public:
 	/// Called when two fixtures cease to touch.
 	void EndContact(b2Contact* contact) override;
 #endif
-	void Begin() override;
+	void Begin(const SampleContext& context) override;
 
-	void Update(float dt) override;
-
-	void Draw(SDL_Renderer* renderer) override;
+	void Draw(DrawList& drawList) const override;
 
 	void End() override;
 
 	void FixedUpdate() override;
 private:
-#ifndef USE_BOX2D
+#ifndef NEKO_SAMPLE_BOX2D
 	PhysicsWorld world_{ {.gravity = Vec2f{Scalar{0.0f}, Scalar{9.81f}}, .dt = fixedDeltaTime} };
 	QuadTree quadTree_;
 
@@ -61,10 +62,6 @@ private:
 	b2Body* b2dynamicBody_;
 
 #endif
-	std::vector<SDL_Vertex> vertices_;
-	std::vector<int> indices_;
-
-
 	bool staticBodyOnGround_ = false;
 	bool dynamicBodyOnGround_ = false;
 };

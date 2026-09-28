@@ -8,9 +8,8 @@ namespace neko
 class GroundSample : public Sample, public ContactListener
 {
 public:
-    void Begin() override;
-    void Update(float dt) override;
-    void Draw(SDL_Renderer* renderer) override;
+    void Begin(const SampleContext& context) override;
+    void Draw(DrawList& drawList) const override;
     void End() override;
     void OnTriggerEnter(const ColliderPair& p) override;
     void OnTriggerExit(const ColliderPair& p) override;
@@ -20,8 +19,6 @@ public:
 private:
     PhysicsWorld world_{ {.gravity = Vec2f{Scalar{0.0f}, Scalar{9.81f}}, .dt = fixedDeltaTime} };
     QuadTree quadTree_;
-    std::vector<SDL_Vertex> vertices_;
-    std::vector<int> indices_;
     BodyIndex circleBodyIndex_ = INVALID_BODY_INDEX;
     BodyIndex rectBodyIndex_ = INVALID_BODY_INDEX;
     BodyIndex groundBodyIndex_ = INVALID_BODY_INDEX;

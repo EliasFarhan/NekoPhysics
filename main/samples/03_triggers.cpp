@@ -1,11 +1,8 @@
 #include "03_triggers.h"
 
-#include <SDL3/SDL_log.h>
-#include <functional>
+#include "core/profile.h"
 
-#ifdef TRACY_ENABLE
-#include <tracy/Tracy.hpp>
-#endif
+#include <functional>
 
 #include "random_utils.h"
 
@@ -13,24 +10,18 @@ namespace neko
 {
 
 
-constexpr static std::size_t circleResolution = 30;
 constexpr static Scalar maxSpeed = Scalar{ 4 };
 constexpr static Scalar maxCircleRadius = Scalar{ 0.02f };
 constexpr static Scalar minCircleRadius = Scalar{ 0.01f };
-constexpr static Scalar pixelPerMeter = Scalar{ 100.0f };
-constexpr static SDL_FColor triggerColor{ 0,1,0,1 };
-constexpr static SDL_FColor untriggerColor{ 1,0,0,1 };
+constexpr static ColorId triggerColor = sample_color::GREEN;
+constexpr static ColorId untriggerColor = sample_color::RED;
+constexpr static ColorId quadTreeColor = sample_color::WHITE;
 
-void TriggersSample::Begin()
+void TriggersSample::Begin([[maybe_unused]] const SampleContext& context)
 {
-
-#ifdef TRACY_ENABLE
-    ZoneScoped;
-#endif
+    NEKO_PROFILE_FUNCTION();
     world_.SetContactListener(this);
     world_.SetBSH(&quadTree_);
-    indices_.reserve(circleCount * (circleResolution * 3));
-    vertices_.reserve(circleCount * (circleResolution + 1));
     bodies_.resize(circleCount);
     for (std::size_t i = 0; i < circleCount; i++)
     {
@@ -41,7 +32,6 @@ void TriggersSample::Begin()
         body.inverseMass = Scalar{ 1 };
 
         auto& triggerBody = bodies_[i];
-        
 
         const auto circleRadius = Scalar{ RandomRange(float{minCircleRadius}, float{maxCircleRadius}) };
         triggerBody.circleRadius = circleRadius;
@@ -49,110 +39,33 @@ void TriggersSample::Begin()
         const auto& triggerCollider = world_.collider({ triggerBody.index });
         auto& circleCollider = world_.circle(triggerCollider.shapeIndex);
         circleCollider.radius = triggerBody.circleRadius;
-
-        for (std::size_t j = 0; j < circleResolution + 1; j++)
-        {
-            auto pos = body.position * pixelPerMeter;
-            SDL_Vertex vertex{};
-            vertex.color = untriggerColor;
-
-            if (j != 0)
-            {
-                pos += (Vec2f::up() * circleRadius).Rotate(Scalar{ 2 } * Pi<Scalar>() * Scalar(j - 1) / Scalar (circleResolution)) * pixelPerMeter;
-            }
-            vertex.position.x = float{pos.x};
-            vertex.position.y = float{ pos.y };
-            vertices_.push_back(vertex);
-        }
-
-        const auto firstIndex = i * (circleResolution + 1);
-        for (std::size_t j = 0; j < circleResolution; j++)
-        {
-            indices_.push_back(static_cast<int>(firstIndex));
-            indices_.push_back(static_cast<int>(firstIndex + j + 1ull));
-            indices_.push_back(static_cast<int>(firstIndex + (j == circleResolution - 1ull ? 1ull : 2ull + j)));
-        }
     }
 }
 
-void TriggersSample::Update([[maybe_unused]]float dt)
+void TriggersSample::Draw(DrawList& drawList) const
 {
-#ifdef TRACY_ENABLE
-    ZoneScoped;
-#endif
-    for (std::size_t i = 0; i < circleCount; i++)
+    NEKO_PROFILE_FUNCTION();
+    for (std::size_t i = 0; i < bodies_.size(); i++)
     {
-        auto& body = world_.body({ static_cast<Index>(i) });
-        if ((body.velocity.x > Scalar{0.0f}&& body.position.x > Scalar{12.8f}) || (body.velocity.x < Scalar{0.0f}&& body.position.x < Scalar{0.0f}))
-        {
-            body.velocity.x = -body.velocity.x;
-        }
-
-        if ((body.velocity.y > Scalar{0.0f} && body.position.y > Scalar{7.2f}) || (body.velocity.y < Scalar{0.0f}&& body.position.y < Scalar{0.0f}))
-        {
-            body.velocity.y = -body.velocity.y;
-        }
-
+        const auto& body = world_.body({ static_cast<Index>(i) });
         const auto& triggerBody = bodies_[i];
-
-        for (std::size_t j = 0; j < circleResolution + 1; j++)
-        {
-            auto pos = body.position * pixelPerMeter;
-            auto& vertex = vertices_[i * (circleResolution + 1) + j];
-
-            if (j != 0)
-            {
-                pos += (Vec2f::up() * triggerBody.circleRadius).Rotate(Scalar{ 2 } * Pi<Scalar>() * Scalar(j - 1) / Scalar(circleResolution)) * pixelPerMeter;
-            }
-            vertex.position.x = float{pos.x};
-            vertex.position.y = float{ pos.y };
-            vertex.color = triggerBody.count == 0 ? untriggerColor : triggerColor;
-        }
-
-        const auto firstIndex = i * (circleResolution + 1);
-        for (std::size_t j = 0; j < circleResolution; j++)
-        {
-            auto* indices = &indices_[i * circleResolution * 3 + j * 3];
-            indices[0] = (static_cast<int>(firstIndex));
-            indices[1] = (static_cast<int>(firstIndex + j + 1ull));
-            indices[2] = (static_cast<int>(firstIndex + (j == circleResolution - 1ull ? 1ull : 2ull + j)));
-        }
+        drawList.circles.push_back({ body.position, triggerBody.circleRadius,
+            triggerBody.count == 0 ? untriggerColor : triggerColor });
     }
-}
-
-void TriggersSample::Draw(SDL_Renderer* renderer)
-{
-
-#ifdef TRACY_ENABLE
-    ZoneScoped;
-#endif
-    if (SDL_RenderGeometry(renderer, nullptr,
-        vertices_.data(), static_cast<int>(vertices_.size()),
-        indices_.data(), static_cast<int>(indices_.size())))
-    {
-        SDL_Log("%s\n", SDL_GetError());
-    }
-    std::function<void(Index)> drawQuad = [this, renderer, &drawQuad](Index nodeIndex)
+    std::function<void(Index)> drawQuad = [this, &drawList, &drawQuad](Index nodeIndex)
     {
         const auto& node = quadTree_.GetNode(nodeIndex);
         const auto& aabb = node.aabb;
-        const auto center = aabb.GetCenter();
-        const auto halfSize = aabb.GetHalfSize();
-        std::array<Vec2f, 4> pos
+        const std::array<Vec2f, 4> corners
         {
-            center+Vec2f(-halfSize.x, halfSize.y),
-            center+Vec2f(-halfSize.x, -halfSize.y),
-            center+Vec2f(halfSize.x, -halfSize.y),
-            center+Vec2f(halfSize.x, halfSize.y),
+            aabb.minBound,
+            Vec2f{ aabb.maxBound.x, aabb.minBound.y },
+            aabb.maxBound,
+            Vec2f{ aabb.minBound.x, aabb.maxBound.y },
         };
         for(std::size_t i = 0; i < 4; i++)
         {
-            const auto pos1 = pos[i]*pixelPerMeter;
-            const auto pos2 = pos[(i+1)%4]*pixelPerMeter;
-            if(SDL_RenderLine(renderer, float{pos1.x}, float{pos1.y}, float{pos2.x}, float{pos2.y}))
-            {
-                SDL_Log("%s\n", SDL_GetError());
-            }
+            drawList.lines.push_back({ corners[i], corners[(i + 1) % 4], quadTreeColor });
         }
         if(!node.IsLeaf())
         {
@@ -162,7 +75,6 @@ void TriggersSample::Draw(SDL_Renderer* renderer)
             }
         }
     };
-    SDL_SetRenderDrawColor(renderer, 255,255,255,255);
     drawQuad(QuadTree::ROOT);
 }
 
@@ -170,8 +82,6 @@ void TriggersSample::End()
 {
     world_.Clear();
     bodies_.clear();
-    vertices_.clear();
-    indices_.clear();
     quadTree_.Clear();
 }
 
@@ -193,11 +103,21 @@ void TriggersSample::OnTriggerExit(const ColliderPair& p)
 
 void TriggersSample::FixedUpdate()
 {
-#ifdef TRACY_ENABLE
-    ZoneScoped;
-#endif
+    NEKO_PROFILE_FUNCTION();
     world_.Step();
-    
+    for (std::size_t i = 0; i < circleCount; i++)
+    {
+        auto& body = world_.body({ static_cast<Index>(i) });
+        if ((body.velocity.x > Scalar{0.0f}&& body.position.x > Scalar{12.8f}) || (body.velocity.x < Scalar{0.0f}&& body.position.x < Scalar{0.0f}))
+        {
+            body.velocity.x = -body.velocity.x;
+        }
+
+        if ((body.velocity.y > Scalar{0.0f} && body.position.y > Scalar{7.2f}) || (body.velocity.y < Scalar{0.0f}&& body.position.y < Scalar{0.0f}))
+        {
+            body.velocity.y = -body.velocity.y;
+        }
+    }
 }
 
 void TriggersSample::OnCollisionEnter([[maybe_unused]] const ColliderPair& p)
