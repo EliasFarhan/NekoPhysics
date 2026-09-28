@@ -22,11 +22,10 @@ namespace
 
 constexpr int STATS_WINDOW = 60;
 /**
- * @brief Timer 2 counts the frame period (timers 0 and 1 belong to cpuStartTiming): 33.513982 MHz / 1024 ticks
- * per second, and a VBlank period (59.8261 Hz) is ~547 ticks
+ * @brief The frame period is measured with calico's system tick counter (tickGetCount, TICK_FREQ = bus clock / 64).
+ * Hardware timers 2 and 3 run that counter (cpuStartTiming reads it too), so they must not be reprogrammed.
  */
-constexpr unsigned FRAME_TIMER = 2;
-constexpr std::uint32_t FRAME_TIMER_HZ_X10 = 327284;
+constexpr std::uint64_t TICK_HZ_X10 = std::uint64_t{ TICK_FREQ } * 10;
 /**
  * @brief VBlanks per second (59.8261 Hz) x 10
  */
@@ -126,11 +125,9 @@ int main()
 
     TimingWindow stepTiming;
     TimingWindow drawTiming;
-    std::uint32_t windowFrameTicks = 0;
+    std::uint64_t windowFrameTicks = 0;
     DisplayedStats displayed;
-
-    timerStart(FRAME_TIMER, ClockDivider_1024, 0, nullptr);
-    timerElapsed(FRAME_TIMER);
+    std::uint64_t lastFrameTick = tickGetCount();
 
     while (pmMainLoop())
     {
@@ -186,7 +183,9 @@ int main()
         swiWaitForVBlank();
         drawer.Present();
 
-        windowFrameTicks += timerElapsed(FRAME_TIMER);
+        const std::uint64_t frameTick = tickGetCount();
+        windowFrameTicks += frameTick - lastFrameTick;
+        lastFrameTick = frameTick;
         if (stepTiming.count == STATS_WINDOW)
         {
             displayed.stepAverageUs = stepTiming.AverageUs();
@@ -195,7 +194,7 @@ int main()
             displayed.drawMaxUs = drawTiming.MaxUs();
             displayed.fpsX10 = windowFrameTicks == 0
                 ? 0
-                : static_cast<std::uint32_t>(std::uint64_t{ FRAME_TIMER_HZ_X10 } * STATS_WINDOW / windowFrameTicks);
+                : static_cast<std::uint32_t>(TICK_HZ_X10 * STATS_WINDOW / windowFrameTicks);
             stepTiming = {};
             drawTiming = {};
             windowFrameTicks = 0;
@@ -204,10 +203,11 @@ int main()
             displayed.stepMaxUs);
         rows.Print(STATS_ROW + 7, "Draw %5" PRIu32 " us avg %5" PRIu32 " max", displayed.drawAverageUs,
             displayed.drawMaxUs);
-        const std::uint32_t vblanksPerFrame =
-            displayed.fpsX10 == 0 ? 0 : (VBLANK_HZ_X10 + displayed.fpsX10 / 2) / displayed.fpsX10;
-        rows.Print(STATS_ROW + 8, "FPS  %2" PRIu32 ".%" PRIu32 " (%" PRIu32 " VBlank/frame)", displayed.fpsX10 / 10,
-            displayed.fpsX10 % 10, vblanksPerFrame);
+        // VBlanks per frame x 10, rounded
+        const std::uint32_t vblanksPerFrameX10 =
+            displayed.fpsX10 == 0 ? 0 : (VBLANK_HZ_X10 * 10 + displayed.fpsX10 / 2) / displayed.fpsX10;
+        rows.Print(STATS_ROW + 8, "FPS  %2" PRIu32 ".%" PRIu32 " (%" PRIu32 ".%" PRIu32 " VBlank/frame)",
+            displayed.fpsX10 / 10, displayed.fpsX10 % 10, vblanksPerFrameX10 / 10, vblanksPerFrameX10 % 10);
     }
     return 0;
 }

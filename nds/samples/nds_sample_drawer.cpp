@@ -379,6 +379,28 @@ void NdsSampleDrawer::RedrawBitmap(u16* buffer) const
         }
         case BitmapShapeType::LINE:
         {
+            if (shape.y0 == shape.y1)
+            {
+                // Horizontal: two pixels per 16-bit write
+                if (shape.y0 >= 0 && shape.y0 < SCREEN_HEIGHT)
+                {
+                    FillSpan(pixels, std::max(std::min(shape.x0, shape.x1), 0),
+                        std::min(std::max(shape.x0, shape.x1) + 1, SCREEN_WIDTH), shape.y0, shape.color);
+                }
+                break;
+            }
+            if (shape.x0 == shape.x1)
+            {
+                if (shape.x0 >= 0 && shape.x0 < SCREEN_WIDTH)
+                {
+                    const int y1 = std::min(std::max(shape.y0, shape.y1), SCREEN_HEIGHT - 1);
+                    for (int y = std::max(std::min(shape.y0, shape.y1), 0); y <= y1; ++y)
+                    {
+                        PutPixel(pixels, shape.x0, y, shape.color);
+                    }
+                }
+                break;
+            }
             // Bresenham, clipped per pixel
             int x = shape.x0;
             int y = shape.y0;

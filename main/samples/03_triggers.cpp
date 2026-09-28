@@ -49,6 +49,15 @@ void TriggersSample::Draw(DrawList& drawList) const
         drawList.circles.push_back({ world_.body({ i }).position, triggerBody.circleRadius,
             triggerBody.count == 0 ? untriggerColor : triggerColor });
     }
+    // Children are exact quadrants of their parent: the root's outline plus a cross through every split node draws
+    // each edge once (the children's outlines would redraw their parent's edges)
+    const auto& root = quadTree_.GetNode(QuadTree::ROOT).aabb;
+    const Vec2f topRight{ root.maxBound.x, root.minBound.y };
+    const Vec2f bottomLeft{ root.minBound.x, root.maxBound.y };
+    drawList.lines.push_back({ root.minBound, topRight, quadTreeColor });
+    drawList.lines.push_back({ topRight, root.maxBound, quadTreeColor });
+    drawList.lines.push_back({ root.maxBound, bottomLeft, quadTreeColor });
+    drawList.lines.push_back({ bottomLeft, root.minBound, quadTreeColor });
     // Depth-first walk with an explicit stack: each pop pushes at most 4 children, one level deeper
     std::array<Index, 3 * QuadTree::MAX_DEPTH + 1> stack{};
     std::size_t stackSize = 0;
@@ -56,24 +65,17 @@ void TriggersSample::Draw(DrawList& drawList) const
     while (stackSize > 0)
     {
         const auto& node = quadTree_.GetNode(stack[--stackSize]);
-        const auto& aabb = node.aabb;
-        const std::array<Vec2f, 4> corners
+        if (node.IsLeaf())
         {
-            aabb.minBound,
-            Vec2f{ aabb.maxBound.x, aabb.minBound.y },
-            aabb.maxBound,
-            Vec2f{ aabb.minBound.x, aabb.maxBound.y },
-        };
-        for (std::size_t i = 0; i < corners.size(); i++)
-        {
-            drawList.lines.push_back({ corners[i], corners[(i + 1) % corners.size()], quadTreeColor });
+            continue;
         }
-        if (!node.IsLeaf())
+        const auto& aabb = node.aabb;
+        const auto center = aabb.GetCenter();
+        drawList.lines.push_back({ Vec2f{ aabb.minBound.x, center.y }, Vec2f{ aabb.maxBound.x, center.y }, quadTreeColor });
+        drawList.lines.push_back({ Vec2f{ center.x, aabb.minBound.y }, Vec2f{ center.x, aabb.maxBound.y }, quadTreeColor });
+        for (Index child = node.firstChild; child < node.firstChild + 4; ++child)
         {
-            for (Index child = node.firstChild; child < node.firstChild + 4; ++child)
-            {
-                stack[stackSize++] = child;
-            }
+            stack[stackSize++] = child;
         }
     }
 }
