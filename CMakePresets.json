@@ -38,13 +38,28 @@
       "displayName": "RelWithDebInfo (samples + tests)",
       "inherits": "base",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" }
+    },
+    {
+      "name": "nds",
+      "displayName": "Nintendo DS test ROM (devkitARM, needs DEVKITPRO)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "$env{DEVKITPRO}/cmake/NDS.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "USE_SAMPLES": "OFF",
+        "USE_TESTING": "OFF",
+        "NEKO_SCALAR": "FIXED16",
+        "NEKO_WARNINGS_AS_ERRORS": "ON"
+      }
     }
   ],
   "buildPresets": [
     { "name": "debug", "configurePreset": "debug" },
     { "name": "debug-float", "configurePreset": "debug-float" },
     { "name": "release", "configurePreset": "release" },
-    { "name": "relwithdebinfo", "configurePreset": "relwithdebinfo" }
+    { "name": "relwithdebinfo", "configurePreset": "relwithdebinfo" },
+    { "name": "nds", "configurePreset": "nds" }
   ],
   "testPresets": [
     {

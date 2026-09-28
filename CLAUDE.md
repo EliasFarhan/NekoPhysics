@@ -24,6 +24,8 @@ cmake --preset debug          # FIXED16; needs VCPKG_ROOT
 cmake --build --preset debug
 ctest --preset debug
 cmake --preset debug-float    # same with NEKO_SCALAR=FLOAT
+cmake --preset nds            # DS test ROM (build/nds/nds/NekoPhysicsDsTest.nds); needs DEVKITPRO, no vcpkg
+cmake --build --preset nds
 ```
 
 As of 2026-09-18 `NEKO_SCALAR=SIXIT` fails to build with MSVC 14.51 and clang (sixit's bundled fmt, non-constexpr `Scalar`); see finding S1.8 in the vault review.
