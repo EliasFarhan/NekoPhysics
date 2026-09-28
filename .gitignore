@@ -3,3 +3,4 @@
 [bB]uild/
 cmake-build-*/
 .idea/
+.mcp.json
