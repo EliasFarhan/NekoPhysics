@@ -1,12 +1,16 @@
 #pragma once
 #include "physics/physics.h"
 #include "sample.h"
+#include "sample_config.h"
 
 #include <vector>
 
 namespace neko
 {
 
+/**
+ * @brief Circles without colliders orbiting a black hole at the center of the world
+ */
 class PlanetSample : public Sample
 {
 public:
@@ -15,8 +19,10 @@ public:
     void Draw(DrawList& drawList) const override;
     void End() override;
 private:
-    static constexpr std::size_t circleCount = 1'000;
-    PhysicsWorld world_{ {.gravity = Vec2f::zero(), .dt = fixedDeltaTime, .maxBodies = circleCount} };
+    static constexpr Index circleCount = sample_config::PLANET_COUNT;
+    PhysicsWorld world_{ {.gravity = Vec2f::zero(), .dt = fixedDeltaTime, .maxBodies = circleCount,
+        .maxColliders = 1, .maxTouchingPairs = 1, .maxBroadphasePairs = 1} };
     std::vector<ColorId> colors_;
+    Vec2f center_{};
 };
 } // namespace neko

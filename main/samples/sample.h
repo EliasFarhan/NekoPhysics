@@ -12,6 +12,13 @@
 namespace neko
 {
 
+struct Body;
+
+/**
+ * @brief Reverses the velocity components that take the body further out of bounds
+ */
+void BounceInside(Body& body, const Aabbf& bounds);
+
 /**
  * @brief What the host platform gives a sample when it begins
  */

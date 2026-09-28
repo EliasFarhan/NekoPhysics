@@ -3,6 +3,7 @@
 #include "physics/physics.h"
 #include "bsh/quadtree.h"
 #include "sample.h"
+#include "sample_config.h"
 
 // Box2D comparison, PC only: define USE_BOX2D (and link box2d::box2d to NekoPhysicsSamples) to enable it
 #if defined(USE_BOX2D) && !defined(NEKO_PLATFORM_NDS)
@@ -13,6 +14,10 @@
 namespace neko
 {
 
+/**
+ * @brief Two boxes on a static ground, pushed with forces once they land: one is held in place, the other moves left
+ * into it. Magenta once on the ground.
+ */
 class MoveIntoSample final : public Sample,
 #ifndef NEKO_SAMPLE_BOX2D
 	public ContactListener
@@ -45,8 +50,11 @@ public:
 	void FixedUpdate() override;
 private:
 #ifndef NEKO_SAMPLE_BOX2D
-	PhysicsWorld world_{ {.gravity = Vec2f{Scalar{0.0f}, Scalar{9.81f}}, .dt = fixedDeltaTime} };
-	QuadTree quadTree_;
+	static constexpr std::size_t bodyCount = 3;
+	static constexpr std::size_t maxPairs = 8;
+	PhysicsWorld world_{ {.gravity = Vec2f{Scalar{0}, Ratio(981, 100)}, .dt = fixedDeltaTime, .maxBodies = bodyCount,
+		.maxColliders = bodyCount, .maxTouchingPairs = maxPairs, .maxBroadphasePairs = 1} };
+	QuadTree quadTree_{ bodyCount, maxPairs };
 
 	BodyIndex staticBodyIndex = INVALID_BODY_INDEX;
 	BodyIndex dynamicBodyIndex = INVALID_BODY_INDEX;

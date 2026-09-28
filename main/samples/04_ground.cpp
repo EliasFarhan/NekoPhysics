@@ -5,81 +5,64 @@
 namespace neko
 {
 
-
-constexpr static Scalar circleRadius = Scalar{ 0.5f };
-constexpr static Vec2f groundHalfSize = Vec2f{ Scalar{5}, Scalar{ 1 } };
-constexpr static Vec2f rectHalfSize = Vec2f{ Scalar{0.5f}, Scalar{ 0.5f } };
+constexpr static Scalar circleRadius = Ratio(1, 2);
+constexpr static Vec2f groundHalfSize = Vec2f{ Scalar{ 5 }, Scalar{ 1 } };
+constexpr static Vec2f rectHalfSize = Vec2f{ Ratio(1, 2), Ratio(1, 2) };
 constexpr static ColorId groundColor = sample_color::GREEN;
 constexpr static ColorId circleColor = sample_color::BLUE;
 constexpr static ColorId collisionCircleColor = sample_color::MAGENTA;
 constexpr static ColorId rectColor = sample_color::WHITE;
-constexpr static Vec2f worldCenter = { Scalar{12.8f / 2.0f}, Scalar{7.2f / 2.0f} };
- static Vec2f groundPosition = worldCenter+Vec2f{Scalar{0}, Scalar{3}};
- static Vec2f circlePosition = worldCenter-Vec2f{Scalar{2}, Scalar{3}};
- static Vec2f rectPosition = worldCenter-Vec2f{Scalar{-2}, Scalar{3}};
 
-void GroundSample::Begin([[maybe_unused]] const SampleContext& context)
+void GroundSample::Begin(const SampleContext& context)
 {
     world_.SetContactListener(this);
     world_.SetBSH(&quadTree_);
+    const auto worldCenter = context.worldBounds.GetCenter();
 
     //Implement ground
     {
         groundBodyIndex_ = world_.AddBody();
         Body& body = world_.body(groundBodyIndex_);
-        body.position = groundPosition;
-        body.velocity = Vec2f{};
+        body.position = worldCenter + Vec2f{ Scalar{ 0 }, Scalar{ 3 } };
         body.type = BodyType::STATIC;
         body.inverseMass = Scalar{ 0 };
 
         const auto colliderIndex = world_.AddAabbCollider(groundBodyIndex_);
         auto& collider = world_.collider(colliderIndex);
-        auto& aabbCollider = world_.aabb(collider.shapeIndex);
-        aabbCollider.halfSize = groundHalfSize;
+        world_.aabb(collider.shapeIndex).halfSize = groundHalfSize;
         collider.isTrigger = false;
-		collider.restitution = neko::Scalar {0};
-
-
+        collider.restitution = Scalar{ 0 };
     }
-    
+
     //Implement ball
     {
         circleBodyIndex_ = world_.AddBody();
         Body& body = world_.body(circleBodyIndex_);
-        body.position = circlePosition;
-        body.velocity = Vec2f{};
+        body.position = worldCenter - Vec2f{ Scalar{ 2 }, Scalar{ 3 } };
         body.type = BodyType::DYNAMIC;
         body.inverseMass = Scalar{ 1 };
 
         const auto colliderIndex = world_.AddCircleCollider(circleBodyIndex_);
         auto& collider = world_.collider(colliderIndex);
-        auto& circleCollider = world_.circle(collider.shapeIndex);
-        circleCollider.radius = circleRadius;
+        world_.circle(collider.shapeIndex).radius = circleRadius;
         collider.isTrigger = false;
-
-		collider.restitution = neko::Scalar {0.5f};
-
+        collider.restitution = Ratio(1, 2);
     }
 
-	{
-		//rect ball
-		rectBodyIndex_ = world_.AddBody();
-		Body& body = world_.body(rectBodyIndex_);
-		body.position = rectPosition;
-		body.velocity = Vec2f{};
-		body.type = BodyType::DYNAMIC;
-		body.inverseMass = Scalar{ 1 };
+    //Implement box
+    {
+        rectBodyIndex_ = world_.AddBody();
+        Body& body = world_.body(rectBodyIndex_);
+        body.position = worldCenter - Vec2f{ Scalar{ -2 }, Scalar{ 3 } };
+        body.type = BodyType::DYNAMIC;
+        body.inverseMass = Scalar{ 1 };
 
-		const auto colliderIndex = world_.AddAabbCollider(rectBodyIndex_);
-		auto& collider = world_.collider(colliderIndex);
-		auto& aabbCollider = world_.aabb(collider.shapeIndex);
-		aabbCollider.halfSize = rectHalfSize;
-		collider.isTrigger = false;
-		collider.restitution = neko::Scalar {0};
-	}
-
-
-    
+        const auto colliderIndex = world_.AddAabbCollider(rectBodyIndex_);
+        auto& collider = world_.collider(colliderIndex);
+        world_.aabb(collider.shapeIndex).halfSize = rectHalfSize;
+        collider.isTrigger = false;
+        collider.restitution = Scalar{ 0 };
+    }
 }
 
 void GroundSample::Draw(DrawList& drawList) const
@@ -97,7 +80,7 @@ void GroundSample::End()
     collisionCount = 0;
 }
 
-void GroundSample::OnTriggerEnter([[maybe_unused]]const ColliderPair& p)
+void GroundSample::OnTriggerEnter([[maybe_unused]] const ColliderPair& p)
 {
 }
 

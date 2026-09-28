@@ -3,11 +3,15 @@
 #include "physics/physics.h"
 #include "bsh/quadtree.h"
 #include "sample.h"
+#include "sample_config.h"
 
 #include <vector>
 
 namespace neko
 {
+/**
+ * @brief Colliding circles in a quadtree broadphase: red alone, green while touching another one
+ */
 class CollisionsSample : public Sample, public ContactListener
 {
 public:
@@ -21,14 +25,17 @@ public:
     void OnCollisionExit(const ColliderPair& p) override;
 
 private:
-    struct TriggeredBody
+    struct CollidingBody
     {
-        ColliderIndex index{};
         int count = 0;
-        Scalar circleRadius{ 0.0f };
+        Scalar circleRadius{ 0 };
     };
-    PhysicsWorld world_{ {.dt = fixedDeltaTime} };
-    QuadTree quadTree_;
-    std::vector<TriggeredBody> bodies_;
+    static constexpr Index circleCount = sample_config::COLLISION_COUNT;
+    static constexpr std::size_t maxPairs = std::size_t{ circleCount } * 8;
+    PhysicsWorld world_{ {.dt = fixedDeltaTime, .maxBodies = circleCount, .maxColliders = circleCount,
+        .maxTouchingPairs = maxPairs, .maxBroadphasePairs = 1} };
+    QuadTree quadTree_{ circleCount, maxPairs };
+    std::vector<CollidingBody> bodies_;
+    Aabbf bounds_{};
 };
 }

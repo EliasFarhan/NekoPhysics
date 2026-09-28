@@ -8,9 +8,24 @@
 #include "06_move_into.h"
 
 #include "core/profile.h"
+#include "physics/physics.h"
 
 namespace neko
 {
+
+void BounceInside(Body& body, const Aabbf& bounds)
+{
+    if ((body.velocity.x > Scalar{ 0 } && body.position.x > bounds.maxBound.x) ||
+        (body.velocity.x < Scalar{ 0 } && body.position.x < bounds.minBound.x))
+    {
+        body.velocity.x = -body.velocity.x;
+    }
+    if ((body.velocity.y > Scalar{ 0 } && body.position.y > bounds.maxBound.y) ||
+        (body.velocity.y < Scalar{ 0 } && body.position.y < bounds.minBound.y))
+    {
+        body.velocity.y = -body.velocity.y;
+    }
+}
 
 SampleRegistry::SampleRegistry()
 {

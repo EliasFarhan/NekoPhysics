@@ -1,51 +1,47 @@
 #include "05_collisions.h"
-#include "random_utils.h"
+#include "sample_rng.h"
 
 namespace neko
 {
 
-constexpr static std::size_t circleCount = 50;
 constexpr static Scalar maxSpeed = Scalar{ 4 };
-constexpr static Scalar maxCircleRadius = Scalar{ 0.2f };
-constexpr static Scalar minCircleRadius = Scalar{ 0.1f };
+constexpr static Scalar maxCircleRadius = Ratio(1, 5);
+constexpr static Scalar minCircleRadius = Ratio(1, 10);
 constexpr static ColorId collidingColor = sample_color::GREEN;
 constexpr static ColorId notCollidingColor = sample_color::RED;
+constexpr static std::uint32_t seed = 0x05C0FFEEu;
 
-
-void CollisionsSample::Begin([[maybe_unused]] const SampleContext& context)
+void CollisionsSample::Begin(const SampleContext& context)
 {
+    bounds_ = context.worldBounds;
     world_.SetContactListener(this);
     world_.SetBSH(&quadTree_);
+    SampleRng rng{ seed };
     bodies_.resize(circleCount);
-    for (std::size_t i = 0; i < circleCount; i++)
+    for (Index i = 0; i < circleCount; ++i)
     {
         const auto index = world_.AddBody();
         Body& body = world_.body(index);
-        body.position = { Scalar{RandomRange(0.0f, 12.8f)}, Scalar{RandomRange(0.0f, 7.2f)} };
-        body.velocity = Vec2f{ Scalar{RandomRange(-1.0f, 1.0f)}, Scalar{RandomRange(-1.0f, 1.0f)} } *maxSpeed;
+        body.position = { rng.Range(bounds_.minBound.x, bounds_.maxBound.x),
+            rng.Range(bounds_.minBound.y, bounds_.maxBound.y) };
+        body.velocity = Vec2f{ rng.Range(Scalar{ -1 }, Scalar{ 1 }), rng.Range(Scalar{ -1 }, Scalar{ 1 }) } * maxSpeed;
         body.inverseMass = Scalar{ 1 };
 
-        auto& triggerBody = bodies_[i];
-
-
-        const auto circleRadius = Scalar{ RandomRange(float{minCircleRadius}, float{maxCircleRadius}) };
-        triggerBody.circleRadius = circleRadius;
-        triggerBody.index = world_.AddCircleCollider(index);
-        auto& triggerCollider = world_.collider({ triggerBody.index });
-        triggerCollider.isTrigger = false;
-        auto& circleCollider = world_.circle(triggerCollider.shapeIndex);
-        circleCollider.radius = triggerBody.circleRadius;
-
+        auto& collidingBody = bodies_[i];
+        collidingBody.circleRadius = rng.Range(minCircleRadius, maxCircleRadius);
+        const auto colliderIndex = world_.AddCircleCollider(index);
+        auto& collider = world_.collider(colliderIndex);
+        collider.isTrigger = false;
+        world_.circle(collider.shapeIndex).radius = collidingBody.circleRadius;
     }
 }
 
 void CollisionsSample::Draw(DrawList& drawList) const
 {
-    for (std::size_t i = 0; i < bodies_.size(); i++)
+    for (Index i = 0; i < bodies_.size(); ++i)
     {
-        const auto& body = world_.body({ static_cast<Index>(i) });
         const auto& collidingBody = bodies_[i];
-        drawList.circles.push_back({ body.position, collidingBody.circleRadius,
+        drawList.circles.push_back({ world_.body({ i }).position, collidingBody.circleRadius,
             collidingBody.count == 0 ? notCollidingColor : collidingColor });
     }
 }
@@ -57,48 +53,32 @@ void CollisionsSample::End()
     quadTree_.Clear();
 }
 
-
 void CollisionsSample::FixedUpdate()
 {
     world_.Step();
-    for (std::size_t i = 0; i < circleCount; i++)
+    for (Index i = 0; i < bodies_.size(); ++i)
     {
-        auto& body = world_.body({ static_cast<Index>(i) });
-        if ((body.velocity.x > Scalar{0.0f}&& body.position.x > Scalar{12.8f}) || (body.velocity.x < Scalar{0.0f}&& body.position.x < Scalar{0.0f}))
-        {
-            body.velocity.x = -body.velocity.x;
-        }
-
-        if ((body.velocity.y > Scalar{0.0f} && body.position.y > Scalar{7.2f}) || (body.velocity.y < Scalar{0.0f}&& body.position.y < Scalar{0.0f}))
-        {
-            body.velocity.y = -body.velocity.y;
-        }
+        BounceInside(world_.body({ i }), bounds_);
     }
 }
 
-void CollisionsSample::OnCollisionEnter(const ColliderPair &p)
+void CollisionsSample::OnCollisionEnter(const ColliderPair& p)
 {
-    const auto& c1 = world_.collider(p.c1);
-    bodies_[c1.bodyIndex.index].count++;
-    const auto& c2 = world_.collider(p.c2);
-    bodies_[c2.bodyIndex.index].count++;
+    bodies_[world_.collider(p.c1).bodyIndex.index].count++;
+    bodies_[world_.collider(p.c2).bodyIndex.index].count++;
 }
 
-void CollisionsSample::OnCollisionExit(const ColliderPair &p)
+void CollisionsSample::OnCollisionExit(const ColliderPair& p)
 {
-    const auto& c1 = world_.collider(p.c1);
-    bodies_[c1.bodyIndex.index].count--;
-    const auto& c2 = world_.collider(p.c2);
-    bodies_[c2.bodyIndex.index].count--;
+    bodies_[world_.collider(p.c1).bodyIndex.index].count--;
+    bodies_[world_.collider(p.c2).bodyIndex.index].count--;
 }
 
-void CollisionsSample::OnTriggerEnter([[maybe_unused]]const ColliderPair &p)
+void CollisionsSample::OnTriggerEnter([[maybe_unused]] const ColliderPair& p)
 {
-
 }
 
-void CollisionsSample::OnTriggerExit([[maybe_unused]] const ColliderPair &p)
+void CollisionsSample::OnTriggerExit([[maybe_unused]] const ColliderPair& p)
 {
-
 }
 }

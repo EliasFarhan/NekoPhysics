@@ -1,7 +1,3 @@
-//
-// Created by unite on 17.10.2024.
-//
-
 #include "06_move_into.h"
 
 #include "core/profile.h"
@@ -10,15 +6,11 @@ namespace neko
 {
 
 constexpr static Vec2f groundHalfSize = Vec2f{ Scalar{ 5 }, Scalar{ 1 }};
-constexpr static Vec2f rectHalfSize = Vec2f{ Scalar{ 0.5f }, Scalar{ 0.5f }};
+constexpr static Vec2f rectHalfSize = Vec2f{ Ratio(1, 2), Ratio(1, 2) };
 constexpr static ColorId groundColor = sample_color::GREEN;
 constexpr static ColorId inAirColor = sample_color::BLUE;
 constexpr static ColorId onGroundColor = sample_color::MAGENTA;
-constexpr static Vec2f worldCenter = { Scalar{ 12.8f / 2.0f }, Scalar{ 7.2f / 2.0f }};
-static Vec2f groundPosition = worldCenter + Vec2f{ Scalar{ 0 }, Scalar{ 3 }};
-static Vec2f dynamicRectPosition = worldCenter - Vec2f{ Scalar{ -2 }, Scalar{ 3 }};
-static Vec2f staticRectPosition = worldCenter - Vec2f{ Scalar{ 2 }, Scalar{ 3 }};
-constexpr static auto maxForce = neko::Scalar{ 10.0f };
+constexpr static auto maxForce = Scalar{ 10 };
 
 #ifndef NEKO_SAMPLE_BOX2D
 void MoveIntoSample::OnTriggerEnter([[maybe_unused]] const ColliderPair& p)
@@ -73,8 +65,12 @@ void MoveIntoSample::EndContact(b2Contact* contact)
 {
 }
 #endif
-void MoveIntoSample::Begin([[maybe_unused]] const SampleContext& context)
+void MoveIntoSample::Begin(const SampleContext& context)
 {
+	const auto worldCenter = context.worldBounds.GetCenter();
+	const auto groundPosition = worldCenter + Vec2f{ Scalar{ 0 }, Scalar{ 3 } };
+	const auto dynamicRectPosition = worldCenter - Vec2f{ Scalar{ -2 }, Scalar{ 3 } };
+	const auto staticRectPosition = worldCenter - Vec2f{ Scalar{ 2 }, Scalar{ 3 } };
 #ifndef NEKO_SAMPLE_BOX2D
 	world_.SetContactListener(this);
 	world_.SetBSH(&quadTree_);
@@ -96,7 +92,7 @@ void MoveIntoSample::Begin([[maybe_unused]] const SampleContext& context)
 		auto& aabbCollider = world_.aabb(collider.shapeIndex);
 		aabbCollider.halfSize = groundHalfSize;
 		collider.isTrigger = false;
-		collider.restitution = neko::Scalar {0};
+		collider.restitution = Scalar{ 0 };
 #else
 		b2BodyDef bodyDef{};
 		bodyDef.position = b2Vec2{ float{groundPosition.x}, float{groundPosition.y} };
@@ -128,7 +124,7 @@ void MoveIntoSample::Begin([[maybe_unused]] const SampleContext& context)
 		auto& aabbCollider = world_.aabb(collider.shapeIndex);
 		aabbCollider.halfSize = rectHalfSize;
 		collider.isTrigger = false;
-		collider.restitution = neko::Scalar {0};
+		collider.restitution = Scalar{ 0 };
 #else
 		b2BodyDef bodyDef{};
 		bodyDef.position = { float{staticRectPosition.x}, float{staticRectPosition.y} };
@@ -163,7 +159,7 @@ void MoveIntoSample::Begin([[maybe_unused]] const SampleContext& context)
 		auto& aabbCollider = world_.aabb(collider.shapeIndex);
 		aabbCollider.halfSize = rectHalfSize;
 		collider.isTrigger = false;
-		collider.restitution = neko::Scalar {0};
+		collider.restitution = Scalar{ 0 };
 #else
 		b2BodyDef bodyDef{};
 		bodyDef.position = { float{dynamicRectPosition.x}, float{dynamicRectPosition.y} };

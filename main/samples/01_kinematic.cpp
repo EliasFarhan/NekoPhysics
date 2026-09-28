@@ -1,42 +1,36 @@
 #include "01_kinematic.h"
-#include "random_utils.h"
+#include "sample_rng.h"
 
 namespace neko
 {
 
-constexpr static auto maxSpeed = Scalar{ 10.0f };
-constexpr static auto circleRadius = Scalar{ 0.1f };
+constexpr static auto maxSpeed = Scalar{ 10 };
+constexpr static auto circleRadius = Ratio(1, 10);
+constexpr static std::uint32_t seed = 0x01C0FFEEu;
 
-void KinematicSample::Begin([[maybe_unused]] const SampleContext& context)
+void KinematicSample::Begin(const SampleContext& context)
 {
+    bounds_ = context.worldBounds;
+    SampleRng rng{ seed };
     colors_.reserve(circleCount);
-    for (std::size_t i = 0; i < std::size_t{circleCount}; i++)
+    for (Index i = 0; i < circleCount; ++i)
     {
         const auto index = world_.AddBody();
         Body& body = world_.body(index);
-        body.position = { Scalar{RandomRange(0.0f, 12.8f)}, Scalar{RandomRange(0.0f, 7.2f)} };
-        body.velocity = Vec2f{ Scalar{RandomRange(-1.0f, 1.0f)}, Scalar{RandomRange(-1.0f, 1.0f)} }*maxSpeed;
-        body.inverseMass = Scalar{ 1.0f };
-        colors_.push_back(static_cast<ColorId>(RandomRange(int{ sample_color::FIRST_BRIGHT }, int{ sample_color::LAST_BRIGHT })));
+        body.position = { rng.Range(bounds_.minBound.x, bounds_.maxBound.x),
+            rng.Range(bounds_.minBound.y, bounds_.maxBound.y) };
+        body.velocity = Vec2f{ rng.Range(Scalar{ -1 }, Scalar{ 1 }), rng.Range(Scalar{ -1 }, Scalar{ 1 }) } * maxSpeed;
+        body.inverseMass = Scalar{ 1 };
+        colors_.push_back(rng.RandomColor());
     }
 }
 
 void KinematicSample::FixedUpdate()
 {
     world_.Step();
-    for (std::size_t i = 0; i < circleCount; i++)
+    for (Index i = 0; i < colors_.size(); ++i)
     {
-        auto& body = world_.body({ static_cast<Index>(i) });
-        if ((body.velocity.x > Scalar{0.0f}&& body.position.x > Scalar{12.8f}) || (body.velocity.x < Scalar{0.0f}&& body.position.x < Scalar{0.0f}))
-        {
-            body.velocity.x = -body.velocity.x;
-        }
-
-        if ((body.velocity.y > Scalar{0.0f}&& body.position.y > Scalar{7.2f}) ||
-            (body.velocity.y < Scalar{0.0f}&& body.position.y < Scalar{0.0f}))
-        {
-            body.velocity.y = -body.velocity.y;
-        }
+        BounceInside(world_.body({ i }), bounds_);
     }
 }
 
@@ -48,10 +42,9 @@ void KinematicSample::End()
 
 void KinematicSample::Draw(DrawList& drawList) const
 {
-    for (std::size_t i = 0; i < colors_.size(); i++)
+    for (Index i = 0; i < colors_.size(); ++i)
     {
-        const auto& body = world_.body({ static_cast<Index>(i) });
-        drawList.circles.push_back({ body.position, circleRadius, colors_[i] });
+        drawList.circles.push_back({ world_.body({ i }).position, circleRadius, colors_[i] });
     }
 }
 }

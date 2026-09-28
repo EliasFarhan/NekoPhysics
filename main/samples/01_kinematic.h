@@ -1,12 +1,16 @@
 #pragma once
 
 #include "sample.h"
+#include "sample_config.h"
 #include "physics/physics.h"
 
 #include <vector>
 
 namespace neko
 {
+/**
+ * @brief Circles without colliders moving at constant speed, bouncing on the world bounds
+ */
 class KinematicSample : public Sample
 {
 public:
@@ -16,8 +20,10 @@ public:
     void End() override;
 
 private:
-    static constexpr std::size_t circleCount = 1'000;
-    PhysicsWorld world_{ {.gravity = Vec2f::zero(), .dt = fixedDeltaTime, .maxBodies = circleCount} };
+    static constexpr Index circleCount = sample_config::KINEMATIC_COUNT;
+    PhysicsWorld world_{ {.gravity = Vec2f::zero(), .dt = fixedDeltaTime, .maxBodies = circleCount,
+        .maxColliders = 1, .maxTouchingPairs = 1, .maxBroadphasePairs = 1} };
     std::vector<ColorId> colors_;
+    Aabbf bounds_{};
 };
 }
