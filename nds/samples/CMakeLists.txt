@@ -5,3 +5,10 @@ target_include_directories(NekoPhysicsDsSampleDrawer PUBLIC ${CMAKE_CURRENT_SOUR
 target_link_libraries(NekoPhysicsDsSampleDrawer PUBLIC NekoPhysicsSamples)
 target_compile_options(NekoPhysicsDsSampleDrawer PRIVATE -marm -fno-exceptions -fno-rtti)
 neko_set_project_warnings(NekoPhysicsDsSampleDrawer)
+
+add_executable(NekoPhysicsDsSamples main.cpp)
+target_link_libraries(NekoPhysicsDsSamples PRIVATE NekoPhysicsDsSampleDrawer)
+target_compile_options(NekoPhysicsDsSamples PRIVATE -marm -fno-exceptions -fno-rtti)
+target_link_options(NekoPhysicsDsSamples PRIVATE -Wl,-Map,$<TARGET_FILE_DIR:NekoPhysicsDsSamples>/NekoPhysicsDsSamples.map)
+neko_set_project_warnings(NekoPhysicsDsSamples)
+nds_create_rom(NekoPhysicsDsSamples NAME "NekoPhysics" SUBTITLE1 "Samples" SUBTITLE2 "sprites and bitmap")
