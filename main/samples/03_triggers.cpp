@@ -149,7 +149,7 @@ void TriggersSample::Draw(SDL_Renderer* renderer)
         {
             const auto pos1 = pos[i]*pixelPerMeter;
             const auto pos2 = pos[(i+1)%4]*pixelPerMeter;
-            if(SDL_RenderLine(renderer, (float)pos1.x, (float)pos1.y, (float)pos2.x, (float)pos2.y))
+            if(SDL_RenderLine(renderer, float{pos1.x}, float{pos1.y}, float{pos2.x}, float{pos2.y}))
             {
                 SDL_Log("%s\n", SDL_GetError());
             }

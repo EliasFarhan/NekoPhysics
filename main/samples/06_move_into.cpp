@@ -111,13 +111,13 @@ void MoveIntoSample::Begin()
 		collider.restitution = neko::Scalar {0};
 #else
 		b2BodyDef bodyDef{};
-		bodyDef.position = b2Vec2{ (float)groundPosition.x, (float)groundPosition.y };
+		bodyDef.position = b2Vec2{ float{groundPosition.x}, float{groundPosition.y} };
 		bodyDef.type = b2_staticBody;
 		bodyDef.fixedRotation = true;
 		b2groundBody_ = b2World_.CreateBody(&bodyDef);
 
 		b2PolygonShape shape;
-		shape.SetAsBox((float)groundHalfSize.x, (float)groundHalfSize.y);
+		shape.SetAsBox(float{groundHalfSize.x}, float{groundHalfSize.y});
 		b2FixtureDef fixtureDef{};
 		fixtureDef.shape = &shape;
 		fixtureDef.friction = 0.0f;
@@ -165,13 +165,13 @@ void MoveIntoSample::Begin()
 		collider.restitution = neko::Scalar {0};
 #else
 		b2BodyDef bodyDef{};
-		bodyDef.position = { (float)staticRectPosition.x, (float)staticRectPosition.y };
+		bodyDef.position = { float{staticRectPosition.x}, float{staticRectPosition.y} };
 		bodyDef.type = b2_dynamicBody;
 		bodyDef.fixedRotation = true;
 		b2staticBody_ = b2World_.CreateBody(&bodyDef);
 
 		b2PolygonShape shape{};
-		shape.SetAsBox((float)rectHalfSize.x, (float)rectHalfSize.y);
+		shape.SetAsBox(float{rectHalfSize.x}, float{rectHalfSize.y});
 
 		b2FixtureDef fixtureDef{};
 		fixtureDef.shape = &shape;
@@ -200,13 +200,13 @@ void MoveIntoSample::Begin()
 		collider.restitution = neko::Scalar {0};
 #else
 		b2BodyDef bodyDef{};
-		bodyDef.position = { (float)dynamicRectPosition.x, (float)dynamicRectPosition.y };
+		bodyDef.position = { float{dynamicRectPosition.x}, float{dynamicRectPosition.y} };
 		bodyDef.type = b2_dynamicBody;
 		bodyDef.fixedRotation = true;
 		b2dynamicBody_ = b2World_.CreateBody(&bodyDef);
 
 		b2PolygonShape shape{};
-		shape.SetAsBox((float)rectHalfSize.x, (float)rectHalfSize.y);
+		shape.SetAsBox(float{rectHalfSize.x}, float{rectHalfSize.y});
 
 		b2FixtureDef fixtureDef{};
 		fixtureDef.shape = &shape;
@@ -242,10 +242,10 @@ void MoveIntoSample::Draw(SDL_Renderer* renderer)
 #else
 		const auto& body = world_.body(staticBodyIndex);
 
-		const auto rect = SDL_FRect{ (float)((body.position.x-rectHalfSize.x) * pixelPerMeter),
-									(float)((body.position.y-rectHalfSize.y) * pixelPerMeter),
-									(float)(neko::Scalar{ 2 } * rectHalfSize.x * pixelPerMeter),
-									(float)(neko::Scalar{ 2 } * rectHalfSize.y * pixelPerMeter)
+		const auto rect = SDL_FRect{ float{(body.position.x-rectHalfSize.x) * pixelPerMeter},
+									float{(body.position.y-rectHalfSize.y) * pixelPerMeter},
+									float{neko::Scalar{ 2 } * rectHalfSize.x * pixelPerMeter},
+									float{neko::Scalar{ 2 } * rectHalfSize.y * pixelPerMeter}
 		};
 #endif
 		const auto color = staticBodyOnGround_ ? onGroundColor : inAirColor;
@@ -263,10 +263,10 @@ void MoveIntoSample::Draw(SDL_Renderer* renderer)
 		};
 #else
 		const auto& body = world_.body(dynamicBodyIndex);
-		const auto rect = SDL_FRect{ (float)((body.position.x - rectHalfSize.x) * pixelPerMeter),
-									(float)((body.position.y - rectHalfSize.y) * pixelPerMeter),
-									(float)(neko::Scalar{ 2 } * rectHalfSize.x * pixelPerMeter),
-									(float)(neko::Scalar{ 2 } * rectHalfSize.y * pixelPerMeter)
+		const auto rect = SDL_FRect{ float{(body.position.x - rectHalfSize.x) * pixelPerMeter},
+									float{(body.position.y - rectHalfSize.y) * pixelPerMeter},
+									float{neko::Scalar{ 2 } * rectHalfSize.x * pixelPerMeter},
+									float{neko::Scalar{ 2 } * rectHalfSize.y * pixelPerMeter}
 		};
 #endif
 		const auto color = dynamicBodyOnGround_ ? onGroundColor : inAirColor;
@@ -304,7 +304,7 @@ void MoveIntoSample::FixedUpdate()
 		{
 			force = force.Normalized() * maxForce;
 		}
-		b2dynamicBody_->ApplyForceToCenter({(float)force.x, (float)force.y}, true);
+		b2dynamicBody_->ApplyForceToCenter({float{force.x}, float{force.y}}, true);
 #else
 		Body& dynamicBody = world_.body(dynamicBodyIndex);
 		//Move dynamic object to the right
@@ -317,9 +317,9 @@ void MoveIntoSample::FixedUpdate()
 		dynamicBody.force += force;
 
 		fmt::print("Dynamic Player Pos: {}, Player Velocity: {}, Player Force: {}\n",
-			(float)dynamicBody.position.x,
-			(float)dynamicBody.velocity.x,
-			(float)dynamicBody.force.x);
+			float{dynamicBody.position.x},
+			float{dynamicBody.velocity.x},
+			float{dynamicBody.force.x});
 #endif
 	}
 	if (staticBodyOnGround_)
@@ -333,7 +333,7 @@ void MoveIntoSample::FixedUpdate()
 		{
 			force = force.Normalized() * maxForce;
 		}
-		b2staticBody_->ApplyForceToCenter({(float)force.x, (float)force.y}, true);
+		b2staticBody_->ApplyForceToCenter({float{force.x}, float{force.y}}, true);
 #else
 		//Use force to make object static
 		Body& staticBody = world_.body(staticBodyIndex);
@@ -346,13 +346,13 @@ void MoveIntoSample::FixedUpdate()
 		}
 		staticBody.force += force;
 		fmt::print("Static Player Pos: {}, Player Velocity: {}, Player Force: {}\n",
-			(float)staticBody.position.x,
-			(float)staticBody.velocity.x,
-			(float)staticBody.force.x);
+			float{staticBody.position.x},
+			float{staticBody.velocity.x},
+			float{staticBody.force.x});
 #endif
 	}
 #ifdef USE_BOX2D
-	b2World_.Step((float)fixedDeltaTime, 10, 3);
+	b2World_.Step(float{fixedDeltaTime}, 10, 3);
 #else
 	world_.Step();
 #endif

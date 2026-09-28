@@ -162,10 +162,10 @@ void GroundSample::Draw(SDL_Renderer* renderer)
         SDL_Log("%s\n", SDL_GetError());
     }
 	const auto& body = world_.body(rectBodyIndex_);
-	const auto rect = SDL_FRect{ (float)((body.position.x-rectHalfSize.x) * pixelPerMeter),
-								 (float)((body.position.y-rectHalfSize.y) * pixelPerMeter),
-								 (float)(neko::Scalar{ 2 } * rectHalfSize.x * pixelPerMeter),
-								 (float)(neko::Scalar{ 2 } * rectHalfSize.y * pixelPerMeter)
+	const auto rect = SDL_FRect{ float{(body.position.x-rectHalfSize.x) * pixelPerMeter},
+								 float{(body.position.y-rectHalfSize.y) * pixelPerMeter},
+								 float{neko::Scalar{ 2 } * rectHalfSize.x * pixelPerMeter},
+								 float{neko::Scalar{ 2 } * rectHalfSize.y * pixelPerMeter}
 	};
 	SDL_SetRenderDrawColor(renderer, 255,255,255,255);
 	SDL_RenderFillRect(renderer, &rect);
@@ -194,7 +194,7 @@ void GroundSample::FixedUpdate()
 #endif
     world_.Step();
 	Body& body = world_.body(circleBodyIndex_);
-	fmt::print("Player Pos: {}, Player Velocity: {}\n", (float)body.position.y, (float)body.velocity.y);
+	fmt::print("Player Pos: {}, Player Velocity: {}\n", float{body.position.y}, float{body.velocity.y});
 
 }
 
