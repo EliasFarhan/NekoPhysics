@@ -103,4 +103,4 @@ void GroundSample::OnCollisionExit([[maybe_unused]] const ColliderPair& p)
 {
     collision_count_--;
 }
-}
+}  // namespace neko

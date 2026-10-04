@@ -77,4 +77,4 @@ void SampleRegistry::Draw(DrawList& draw_list) const
     }
 }
 
-} // namespace neko
+}  // namespace neko

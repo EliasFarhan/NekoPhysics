@@ -61,6 +61,6 @@ constexpr Fixed16 Exp()
     return Fixed16::FromUnderlyingValue(178145);
 }
 
-}
+}  // namespace neko
 
 #endif  // NEKO_MATH_CONST_H_

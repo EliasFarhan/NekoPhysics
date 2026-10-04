@@ -9,9 +9,7 @@
 namespace neko
 {
 
-/**
- * @brief Integer type of body, shape and collider indices. 16 bits keep snapshots small on the DS.
- */
+// Integer type of body, shape and collider indices. 16 bits keep snapshots small on the DS.
 using Index = std::uint16_t;
 
 class BodyIndex
@@ -78,9 +76,7 @@ static_assert(std::is_trivially_copyable_v<ColliderIndex>);
 
 constexpr auto kInvalidColliderIndex = ColliderIndex{};
 
-/**
- * @brief Unordered pair of colliders, stored with c1 < c2 so that it can be compared and sorted
- */
+// Unordered pair of colliders, stored with c1 < c2 so that it can be compared and sorted
 class ColliderPair
 {
 public:
@@ -107,6 +103,6 @@ private:
 static_assert(sizeof(ColliderPair) == 2 * sizeof(Index));
 static_assert(std::is_trivially_copyable_v<ColliderPair>);
 
-}
+}  // namespace neko
 
 #endif  // NEKO_PHYSICS_PHYSICS_TYPE_H_

@@ -61,7 +61,7 @@ static_assert(neko::Sin(Fixed16{ 0 }) == Fixed16{ 0 });
 static_assert(neko::Cos(Fixed16{ 0 }) == Fixed16{ 1 });
 static_assert(neko::internal::kSinTable[neko::internal::kSinTableSize / 4] == 65536);
 static_assert(neko::internal::kSinTable[neko::internal::kSinTableSize] == 0);
-} // namespace
+}  // namespace
 
 TEST(Fixed16, SinCosMatchStd)
 {

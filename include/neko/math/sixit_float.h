@@ -42,6 +42,6 @@ inline sixit::dmath::ieee_float_inline_asm Cos(sixit::dmath::ieee_float_inline_a
 {
 	return sixit::dmath::mathf::cos(value);
 }
-}
+}  // namespace neko
 
 #endif  // NEKO_MATH_SIXIT_FLOAT_H_

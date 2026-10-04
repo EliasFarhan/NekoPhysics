@@ -75,6 +75,6 @@ T Tan(T value)
 {
 	return std::tan(value);
 }
-}
+}  // namespace neko
 
 #endif  // NEKO_MATH_FUNC_H_

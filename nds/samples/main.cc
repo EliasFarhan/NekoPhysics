@@ -21,14 +21,10 @@ namespace
 {
 
 constexpr int kStatsWindow = 60;
-/**
- * @brief The frame period is measured with calico's system tick counter (tickGetCount, TICK_FREQ = bus clock / 64).
- * Hardware timers 2 and 3 run that counter (cpuStartTiming reads it too), so they must not be reprogrammed.
- */
+// The frame period is measured with calico's system tick counter (tickGetCount, TICK_FREQ = bus clock / 64).
+// Hardware timers 2 and 3 run that counter (cpuStartTiming reads it too), so they must not be reprogrammed.
 constexpr std::uint64_t kTickHzX10 = std::uint64_t{ TICK_FREQ } * 10;
-/**
- * @brief VBlanks per second (59.8261 Hz) x 10
- */
+// VBlanks per second (59.8261 Hz) x 10
 constexpr std::uint32_t kVblankHzX10 = 598;
 
 constexpr int kConsoleColumns = 32;
@@ -55,9 +51,7 @@ struct TimingWindow
     [[nodiscard]] std::uint32_t MaxUs() const { return timerTicks2usec(max); }
 };
 
-/**
- * @brief Values shown on the console, refreshed every kStatsWindow frames
- */
+// Values shown on the console, refreshed every kStatsWindow frames
 struct DisplayedStats
 {
     std::uint32_t step_average_us = 0;
@@ -67,9 +61,7 @@ struct DisplayedStats
     std::uint32_t fps_x10 = 0;
 };
 
-/**
- * @brief Console rows as last printed: a row is only reprinted when its text changes, to keep console time down
- */
+// Console rows as last printed: a row is only reprinted when its text changes, to keep console time down
 class ConsoleRows
 {
 public:
@@ -97,7 +89,7 @@ private:
     std::array<std::array<char, kConsoleColumns + 1>, 24> rows_{};
 };
 
-} // namespace
+}  // namespace
 
 int main()
 {

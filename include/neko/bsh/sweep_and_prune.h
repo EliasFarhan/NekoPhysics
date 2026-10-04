@@ -9,12 +9,10 @@
 namespace neko
 {
 
-/**
- * @brief Sort-and-sweep broadphase on the x axis, the default broadphase of PhysicsWorld.
- *
- * Deterministic (ties are broken by collider index), allocation-free after construction and stateless between
- * steps, so it needs no snapshot for rollback. Pairs are exactly the colliders whose AABBs intersect.
- */
+// Sort-and-sweep broadphase on the x axis, the default broadphase of PhysicsWorld.
+//
+// Deterministic (ties are broken by collider index), allocation-free after construction and stateless between
+// steps, so it needs no snapshot for rollback. Pairs are exactly the colliders whose AABBs intersect.
 class SweepAndPrune final : public BoundingSurfaceHierarchy
 {
 public:
@@ -33,6 +31,6 @@ private:
     ArrayList<ColliderPair> possible_pairs_;
 };
 
-} // namespace neko
+}  // namespace neko
 
 #endif  // NEKO_BSH_SWEEP_AND_PRUNE_H_

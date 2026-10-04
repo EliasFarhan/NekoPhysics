@@ -81,4 +81,4 @@ void CollisionsSample::OnTriggerEnter([[maybe_unused]] const ColliderPair& p)
 void CollisionsSample::OnTriggerExit([[maybe_unused]] const ColliderPair& p)
 {
 }
-}
+}  // namespace neko

@@ -21,10 +21,8 @@
 namespace
 {
 
-/**
- * @brief Longest frame time fed to the accumulator: after a stall (a breakpoint, a window drag) the simulation slows
- * down instead of running hundreds of steps to catch up
- */
+// Longest frame time fed to the accumulator: after a stall (a breakpoint, a window drag) the simulation slows
+// down instead of running hundreds of steps to catch up
 constexpr float kMaxFrameTime = 0.25f;
 
 void DrawSampleMenu(neko::SampleRegistry& registry, const neko::SampleContext& context)
@@ -53,7 +51,7 @@ void DrawSampleMenu(neko::SampleRegistry& registry, const neko::SampleContext& c
     ImGui::End();
 }
 
-} // namespace
+}  // namespace
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 {

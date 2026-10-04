@@ -9,9 +9,7 @@
 namespace neko
 {
 
-/**
- * @brief Circles without colliders orbiting a black hole at the center of the world
- */
+// Circles without colliders orbiting a black hole at the center of the world
 class PlanetSample : public Sample
 {
 public:
@@ -27,6 +25,6 @@ private:
     std::vector<ColorId> colors_;
     Vec2f center_{};
 };
-} // namespace neko
+}  // namespace neko
 
 #endif  // MAIN_SAMPLES_02_PLANETS_H_

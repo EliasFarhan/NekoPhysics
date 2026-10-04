@@ -16,9 +16,7 @@ namespace
 
 constexpr int kMinCircleSegments = 8;
 constexpr int kMaxCircleSegments = 32;
-/**
- * @brief Inside of the camera rectangle, so that the letterbox bars show
- */
+// Inside of the camera rectangle, so that the letterbox bars show
 constexpr SDL_FColor kBackgroundColor{ 0.08f, 0.08f, 0.1f, 1.0f };
 
 SDL_FColor ToSdlColor(ColorId color)
@@ -28,7 +26,7 @@ SDL_FColor ToSdlColor(ColorId color)
         1.0f };
 }
 
-} // namespace
+}  // namespace
 
 SdlSampleDrawer::Viewport SdlSampleDrawer::FitCamera(const Aabbf& camera) const
 {
@@ -142,4 +140,4 @@ void SdlSampleDrawer::SetDrawColor(ColorId color)
     SDL_SetRenderDrawColorFloat(renderer_, sdl_color.r, sdl_color.g, sdl_color.b, sdl_color.a);
 }
 
-} // namespace neko
+}  // namespace neko

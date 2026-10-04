@@ -25,6 +25,6 @@ struct Contact
     void Resolve();
     [[nodiscard]] Scalar CalculateSeparateVelocity() const;
 };
-} // namespace neko
+}  // namespace neko
 
 #endif  // NEKO_PHYSICS_CONTACT_SOLVER_H_

@@ -68,7 +68,7 @@ protected:
 
 Vec2f V(float x, float y) { return { Scalar{x}, Scalar{y} }; }
 float F(Scalar value) { return static_cast<float>(value); }
-} // namespace
+}  // namespace
 
 // Gravity is an acceleration: it used to be divided by the inverse mass then multiplied back (DS review D2.1)
 TEST(Integrator, GravityDoesNotDependOnMass)

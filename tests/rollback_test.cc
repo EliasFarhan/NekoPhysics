@@ -35,9 +35,7 @@ public:
 
 constexpr neko::PhysicsWorldConfig kConfig{ .max_bodies = 32, .max_colliders = 32, .max_touching_pairs = 128 };
 
-/**
- * @brief A static ground, a pile of falling boxes and circles (some of them triggers) and a kinematic paddle
- */
+// A static ground, a pile of falling boxes and circles (some of them triggers) and a kinematic paddle
 void BuildScene(neko::PhysicsWorld& world)
 {
     const auto ground = world.AddBody();
@@ -74,7 +72,7 @@ void BuildScene(neko::PhysicsWorld& world)
     world.collider(paddle_collider).is_trigger = false;
     world.aabb(world.collider(paddle_collider).shape_index).half_size = { Scalar{0.2f}, Scalar{0.5f} };
 }
-} // namespace
+}  // namespace
 
 TEST(Checksum, WorldChecksumFollowsState)
 {

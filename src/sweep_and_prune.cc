@@ -69,4 +69,4 @@ void SweepAndPrune::Clear()
     possible_pairs_.clear();
 }
 
-} // namespace neko
+}  // namespace neko

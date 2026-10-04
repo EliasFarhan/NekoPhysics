@@ -44,5 +44,5 @@ void OnAllocationFailure()
     std::abort();
 #endif
 }
-} // namespace internal
-}
+}  // namespace internal
+}  // namespace neko

@@ -59,4 +59,4 @@ void PlanetSample::End()
     colors_.clear();
     world_.Clear();
 }
-} // namespace neko
+}  // namespace neko

@@ -20,9 +20,7 @@ namespace neko
 {
 namespace
 {
-/**
- * @brief FNV-1a over the bytes of each 32-bit word: order-dependent, so equal or swapped fields don't cancel out
- */
+// FNV-1a over the bytes of each 32-bit word: order-dependent, so equal or swapped fields don't cancel out
 class Checksum
 {
 public:
@@ -59,10 +57,8 @@ private:
     std::uint32_t hash_ = kOffsetBasis;
 };
 
-/**
- * @brief Reuses the first free slot, or appends one while under capacity
- * @return the slot index, or std::nullopt when the list is full
- */
+// Reuses the first free slot, or appends one while under capacity
+// Returns the slot index, or std::nullopt when the list is full
 template<typename T, typename IsFree>
 std::optional<Index> AcquireSlot(ArrayList<T>& list, std::size_t capacity, IsFree is_free)
 {
@@ -97,7 +93,7 @@ constexpr bool IsFreeBody(const Body& body) { return body.type == BodyType::kNon
 constexpr bool IsFreeCollider(const Collider& collider) { return collider.type == ShapeType::kNone; }
 constexpr bool IsFreeCircle(const CircleCollider& circle) { return circle.radius < Scalar{0}; }
 constexpr bool IsFreeAabb(const AabbCollider& aabb) { return aabb.half_size.x() < Scalar{0}; }
-} // namespace
+}  // namespace
 
 std::uint32_t GenerateChecksum(const Body& body)
 {
@@ -664,4 +660,4 @@ std::uint32_t PhysicsWorld::GenerateChecksum() const
     }
     return checksum.Get();
 }
-} // namespace neko
+}  // namespace neko

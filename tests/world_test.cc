@@ -22,7 +22,7 @@ public:
     int collision_enter = 0;
     int collision_exit = 0;
 };
-} // namespace
+}  // namespace
 
 TEST(ColliderPair, IsNormalized)
 {

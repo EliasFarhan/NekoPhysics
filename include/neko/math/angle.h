@@ -9,20 +9,16 @@ namespace neko
 {
 
 class Degree;
-/**
- * \brief Radian is an utility class that describes radian angles (0 to 2PI).
- * It can be easily converted to Degree with conversion constructor.
- * It can be used with trigonometric functions (Sin, Cos, Tan)
- */
+// Radian is an utility class that describes radian angles (0 to 2PI).
+// It can be easily converted to Degree with conversion constructor.
+// It can be used with trigonometric functions (Sin, Cos, Tan)
 class Radian
 {
 public:
     constexpr Radian() = default;
     constexpr explicit Radian(Scalar value) : value_(value) {}
-    /**
-     * \brief Conversion constructor that implicitly converts Degree to Radian
-     * \param angle is the degree angle to be converted to Radian
-     */
+    // Conversion constructor that implicitly converts Degree to Radian
+    // `angle` is the degree angle to be converted to Radian.
     constexpr Radian(const Degree& angle);
     [[nodiscard]] constexpr Scalar value() const { return value_; }
 
@@ -48,20 +44,16 @@ private:
 
 constexpr Radian operator*(Scalar value, Radian angle) { return Radian{ angle.value() * value }; }
 
-/**
- * \brief Degree is an utility class that describes degree angles (0 to 360).
- * It can be easily converted to Radian with conversion constructor.
- * It can be used with trigonometric functions (Sin, Cos, Tan)
- */
+// Degree is an utility class that describes degree angles (0 to 360).
+// It can be easily converted to Radian with conversion constructor.
+// It can be used with trigonometric functions (Sin, Cos, Tan)
 class Degree
 {
 public:
     constexpr Degree() = default;
     constexpr explicit Degree(Scalar value) : value_(value) {}
-    /**
-     * \brief Conversion constructor that implicitly converts Radian to Degree
-     * \param angle is the radian angle to be converted to Degree
-     */
+    // Conversion constructor that implicitly converts Radian to Degree
+    // `angle` is the radian angle to be converted to Degree.
     constexpr Degree(const Radian& angle) : value_(angle.value() / Pi<Scalar>() * Scalar{180}) {}
     [[nodiscard]] constexpr Scalar value() const { return value_; }
     constexpr Degree operator+(Degree angle) const { return Degree{ value_ + angle.value() }; }
@@ -92,35 +84,29 @@ constexpr Radian::Radian(const Degree& angle)
     value_ = angle.value() / Scalar{180} * Pi<Scalar>();
 }
 
-/**
- * \brief Sin is a function that calculates the sinus of a given angle.
- * \param angle is the given angle
- * \return the result of the sinus of angle
- */
+// Sin is a function that calculates the sinus of a given angle.
+// `angle` is the given angle.
+// Returns the result of the sinus of angle
 inline Scalar Sin(Radian angle)
 {
     return Sin(angle.value());
 }
 
-/**
- * \brief Cos is a function that calculates the cosinus of a given angle.
- * \param angle is the given angle
- * \return the result of the cosinus of angle
- */
+// Cos is a function that calculates the cosinus of a given angle.
+// `angle` is the given angle.
+// Returns the result of the cosinus of angle
 inline Scalar Cos(Radian angle)
 {
     return Cos(angle.value());
 }
 
-/**
- * \brief Tan is a function that calculates the tangent of a given angle.
- * \param angle is the given angle
- * \return the result of the tangent of angle
- */
+// Tan is a function that calculates the tangent of a given angle.
+// `angle` is the given angle.
+// Returns the result of the tangent of angle
 inline Scalar Tan(Radian angle)
 {
     return Tan(angle.value());
 }
-}
+}  // namespace neko
 
 #endif  // NEKO_MATH_ANGLE_H_

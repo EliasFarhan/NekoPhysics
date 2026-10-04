@@ -15,10 +15,8 @@ namespace neko
 
 namespace internal
 {
-/**
- * @brief Floor of the square root of a 64-bit integer, computed bit by bit.
- * Exact, so it matches the DS hardware square root unit (REG_SQRTCNT, 64-bit mode).
- */
+// Floor of the square root of a 64-bit integer, computed bit by bit.
+// Exact, so it matches the DS hardware square root unit (REG_SQRTCNT, 64-bit mode).
 [[nodiscard]] constexpr std::uint32_t ISqrt64Portable(std::uint64_t value) noexcept
 {
     std::uint64_t result = 0;
@@ -43,9 +41,7 @@ namespace internal
     return static_cast<std::uint32_t>(result);
 }
 
-/**
- * @brief 64/32 signed division, truncated toward zero, keeping the low 32 bits of the quotient. den must not be 0.
- */
+// 64/32 signed division, truncated toward zero, keeping the low 32 bits of the quotient. den must not be 0.
 [[nodiscard]] constexpr std::int32_t Div64Portable(std::int64_t num, std::int32_t den) noexcept
 {
     return static_cast<std::int32_t>(num / den);
@@ -55,9 +51,7 @@ namespace internal
 // must not run inside IRQ handlers (an interrupted operation would return the handler's result).
 // Constant evaluation keeps the portable path, and both paths give bit-exact results.
 
-/**
- * @brief Floor of the square root of a 64-bit integer (REG_SQRTCNT 64-bit mode on the DS).
- */
+// Floor of the square root of a 64-bit integer (REG_SQRTCNT 64-bit mode on the DS).
 [[nodiscard]] constexpr std::uint32_t ISqrt64(std::uint64_t value) noexcept
 {
 #if defined(NEKO_PLATFORM_NDS)
@@ -74,9 +68,7 @@ namespace internal
     return ISqrt64Portable(value);
 }
 
-/**
- * @brief Same as Div64Portable (REG_DIVCNT 64/32 mode on the DS). den must not be 0.
- */
+// Same as Div64Portable (REG_DIVCNT 64/32 mode on the DS). den must not be 0.
 [[nodiscard]] constexpr std::int32_t Div64(std::int64_t num, std::int32_t den) noexcept
 {
 #if defined(NEKO_PLATFORM_NDS)
@@ -87,16 +79,14 @@ namespace internal
 #endif
     return Div64Portable(num, den);
 }
-} // namespace internal
+}  // namespace internal
 
-/**
- * @brief Fixed-point number
- *
- * Rounding rules, which the DS port must reproduce bit for bit:
- * - multiplication rounds to nearest, ties away from zero;
- * - division truncates toward zero (like the DS divider) and saturates when dividing by zero;
- * - conversion from floating point rounds to nearest, conversion to integer truncates toward zero.
- */
+// Fixed-point number
+//
+// Rounding rules, which the DS port must reproduce bit for bit:
+// - multiplication rounds to nearest, ties away from zero;
+// - division truncates toward zero (like the DS divider) and saturates when dividing by zero;
+// - conversion from floating point rounds to nearest, conversion to integer truncates toward zero.
 template<typename T=std::int32_t, T Exp=16, typename MulT=std::int64_t>
 class Fixed
 {
@@ -239,9 +229,7 @@ template<typename T, T Exp, typename MulT>
 inline constexpr bool is_fixed_v<Fixed<T, Exp, MulT>> = true;
 // NOLINTEND(readability-identifier-naming)
 
-/**
- * @brief Exact square root (floor), negative values return 0.
- */
+// Exact square root (floor), negative values return 0.
 [[nodiscard]] constexpr Fixed16 Sqrt(Fixed16 value) noexcept
 {
     if (value.underlying_value() <= 0)
@@ -253,7 +241,7 @@ inline constexpr bool is_fixed_v<Fixed<T, Exp, MulT>> = true;
     return Fixed16::FromUnderlyingValue(static_cast<std::int32_t>(internal::ISqrt64(squared)));
 }
 
-} // namespace neko
+}  // namespace neko
 
 // Standard library interface names
 // NOLINTBEGIN(readability-identifier-naming)

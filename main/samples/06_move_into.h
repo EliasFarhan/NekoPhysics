@@ -15,10 +15,8 @@
 namespace neko
 {
 
-/**
- * @brief Two boxes on a static ground, pushed with forces once they land: one is held in place, the other moves left
- * into it. Magenta once on the ground.
- */
+// Two boxes on a static ground, pushed with forces once they land: one is held in place, the other moves left
+// into it. Magenta once on the ground.
 class MoveIntoSample final : public Sample,
 #ifndef NEKO_SAMPLE_BOX2D
 	public ContactListener
@@ -76,6 +74,6 @@ private:
 	bool static_body_on_ground_ = false;
 	bool dynamic_body_on_ground_ = false;
 };
-}
+}  // namespace neko
 
 #endif  // MAIN_SAMPLES_06_MOVE_INTO_H_

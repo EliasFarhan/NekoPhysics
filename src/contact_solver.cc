@@ -13,7 +13,7 @@ Scalar InverseMass(const Body& body)
 {
     return body.type == BodyType::kDynamic ? body.inverse_mass : Scalar{0};
 }
-} // namespace
+}  // namespace
 
 Scalar Contact::CalculateSeparateVelocity() const
 {
@@ -54,4 +54,4 @@ NEKO_HOT void Contact::Resolve()
         bodies[1].body->position -= move_per_i_mass * inverse_mass2;
     }
 }
-} // namespace neko
+}  // namespace neko

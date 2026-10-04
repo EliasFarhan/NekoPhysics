@@ -10,9 +10,7 @@
 
 namespace neko
 {
-/**
- * @brief Colliding circles in a quadtree broadphase: red alone, green while touching another one
- */
+// Colliding circles in a quadtree broadphase: red alone, green while touching another one
 class CollisionsSample : public Sample, public ContactListener
 {
 public:
@@ -40,6 +38,6 @@ private:
     std::vector<CollidingBody> bodies_;
     Aabbf bounds_{};
 };
-}
+}  // namespace neko
 
 #endif  // MAIN_SAMPLES_05_COLLISIONS_H_

@@ -43,7 +43,7 @@ class SampleTest : public ::testing::TestWithParam<std::size_t>
 {
 };
 
-} // namespace
+}  // namespace
 
 // The samples build their scenes with a fixed-seed SampleRng and simulate only in FixedUpdate: two runs of the same
 // sample give the same state, whether it's restarted in the same registry or built by another one

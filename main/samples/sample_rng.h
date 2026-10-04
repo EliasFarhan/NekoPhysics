@@ -9,10 +9,8 @@
 namespace neko
 {
 
-/**
- * @brief Seeded xorshift32 for the sample scenes. Scalar ranges are built from integer ratios, so the same seed gives
- * the same scene on PC FIXED16 and on the DS, with no float and no std::random_device.
- */
+// Seeded xorshift32 for the sample scenes. Scalar ranges are built from integer ratios, so the same seed gives
+// the same scene on PC FIXED16 and on the DS, with no float and no std::random_device.
 class SampleRng
 {
 public:
@@ -28,26 +26,20 @@ public:
         return state_;
     }
 
-    /**
-     * @brief Integer in [min_value, max_value]
-     */
+    // Integer in [min_value, max_value]
     constexpr int Range(int min_value, int max_value) noexcept
     {
         const auto span = static_cast<std::uint32_t>(max_value - min_value) + 1u;
         return min_value + static_cast<int>(Next() % span);
     }
 
-    /**
-     * @brief Scalar in [min_value, max_value], in kResolution steps
-     */
+    // Scalar in [min_value, max_value], in kResolution steps
     constexpr Scalar Range(Scalar min_value, Scalar max_value) noexcept
     {
         return min_value + (max_value - min_value) * Ratio(Range(0, kResolution), kResolution);
     }
 
-    /**
-     * @brief One of the non-grey palette entries
-     */
+    // One of the non-grey palette entries
     constexpr ColorId RandomColor() noexcept
     {
         return static_cast<ColorId>(Range(sample_color::kFirstBright, sample_color::kLastBright));
@@ -59,6 +51,6 @@ private:
     std::uint32_t state_;
 };
 
-} // namespace neko
+}  // namespace neko
 
 #endif  // MAIN_SAMPLES_SAMPLE_RNG_H_

@@ -15,23 +15,17 @@ struct QuadNode
     static constexpr Index kNone = std::numeric_limits<Index>::max();
 
     Aabbf aabb{};
-    /**
-     * @brief The four children are contiguous, starting at first_child
-     */
+    // The four children are contiguous, starting at first_child
     Index first_child = kNone;
-    /**
-     * @brief Head of the linked list of colliders stored in this node
-     */
+    // Head of the linked list of colliders stored in this node
     Index first_entry = kNone;
     Index entry_count = 0;
 
     [[nodiscard]] constexpr bool IsLeaf() const noexcept { return first_child == kNone; }
 };
 
-/**
- * @brief Quadtree broadphase. Nodes and colliders live in arrays sized at construction and link to each other with
- * indices: no allocation after construction, and copies are safe.
- */
+// Quadtree broadphase. Nodes and colliders live in arrays sized at construction and link to each other with
+// indices: no allocation after construction, and copies are safe.
 class QuadTree final : public BoundingSurfaceHierarchy
 {
 public:
@@ -39,10 +33,8 @@ public:
     static constexpr std::size_t kMaxSize = 4;
     static constexpr Index kRoot = 0;
 
-    /**
-     * @param max_depth depth of the deepest nodes (the root is at depth 0)
-     * @param max_size number of colliders above which a leaf splits
-     */
+    // `max_depth` is the depth of the deepest nodes (the root is at depth 0).
+    // `max_size` is the number of colliders above which a leaf splits.
     explicit QuadTree(std::size_t max_colliders = 256, std::size_t max_pairs = 2048,
         std::size_t max_depth = kMaxDepth, std::size_t max_size = kMaxSize, Allocator& allocator = DefaultAllocator());
 
@@ -78,6 +70,6 @@ private:
     std::size_t used_nodes_ = 1;
 };
 
-}
+}  // namespace neko
 
 #endif  // NEKO_BSH_QUADTREE_H_

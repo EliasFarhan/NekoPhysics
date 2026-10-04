@@ -53,9 +53,7 @@ struct Collider
 };
 [[nodiscard]] std::uint32_t GenerateChecksum(const Collider& collider);
 
-/**
- * @brief A negative radius marks a free slot
- */
+// A negative radius marks a free slot
 struct CircleCollider
 {
     Scalar radius{ -1 };
@@ -63,9 +61,7 @@ struct CircleCollider
 
 [[nodiscard]] std::uint32_t GenerateChecksum(const CircleCollider& collider);
 
-/**
- * @brief A negative half size marks a free slot
- */
+// A negative half size marks a free slot
 struct AabbCollider
 {
     Vec2f half_size{ Scalar {-1}, Scalar {-1} };
@@ -73,9 +69,7 @@ struct AabbCollider
 
 [[nodiscard]] std::uint32_t GenerateChecksum(const AabbCollider& collider);
 
-/**
- * @brief Pair of colliders that touched at the end of the last step, used to send enter and exit events
- */
+// Pair of colliders that touched at the end of the last step, used to send enter and exit events
 struct TouchingPair
 {
     ColliderPair pair{};
@@ -85,26 +79,16 @@ struct TouchingPair
 struct PhysicsWorldConfig
 {
     Vec2f gravity{ Scalar{0.0f}, Scalar{-9.81f} };
-    /**
-     * @brief Duration of one Step. Fixed, so that every peer and every rollback resimulation uses the same value
-     */
+    // Duration of one Step. Fixed, so that every peer and every rollback resimulation uses the same value
     Scalar dt{ 1.0f / 60.0f };
-    /**
-     * @brief Capacities are allocated once, at construction: Step and CopyFrom never allocate
-     */
+    // Capacities are allocated once, at construction: Step and CopyFrom never allocate
     std::size_t max_bodies = 256;
     std::size_t max_colliders = 256;
-    /**
-     * @brief Maximum number of touching pairs tracked for enter/exit events
-     */
+    // Maximum number of touching pairs tracked for enter/exit events
     std::size_t max_touching_pairs = 1024;
-    /**
-     * @brief Maximum number of pairs whose AABBs overlap, for the default broadphase
-     */
+    // Maximum number of pairs whose AABBs overlap, for the default broadphase
     std::size_t max_broadphase_pairs = 2048;
-    /**
-     * @brief Must outlive the world. nullptr means DefaultAllocator()
-     */
+    // Must outlive the world. nullptr means DefaultAllocator()
     Allocator* allocator = nullptr;
 };
 
@@ -112,45 +96,33 @@ class PhysicsWorld
 {
 public:
     explicit PhysicsWorld(const PhysicsWorldConfig& config = {});
-    /**
-     * @brief Copies would allocate: rollback snapshots use CopyFrom into an existing world instead
-     */
+    // Copies would allocate: rollback snapshots use CopyFrom into an existing world instead
     PhysicsWorld(const PhysicsWorld&) = delete;
     PhysicsWorld& operator=(const PhysicsWorld&) = delete;
     PhysicsWorld(PhysicsWorld&&) = default;
     PhysicsWorld& operator=(PhysicsWorld&&) = default;
     ~PhysicsWorld() = default;
 
-    /**
-     * @brief Returns kInvalidBodyIndex when max_bodies are in use
-     */
+    // Returns kInvalidBodyIndex when max_bodies are in use
     BodyIndex AddBody();
-    /**
-     * @brief Removes the body and all its colliders
-     */
+    // Removes the body and all its colliders
     void RemoveBody(BodyIndex index);
     bool DetectContact(Body& body1, Collider& collider1, Body& body2, Collider& collider2, Contact* contact);
-    /**
-     * @brief Advances the world by config.dt
-     */
+    // Advances the world by config.dt
     void Step();
     void Clear();
     void ResolveBroadphase();
     void ResolveNarrowphase();
-    /**
-     * @brief Sorts new_touching_pairs_ by pair (c1 then c2), the same total order as
-     * std::sort(..., [](a, b){ return a.pair < b.pair; }), but in O(n + max_colliders): a counting sort on c1
-     * (colliders are indices into a small, fixed-size table) followed by an insertion sort of each c1 bucket, which
-     * is short (a body only touches a handful of others).
-     */
+    // Sorts new_touching_pairs_ by pair (c1 then c2), the same total order as
+    // std::sort(..., [](a, b){ return a.pair < b.pair; }), but in O(n + max_colliders): a counting sort on c1
+    // (colliders are indices into a small, fixed-size table) followed by an insertion sort of each c1 bucket, which
+    // is short (a body only touches a handful of others).
     void SortNewTouchingPairs();
 
     [[nodiscard]] Body& body(BodyIndex index) { return bodies_[index.index()]; }
     [[nodiscard]] const Body& body(BodyIndex index) const { return bodies_[index.index()]; }
 
-    /**
-     * @brief Return kInvalidColliderIndex when max_colliders are in use
-     */
+    // Return kInvalidColliderIndex when max_colliders are in use
 	ColliderIndex AddCircleCollider(BodyIndex body);
 	ColliderIndex AddAabbCollider(BodyIndex body);
     void RemoveCollider(ColliderIndex index);
@@ -163,28 +135,20 @@ public:
 	[[nodiscard]] CircleCollider& circle(ShapeIndex shape_index) { return circles_[shape_index.index()]; }
     [[nodiscard]] const CircleCollider& circle(ShapeIndex shape_index) const { return circles_[shape_index.index()]; }
 
-    /**
-     * @brief Replaces the default broadphase (sort and sweep); nullptr restores it
-     */
+    // Replaces the default broadphase (sort and sweep); nullptr restores it
     void SetBSH(BoundingSurfaceHierarchy* bounding_surface_hierarchy) { bsh_ = bounding_surface_hierarchy; }
     void SetContactListener(ContactListener* contact_listener) { contact_listener_ = contact_listener; }
 
 	[[nodiscard]] Vec2f gravity() const { return config_.gravity; }
 	[[nodiscard]] Scalar dt() const { return config_.dt; }
     [[nodiscard]] const ArrayList<TouchingPair>& touching_pairs() const { return touching_pairs_; }
-    /**
-     * @brief Number of pairs whose AABBs overlap, found by the broadphase during the last ResolveBroadphase
-     */
+    // Number of pairs whose AABBs overlap, found by the broadphase during the last ResolveBroadphase
     [[nodiscard]] std::size_t BroadphasePairCount() const { return Broadphase().GetPossiblePairs().size(); }
 
-    /**
-     * @brief Copies the simulation state (bodies, colliders, shapes, touching pairs), not the listener nor the BSH.
-     * Doesn't allocate when both worlds have the same config.
-     */
+    // Copies the simulation state (bodies, colliders, shapes, touching pairs), not the listener nor the BSH.
+    // Doesn't allocate when both worlds have the same config.
 	void CopyFrom(const PhysicsWorld& physics_world);
-    /**
-     * @brief Hash of the whole simulation state, to detect desyncs between peers
-     */
+    // Hash of the whole simulation state, to detect desyncs between peers
     [[nodiscard]] std::uint32_t GenerateChecksum() const;
 private:
     void NotifyContactChanges() const;
@@ -203,15 +167,11 @@ private:
     ArrayList<Collider> colliders_;
     ArrayList<TouchingPair> touching_pairs_;
     ArrayList<TouchingPair> new_touching_pairs_;
-    /**
-     * @brief Scratch buffer for ResolveBroadphase: each active collider's Aabbf, computed once per Step and reused
-     * for both the world box pass and the insert pass (GetAabb isn't free: a body lookup plus a shape switch)
-     */
+    // Scratch buffer for ResolveBroadphase: each active collider's Aabbf, computed once per Step and reused
+    // for both the world box pass and the insert pass (GetAabb isn't free: a body lookup plus a shape switch)
     ArrayList<Aabbf> collider_aabb_cache_;
-    /**
-     * @brief Scratch for SortNewTouchingPairs: bucketCount_[k] then bucketStart_[k] hold, then temporarily the write
-     * cursor for, colliders whose ColliderPair::c1.index == k; sorted_ is the counting sort's output buffer.
-     */
+    // Scratch for SortNewTouchingPairs: bucketCount_[k] then bucketStart_[k] hold, then temporarily the write
+    // cursor for, colliders whose ColliderPair::c1.index == k; sorted_ is the counting sort's output buffer.
     ArrayList<std::uint32_t> touching_pair_bucket_count_;
     ArrayList<std::uint32_t> touching_pair_bucket_start_;
     ArrayList<TouchingPair> sorted_touching_pairs_;
@@ -220,6 +180,6 @@ private:
     BoundingSurfaceHierarchy* bsh_ = nullptr;
 };
 
-} // namespace neko
+}  // namespace neko
 
 #endif  // NEKO_PHYSICS_PHYSICS_H_

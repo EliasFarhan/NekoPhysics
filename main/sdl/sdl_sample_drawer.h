@@ -10,10 +10,8 @@
 namespace neko
 {
 
-/**
- * @brief Renders a DrawList with an SDL renderer: the camera is fitted into the window with letterboxing, circles
- * are tessellated into one geometry batch, boxes and lines are batched by color.
- */
+// Renders a DrawList with an SDL renderer: the camera is fitted into the window with letterboxing, circles
+// are tessellated into one geometry batch, boxes and lines are batched by color.
 class SdlSampleDrawer final : public SampleDrawer
 {
 public:
@@ -39,6 +37,6 @@ private:
     std::vector<SDL_FRect> rects_;
 };
 
-} // namespace neko
+}  // namespace neko
 
 #endif  // MAIN_SDL_SDL_SAMPLE_DRAWER_H_

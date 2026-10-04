@@ -8,9 +8,7 @@ namespace neko
 {
 namespace
 {
-/**
- * @brief Number of nodes of a full tree: 1 + 4 + ... + 4^max_depth
- */
+// Number of nodes of a full tree: 1 + 4 + ... + 4^max_depth
 constexpr std::size_t FullTreeNodeCount(std::size_t max_depth)
 {
     std::size_t count = 0;
@@ -22,7 +20,7 @@ constexpr std::size_t FullTreeNodeCount(std::size_t max_depth)
     }
     return count;
 }
-} // namespace
+}  // namespace
 
 QuadTree::QuadTree(std::size_t max_colliders, std::size_t max_pairs, std::size_t max_depth, std::size_t max_size, Allocator& allocator) :
     max_colliders_(max_colliders),
@@ -201,4 +199,4 @@ void QuadTree::AddPair(Index entry1, Index entry2)
     }
 }
 
-}
+}  // namespace neko

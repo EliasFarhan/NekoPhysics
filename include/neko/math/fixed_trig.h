@@ -14,9 +14,7 @@ namespace internal
 inline constexpr std::size_t kSinTableBits = 10;
 inline constexpr std::size_t kSinTableSize = std::size_t{ 1 } << kSinTableBits;
 
-/**
- * @brief Compile-time sine (Taylor series on [-pi/2, pi/2]), only used to build the table
- */
+// Compile-time sine (Taylor series on [-pi/2, pi/2]), only used to build the table
 consteval double ConstevalSin(double x)
 {
     constexpr double pi = 3.14159265358979323846;
@@ -47,9 +45,7 @@ consteval double ConstevalSin(double x)
     return sum;
 }
 
-/**
- * @brief sin over one full turn in 16.16, plus the first value again so interpolation never wraps
- */
+// sin over one full turn in 16.16, plus the first value again so interpolation never wraps
 consteval std::array<std::int32_t, kSinTableSize + 1> MakeSinTable()
 {
     constexpr double pi = 3.14159265358979323846;
@@ -64,10 +60,8 @@ consteval std::array<std::int32_t, kSinTableSize + 1> MakeSinTable()
 
 inline constexpr auto kSinTable = MakeSinTable();
 
-/**
- * @brief Angle in radians to a phase in 1/2^32 of a turn. One multiplication, no division, and the wrap-around to
- * [0, 2 pi) is the uint32_t overflow.
- */
+// Angle in radians to a phase in 1/2^32 of a turn. One multiplication, no division, and the wrap-around to
+// [0, 2 pi) is the uint32_t overflow.
 [[nodiscard]] constexpr std::uint32_t RadiansToPhase(Fixed16 radians) noexcept
 {
     // round(2^32 / (2 pi))
@@ -86,11 +80,9 @@ inline constexpr auto kSinTable = MakeSinTable();
     const auto interpolation = (static_cast<std::int64_t>(v2 - v1) * fraction + half) >> fraction_bits;
     return Fixed16::FromUnderlyingValue(static_cast<std::int32_t>(v1 + interpolation));
 }
-} // namespace internal
+}  // namespace internal
 
-/**
- * @brief Sine of an angle in radians. Table + linear interpolation, error below 5e-5, no division.
- */
+// Sine of an angle in radians. Table + linear interpolation, error below 5e-5, no division.
 [[nodiscard]] constexpr Fixed16 Sin(Fixed16 radians) noexcept
 {
     return internal::SinFromPhase(internal::RadiansToPhase(radians));
@@ -107,6 +99,6 @@ inline constexpr auto kSinTable = MakeSinTable();
     return Sin(radians) / Cos(radians);
 }
 
-} // namespace neko
+}  // namespace neko
 
 #endif  // NEKO_MATH_FIXED_TRIG_H_

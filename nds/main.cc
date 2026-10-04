@@ -29,7 +29,7 @@ __attribute__((format(printf, 1, 2))) void Log(const char* format, ...)
     nocashMessage(line);
 }
 
-} // namespace
+}  // namespace
 
 struct Timing
 {
@@ -59,10 +59,8 @@ struct PairCountSample
     std::uint16_t touching_pairs = 0;
 };
 
-/**
- * @brief Every number the vault report is built from, kept in one global struct so a host-side gdb session can
- * `print g_report` (or any field) once the ROM reaches the TestsDone() breakpoint.
- */
+// Every number the vault report is built from, kept in one global struct so a host-side gdb session can
+// `print g_report` (or any field) once the ROM reaches the TestsDone() breakpoint.
 struct Report
 {
     bool hooks_ok = false;
@@ -118,9 +116,7 @@ std::uint64_t Next(std::uint64_t& state)
     return state;
 }
 
-/**
- * @brief Compares the DS divider and sqrt hooks with the portable code on random and edge inputs
- */
+// Compares the DS divider and sqrt hooks with the portable code on random and edge inputs
 bool CheckMathHooks()
 {
     int failures = 0;
@@ -218,9 +214,7 @@ bool RunFallingPile()
     return ok;
 }
 
-/**
- * @brief 3 static boxes and 252 dynamic bodies, near the default capacity of 256 bodies
- */
+// 3 static boxes and 252 dynamic bodies, near the default capacity of 256 bodies
 void BuildHeavyPile(neko::PhysicsWorld& world)
 {
     using neko::Scalar;
@@ -266,9 +260,7 @@ void BuildHeavyPile(neko::PhysicsWorld& world)
 
 constexpr int kHeavySteps = 600;
 
-/**
- * @brief Timing and checksum only, with no profiling overhead: the numbers reported for the 8ms budget
- */
+// Timing and checksum only, with no profiling overhead: the numbers reported for the 8ms budget
 void RunHeavyPile()
 {
     neko::PhysicsWorld world{};
@@ -289,10 +281,8 @@ void RunHeavyPile()
     LogTiming("255", g_report.heavy_timing);
 }
 
-/**
- * @brief Same scene, run to a resting pile, then profiled with StepPhase ticks: slower than RunHeavyPile because
- * of the extra cpuGetTiming() reads, so its own Step timing isn't part of the reported avg/max ms.
- */
+// Same scene, run to a resting pile, then profiled with StepPhase ticks: slower than RunHeavyPile because
+// of the extra cpuGetTiming() reads, so its own Step timing isn't part of the reported avg/max ms.
 void RunHeavyPileProfile()
 {
     neko::PhysicsWorld world{};
@@ -326,7 +316,7 @@ void RunHeavyPileProfile()
     }
 }
 
-} // namespace
+}  // namespace
 
 // Reached exactly once, after every result has been logged: the breakpoint a host-side gdb session sets before
 // letting the ARM9 run (melonDS's GDB stub, see melonDS.toml [Instance0.Gdb]), since results live in g_report.

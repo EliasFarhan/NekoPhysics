@@ -10,9 +10,7 @@
 namespace neko
 {
 
-/**
- * @brief Phases of PhysicsWorld::Step tracked by the DS test ROM's per-phase breakdown.
- */
+// Phases of PhysicsWorld::Step tracked by the DS test ROM's per-phase breakdown.
 enum class StepPhase : std::uint8_t
 {
     kIntegration,
@@ -23,19 +21,15 @@ enum class StepPhase : std::uint8_t
     kCount
 };
 
-/**
- * @brief Accumulated ticks per StepPhase. Bus-clock ticks on the DS (see cpuStartTiming), meaningless elsewhere.
- */
+// Accumulated ticks per StepPhase. Bus-clock ticks on the DS (see cpuStartTiming), meaningless elsewhere.
 struct StepPhaseTicks
 {
     std::uint32_t ticks[static_cast<std::size_t>(StepPhase::kCount)] = {};
 };
 
 #if defined(NEKO_PLATFORM_NDS)
-/**
- * @brief Set by the DS test ROM before a profiling run; nullptr (the default) means "don't collect", so Step()
- * pays only a null check on every platform that isn't actively measuring.
- */
+// Set by the DS test ROM before a profiling run; nullptr (the default) means "don't collect", so Step()
+// pays only a null check on every platform that isn't actively measuring.
 inline StepPhaseTicks* g_step_phase_ticks = nullptr;
 
 [[nodiscard]] inline std::uint32_t StepProfileNow() noexcept
@@ -55,6 +49,6 @@ inline void StepProfileMark(StepPhase phase, std::uint32_t since) noexcept
 constexpr void StepProfileMark(StepPhase, std::uint32_t) noexcept {}
 #endif
 
-} // namespace neko
+}  // namespace neko
 
 #endif  // NEKO_CORE_STEP_PROFILE_H_

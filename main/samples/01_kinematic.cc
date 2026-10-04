@@ -47,4 +47,4 @@ void KinematicSample::Draw(DrawList& draw_list) const
         draw_list.circles.push_back({ world_.body(BodyIndex{ i }).position, kCircleRadius, colors_[i] });
     }
 }
-}
+}  // namespace neko

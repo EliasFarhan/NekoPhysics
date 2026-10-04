@@ -13,14 +13,10 @@ namespace
 {
 
 constexpr int kSpriteCountMax = 128;
-/**
- * @brief Pixel coordinates are clamped to this range, so that a body far away can't make a line loop for long
- */
+// Pixel coordinates are clamped to this range, so that a body far away can't make a line loop for long
 constexpr std::int64_t kPixelLimit = 2048;
 constexpr int kBufferMapBaseStride = 4;
-/**
- * @brief 64 KB per 256x256 8bpp buffer, in u16
- */
+// 64 KB per 256x256 8bpp buffer, in u16
 constexpr std::size_t kBufferHalfwords = 256 * 256 / 2;
 constexpr std::uint32_t kVisibleBitmapBytes = 256 * 192;
 
@@ -29,14 +25,10 @@ constexpr u16 ToRgb15(const PaletteColor& color)
     return static_cast<u16>((color.r >> 3) | ((color.g >> 3) << 5) | ((color.b >> 3) << 10));
 }
 
-/**
- * @brief Letterbox background: bitmap palette entry 0 is transparent and shows the backdrop color
- */
+// Letterbox background: bitmap palette entry 0 is transparent and shows the backdrop color
 constexpr u16 kBackdropColor = ToRgb15({ 20, 20, 26 });
 
-/**
- * @brief Round(value * scale) with value and scale in 16.16, computed in 64 bits so that it can't overflow
- */
+// Round(value * scale) with value and scale in 16.16, computed in 64 bits so that it can't overflow
 int ToPixels(Scalar value, Scalar scale)
 {
     const std::int64_t product = std::int64_t{ value.underlying_value() } * std::int64_t{ scale.underlying_value() };
@@ -44,10 +36,8 @@ int ToPixels(Scalar value, Scalar scale)
     return static_cast<int>(std::clamp(pixels, -kPixelLimit, kPixelLimit));
 }
 
-/**
- * @brief Writes 4bpp sprite graphics (1D mapping: 8x8 tiles in row-major order, low nibble = left pixel) with
- * 16-bit VRAM writes. Pixels where inside(x, y) is true use palette entry 1, the others are transparent.
- */
+// Writes 4bpp sprite graphics (1D mapping: 8x8 tiles in row-major order, low nibble = left pixel) with
+// 16-bit VRAM writes. Pixels where inside(x, y) is true use palette entry 1, the others are transparent.
 template<typename Inside>
 void RasterizeSprite(u16* gfx, int width, int height, Inside inside)
 {
@@ -76,10 +66,8 @@ void RasterizeSprite(u16* gfx, int width, int height, Inside inside)
     }
 }
 
-/**
- * @brief Pixel of a circle of radius r (in pixels) whose bounding square starts at 0: pixel centers within r of the
- * center (r, r)
- */
+// Pixel of a circle of radius r (in pixels) whose bounding square starts at 0: pixel centers within r of the
+// center (r, r)
 constexpr bool InsideCircle(int x, int y, int radius)
 {
     const int dx = 2 * x + 1 - 2 * radius;
@@ -97,9 +85,7 @@ void PutPixel(volatile u16* buffer, int x, int y, ColorId color)
                                          : (current & 0xFF00u) | unsigned{ color });
 }
 
-/**
- * @brief Row y, pixels [x0, x1), already clipped
- */
+// Row y, pixels [x0, x1), already clipped
 void FillSpan(volatile u16* buffer, int x0, int x1, int y, ColorId color)
 {
     if (x0 >= x1)
@@ -135,7 +121,7 @@ std::uint32_t HashInt(std::uint32_t hash, int value)
     return hash;
 }
 
-} // namespace
+}  // namespace
 
 std::optional<NdsSampleDrawer::SpriteShape> NdsSampleDrawer::FindSpriteShape(int width, int height)
 {
@@ -437,4 +423,4 @@ void NdsSampleDrawer::RedrawBitmap(u16* buffer) const
     }
 }
 
-} // namespace neko
+}  // namespace neko

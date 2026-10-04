@@ -7,9 +7,7 @@
 
 namespace neko
 {
-/**
- * @brief A ball and a box falling on a static ground. The ball turns magenta while it touches something.
- */
+// A ball and a box falling on a static ground. The ball turns magenta while it touches something.
 class GroundSample : public Sample, public ContactListener
 {
 public:
@@ -33,6 +31,6 @@ private:
     BodyIndex ground_body_index_ = kInvalidBodyIndex;
     int collision_count_ = 0;
 };
-}
+}  // namespace neko
 
 #endif  // MAIN_SAMPLES_04_GROUND_H_

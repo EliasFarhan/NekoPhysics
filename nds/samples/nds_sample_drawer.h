@@ -13,40 +13,30 @@
 namespace neko
 {
 
-/**
- * @brief Renders a DrawList on the DS top screen (main engine), with no float:
- * - circles up to 32 px of radius and boxes up to 64x64 px are hardware sprites (at most 128, the rest are dropped);
- * - bigger shapes and lines go to a double-buffered 256x256 8bpp bitmap on BG3, redrawn only when its content
- *   changes (hash of the bitmap-routed shapes).
- * Sprites are above the bitmap. Render builds the next frame during the visible frame, Present (right after
- * swiWaitForVBlank) sends it to the hardware.
- */
+// Renders a DrawList on the DS top screen (main engine), with no float:
+// - circles up to 32 px of radius and boxes up to 64x64 px are hardware sprites (at most 128, the rest are dropped);
+// - bigger shapes and lines go to a double-buffered 256x256 8bpp bitmap on BG3, redrawn only when its content
+//   changes (hash of the bitmap-routed shapes).
+// Sprites are above the bitmap. Render builds the next frame during the visible frame, Present (right after
+// swiWaitForVBlank) sends it to the hardware.
 class NdsSampleDrawer final : public SampleDrawer
 {
 public:
     struct Stats
     {
         int sprites_used = 0;
-        /**
-         * @brief Shapes that needed a sprite past the 128th, in the last Render
-         */
+        // Shapes that needed a sprite past the 128th, in the last Render
         int dropped_sprites = 0;
         int bitmap_shapes = 0;
-        /**
-         * @brief Number of bitmap redraws since Init
-         */
+        // Number of bitmap redraws since Init
         std::uint32_t bitmap_redraws = 0;
     };
 
-    /**
-     * @brief Video modes, VRAM banks A (BG3 bitmap) and B (sprites), palettes, circle graphics. Leaves the sub engine
-     * and bank C to the console.
-     */
+    // Video modes, VRAM banks A (BG3 bitmap) and B (sprites), palettes, circle graphics. Leaves the sub engine
+    // and bank C to the console.
     void Init();
     void Render(const DrawList& draw_list) override;
-    /**
-     * @brief Call right after swiWaitForVBlank: OAM update and bitmap buffer swap, during VBlank
-     */
+    // Call right after swiWaitForVBlank: OAM update and bitmap buffer swap, during VBlank
     void Present();
     [[nodiscard]] const Stats& stats() const { return stats_; }
 
@@ -61,9 +51,7 @@ private:
         kCircle,
         kLine
     };
-    /**
-     * @brief In pixels. RECT: [x0, x1) x [y0, y1); CIRCLE: center (x0, y0), radius x1; LINE: (x0, y0) to (x1, y1)
-     */
+    // In pixels. RECT: [x0, x1) x [y0, y1); CIRCLE: center (x0, y0), radius x1; LINE: (x0, y0) to (x1, y1)
     struct BitmapShape
     {
         int x0 = 0;
@@ -98,24 +86,20 @@ private:
     void RedrawBitmap(u16* buffer) const;
 
     Stats stats_{};
-    /**
-     * @brief Indexed by radius in pixels, from 1 to kMaxSpriteRadius
-     */
+    // Indexed by radius in pixels, from 1 to kMaxSpriteRadius
     std::array<SpriteGfx, kMaxSpriteRadius + 1> circle_gfx_{};
     std::array<BoxGfx, kMaxBoxGfx> box_gfx_{};
     std::size_t box_gfx_count_ = 0;
     int previous_sprite_count_ = 0;
 
     int bg_ = -1;
-    /**
-     * @brief Index (0 or 1) of the buffer on screen: buffer i is at map base 4 * i (64 KB each in bank A)
-     */
+    // Index (0 or 1) of the buffer on screen: buffer i is at map base 4 * i (64 KB each in bank A)
     int front_buffer_ = 0;
     bool swap_pending_ = false;
     std::uint32_t front_hash_ = 0;
     std::vector<BitmapShape> bitmap_shapes_;
 };
 
-} // namespace neko
+}  // namespace neko
 
 #endif  // NDS_SAMPLES_NDS_SAMPLE_DRAWER_H_

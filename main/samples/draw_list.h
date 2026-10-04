@@ -12,9 +12,7 @@
 namespace neko
 {
 
-/**
- * @brief Index into kSamplePalette. 0 is transparent (the DS sprite and bitmap palettes reserve entry 0).
- */
+// Index into kSamplePalette. 0 is transparent (the DS sprite and bitmap palettes reserve entry 0).
 using ColorId = std::uint8_t;
 
 struct PaletteColor
@@ -24,10 +22,8 @@ struct PaletteColor
     std::uint8_t b = 0;
 };
 
-/**
- * @brief Colors shared by every backend: on the DS, ColorId i is sprite palette bank i (fill = entry 1) and bitmap
- * BG palette entry i, so no backend has to quantize anything
- */
+// Colors shared by every backend: on the DS, ColorId i is sprite palette bank i (fill = entry 1) and bitmap
+// BG palette entry i, so no backend has to quantize anything
 inline constexpr std::array<PaletteColor, 16> kSamplePalette = { {
     { 0, 0, 0 },       // transparent
     { 255, 255, 255 }, // white
@@ -66,12 +62,10 @@ inline constexpr ColorId kPink = 12;
 inline constexpr ColorId kLime = 13;
 inline constexpr ColorId kTeal = 14;
 inline constexpr ColorId kSky = 15;
-/**
- * @brief Non-grey entries, the range random colors are picked from
- */
+// Non-grey entries, the range random colors are picked from
 inline constexpr ColorId kFirstBright = kRed;
 inline constexpr ColorId kLastBright = kSky;
-} // namespace sample_color
+}  // namespace sample_color
 
 struct DrawCircle
 {
@@ -94,23 +88,17 @@ struct DrawLine
     ColorId color = sample_color::kWhite;
 };
 
-/**
- * @brief What a sample shows for one frame, in world space (meters, y down). Backends map it to the screen and
- * draw circles, then boxes, then lines.
- */
+// What a sample shows for one frame, in world space (meters, y down). Backends map it to the screen and
+// draw circles, then boxes, then lines.
 struct DrawList
 {
-    /**
-     * @brief World rectangle to show: the SampleContext bounds
-     */
+    // World rectangle to show: the SampleContext bounds
     Aabbf camera{};
     std::vector<DrawCircle> circles;
     std::vector<DrawBox> boxes;
     std::vector<DrawLine> lines;
 
-    /**
-     * @brief Called once by the host: Clear keeps the capacity, so frames don't allocate
-     */
+    // Called once by the host: Clear keeps the capacity, so frames don't allocate
     void Reserve(std::size_t circle_count, std::size_t box_count, std::size_t line_count)
     {
         circles.reserve(circle_count);
@@ -135,6 +123,6 @@ public:
     virtual void Render(const DrawList& draw_list) = 0;
 };
 
-} // namespace neko
+}  // namespace neko
 
 #endif  // MAIN_SAMPLES_DRAW_LIST_H_

@@ -13,9 +13,7 @@ namespace
 {
 using neko::Scalar;
 
-/**
- * @brief Small deterministic generator, so the scenes are the same on every platform
- */
+// Small deterministic generator, so the scenes are the same on every platform
 class Lcg
 {
 public:
@@ -87,7 +85,7 @@ std::vector<neko::ColliderPair> CollectPairs(neko::BoundingSurfaceHierarchy& bro
 }
 
 constexpr std::size_t kColliderCount = 200;
-} // namespace
+}  // namespace
 
 TEST(SweepAndPrune, FindsExactlyTheIntersectingPairs)
 {

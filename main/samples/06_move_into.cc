@@ -283,4 +283,4 @@ void MoveIntoSample::FixedUpdate()
 #endif
 
 }
-}
+}  // namespace neko

@@ -9,10 +9,8 @@
 
 namespace neko
 {
-/**
- * @brief Tiny trigger circles in a quadtree broadphase: red alone, green while overlapping another one. Draws the
- * quadtree nodes.
- */
+// Tiny trigger circles in a quadtree broadphase: red alone, green while overlapping another one. Draws the
+// quadtree nodes.
 class TriggersSample : public Sample, public ContactListener
 {
 public:
@@ -40,6 +38,6 @@ private:
     std::vector<TriggeredBody> bodies_;
     Aabbf bounds_{};
 };
-}
+}  // namespace neko
 
 #endif  // MAIN_SAMPLES_03_TRIGGERS_H_

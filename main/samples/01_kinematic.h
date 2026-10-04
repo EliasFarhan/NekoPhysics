@@ -9,9 +9,7 @@
 
 namespace neko
 {
-/**
- * @brief Circles without colliders moving at constant speed, bouncing on the world bounds
- */
+// Circles without colliders moving at constant speed, bouncing on the world bounds
 class KinematicSample : public Sample
 {
 public:
@@ -28,6 +26,6 @@ private:
     std::vector<ColorId> colors_;
     Aabbf bounds_{};
 };
-}
+}  // namespace neko
 
 #endif  // MAIN_SAMPLES_01_KINEMATIC_H_

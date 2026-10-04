@@ -90,9 +90,7 @@ template<typename T>
     return CompareLength(c1.position() - c2.position(), c1.radius() + c2.radius()) <= 0;
 }
 
-/**
- * @brief Point of the box closest to point (point itself when it is inside)
- */
+// Point of the box closest to point (point itself when it is inside)
 template<typename T>
 [[nodiscard]] constexpr Vec2<T> ClosestPoint(const Aabb<T>& aabb, Vec2<T> point)
 {
@@ -114,6 +112,6 @@ constexpr bool Intersect(const Aabb<T>& aabb, const Circle<T>& circle)
 
 using Aabbf = Aabb<Scalar>;
 using Circlef = Circle<Scalar>;
-} // namespace neko
+}  // namespace neko
 
 #endif  // NEKO_MATH_SHAPE_H_

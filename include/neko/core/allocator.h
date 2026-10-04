@@ -29,23 +29,17 @@ public:
 
 };
 
-/**
- * @brief Process-wide heap allocator used when none is given
- */
+// Process-wide heap allocator used when none is given
 [[nodiscard]] Allocator& DefaultAllocator() noexcept;
 
 namespace internal
 {
-/**
- * @brief Throws std::bad_alloc, or aborts when exceptions are disabled (usual on the DS)
- */
+// Throws std::bad_alloc, or aborts when exceptions are disabled (usual on the DS)
 [[noreturn]] void OnAllocationFailure();
-} // namespace internal
+}  // namespace internal
 
-/**
- * \brief Proxy allocator respecting allocator_traits. Holds a pointer, so containers can be copied and moved freely
- * as long as the Allocator outlives them.
- */
+// Proxy allocator respecting allocator_traits. Holds a pointer, so containers can be copied and moved freely
+// as long as the Allocator outlives them.
 template<typename T>
 class StandardAllocator
 {
@@ -91,6 +85,6 @@ private:
 
 template<typename T>
 using ArrayList = std::vector<T, StandardAllocator<T>>;
-}
+}  // namespace neko
 
 #endif  // NEKO_CORE_ALLOCATOR_H_

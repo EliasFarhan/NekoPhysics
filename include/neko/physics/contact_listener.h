@@ -17,6 +17,6 @@ public:
 
 
 
-}
+}  // namespace neko
 
 #endif  // NEKO_PHYSICS_CONTACT_LISTENER_H_

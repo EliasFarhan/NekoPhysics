@@ -15,9 +15,7 @@ namespace neko
 {
 namespace internal
 {
-/**
- * @brief Square that can't overflow: Q32.32 in 64 bits for Fixed16 (16.16 overflows past ~181), T otherwise
- */
+// Square that can't overflow: Q32.32 in 64 bits for Fixed16 (16.16 overflows past ~181), T otherwise
 template<typename T>
 [[nodiscard]] constexpr auto WideSquare(T value) noexcept
 {
@@ -31,7 +29,7 @@ template<typename T>
         return value * value;
     }
 }
-} // namespace internal
+}  // namespace internal
 
 template<typename T>
 class Vec2
@@ -121,9 +119,7 @@ public:
     static constexpr Vec2 Right() { return Vec2{ Scalar{1},Scalar{0} }; }
     static constexpr Vec2 One() { return Vec2{ Scalar{1},Scalar{1} }; }
 
-    /**
-     *  @brief Rotate the 2d vector of a radian angle
-     */
+    // Rotate the 2d vector of a radian angle
     [[nodiscard]] Vec2 Rotate(T angle) const noexcept
     {
         const auto sin = Sin(angle);
@@ -160,9 +156,7 @@ public:
             return Sqrt(SquareLength());
         }
     }
-    /**
-     * @brief Unit vector with the same direction, or zero for a zero vector
-     */
+    // Unit vector with the same direction, or zero for a zero vector
     [[nodiscard]] Vec2 Normalized() const
     {
         const auto length = Length();
@@ -198,10 +192,8 @@ static_assert(sizeof(Vec2<int>) == 8);
 static_assert(std::is_trivially_copyable_v<Vec2<Fixed16>>);
 static_assert(std::is_trivially_copyable_v<Vec2<float>>);
 
-/**
- * @brief Compares the length of v with length (>= 0) without computing a square root or overflowing
- * @return negative if |v| < length, 0 if equal, positive if |v| > length
- */
+// Compares the length of v with length (>= 0) without computing a square root or overflowing
+// Returns negative if |v| < length, 0 if equal, positive if |v| > length
 template<typename T>
 [[nodiscard]] constexpr int CompareLength(Vec2<T> v, T length) noexcept
 {
@@ -224,6 +216,6 @@ constexpr Vec2<T> operator*(Scalar f, Vec2<T> other)
 using Vec2f = Vec2<Scalar>;
 using Vec2u = Vec2<unsigned>;
 using Vec2i = Vec2<int>;
-} // namespace neko
+}  // namespace neko
 
 #endif  // NEKO_MATH_VEC2_H_
