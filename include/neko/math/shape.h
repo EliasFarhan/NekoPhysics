@@ -81,11 +81,13 @@ static_assert(std::is_trivially_copyable_v<Circle<float>>);
 template <typename T>
 constexpr bool Intersect(const Aabb<T>& a, const Aabb<T>& b) {
   if (a.max_bound().x() < b.min_bound().x() ||
-      a.min_bound().x() > b.max_bound().x())
+      a.min_bound().x() > b.max_bound().x()) {
     return false;
+  }
   if (a.max_bound().y() < b.min_bound().y() ||
-      a.min_bound().y() > b.max_bound().y())
+      a.min_bound().y() > b.max_bound().y()) {
     return false;
+  }
   return true;
 }
 

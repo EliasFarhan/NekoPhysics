@@ -12,7 +12,7 @@ NekoPhysics is a small deterministic 2D physics library in C++20 with a quadtree
 
 ## Reviews, discussions and plans live in the Obsidian vault
 
-**Folder:** `H:/vault/sae/Projets/NekoPhysics/`. Write new reviews, design discussions and plans there (with YAML frontmatter like the existing notes) and update their status there. Do not add review or plan documents to this repo.
+**Folder:** `H:/vault/sae/Projets/NekoPhysics/` on Windows, `~/Documents/Vault/SAE/Projets/NekoPhysics/` on Linux. Write new reviews, design discussions and plans there (with YAML frontmatter like the existing notes) and update their status there. Do not add review or plan documents to this repo.
 
 - `NekoPhysics review.md`: code review from 2026-09-18 (verified on `fd65db2`), findings S1–S5 with block ids (`^s1-1` …) and effort sizes.
 - `NekoPhysics review tasks.md`: sortable findings table. Mark items 🟢 there when fixed (with the commit hash).
@@ -35,6 +35,17 @@ cmake --build --preset nds
 As of 2026-09-18 `NEKO_SCALAR=SIXIT` fails to build with MSVC 14.51 and clang (sixit's bundled fmt, non-constexpr `Scalar`); see finding S1.8 in the vault review.
 
 
+## Style
+
+The code follows the [Google C++ Style Guide](https://google.github.io/styleguide/cppguide.html), migrated on branch `google-style` (plan in the vault: `Plans/NekoPhysics Google style plan.md`). Project choices:
+- `.clang-format` (Google, 80 columns) formats everything outside `externals/`. Run `clang-format -i` on touched files before committing.
+- `.clang-tidy` checks `google-*` and Google naming (naming warnings are errors): `snake_case` variables and struct fields, `snake_case_` private members, `kCamelCase` constants and enumerators, `CamelCase` functions, `g_` for mutable globals. Accessors and mutators are `snake_case` (`x()`, `set_x()`, `body()`, `touching_pairs()`); clang-tidy accepts any snake_case method, so keep snake_case for accessors only. Run it with `run-clang-tidy -p build/debug`. For the DS code, export a compile DB (`cmake --preset nds -B build/nds-tidy -DCMAKE_EXPORT_COMPILE_COMMANDS=ON`) and pass `--target=arm-none-eabi` plus devkitARM's include paths as `-isystem`. Never `-fix` a TU that has compile errors: clang-tidy also applies compiler fix-its.
+- Sources are `.cc`. Headers use `#define` guards named from the path (`NEKO_MATH_VEC2_H_`, `MAIN_SAMPLES_SAMPLE_H_`). Includes name the full path: `"neko/..."` for the library (`include/neko/`), and the repo-root path for the rest (`"main/samples/sample.h"`, `"tests/scenes/falling_pile.h"`).
+- Comments are `//` (no Doxygen).
+- Value types with behavior are classes with private fields and accessors: `Vec2` (`x()`, `set_x()`), `Aabb`, `Circle`, the index types (`index()`, explicit constructor from `Index`) and `ColliderPair`. Passive data (`Body`, `Collider`, configs...) stays structs with public `snake_case` fields. `Fixed`, `Vec2`, `Radian` and `Degree` assignments are lvalue-only, so `v.x() += d` doesn't compile; use the setters.
+- No exceptions or RTTI in the library (`-fno-exceptions -fno-rtti`); allocation failure aborts. Single-argument constructors are `explicit`.
+- Standard-interface names are kept with `NOLINT` (`std::numeric_limits<Fixed>`, `StandardAllocator::allocate`, `is_fixed_v`).
+
 ## Warnings
 
-`cmake/CompilerWarnings.cmake` defines `neko_set_project_warnings(<target>)`, applied to the library, the samples and every test. New targets must call it. `NEKO_WARNINGS_AS_ERRORS` is ON (also forced by the presets): MSVC `/W4` + extras are clean for the library, tests and samples; the clang list is clean for the library and tests (checked with emsdk clang against the MSVC headers). The GCC-only flags have not been run yet. Don't silence warnings with casts at call sites when the fix belongs in the types (indices are `neko::Index` = `std::uint16_t`).
+`cmake/CompilerWarnings.cmake` defines `neko_set_project_warnings(<target>)`, applied to the library, the samples and every test. New targets must call it. `NEKO_WARNINGS_AS_ERRORS` is ON (also forced by the presets): MSVC `/W4` + extras are clean for the library, tests and samples; the clang list is clean for the library and tests (checked with emsdk clang against the MSVC headers). GCC 16.2 (Linux, with the GCC-only flags) and devkitARM are clean too (2026-10-04). Don't silence warnings with casts at call sites when the fix belongs in the types (indices are `neko::Index` = `std::uint16_t`).

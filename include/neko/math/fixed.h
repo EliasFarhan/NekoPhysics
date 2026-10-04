@@ -56,7 +56,9 @@ namespace internal {
   // portable path
   if !consteval {
     if (value < (std::uint64_t{1} << 62)) {
-      return sqrt64(static_cast<long long>(value));
+      // libnds' sqrt64 takes a long long
+      return sqrt64(
+          static_cast<long long>(value));  // NOLINT(google-runtime-int)
     }
   }
 #endif
