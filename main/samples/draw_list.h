@@ -50,48 +50,48 @@ inline constexpr std::array<PaletteColor, 16> kSamplePalette = { {
 namespace sample_color
 {
 // Not TRANSPARENT: wingdi.h defines it as a macro
-inline constexpr ColorId EMPTY = 0;
-inline constexpr ColorId WHITE = 1;
-inline constexpr ColorId GREY = 2;
-inline constexpr ColorId DARK_GREY = 3;
-inline constexpr ColorId RED = 4;
-inline constexpr ColorId GREEN = 5;
-inline constexpr ColorId BLUE = 6;
-inline constexpr ColorId YELLOW = 7;
-inline constexpr ColorId CYAN = 8;
-inline constexpr ColorId MAGENTA = 9;
-inline constexpr ColorId ORANGE = 10;
-inline constexpr ColorId PURPLE = 11;
-inline constexpr ColorId PINK = 12;
-inline constexpr ColorId LIME = 13;
-inline constexpr ColorId TEAL = 14;
-inline constexpr ColorId SKY = 15;
+inline constexpr ColorId kEmpty = 0;
+inline constexpr ColorId kWhite = 1;
+inline constexpr ColorId kGrey = 2;
+inline constexpr ColorId kDarkGrey = 3;
+inline constexpr ColorId kRed = 4;
+inline constexpr ColorId kGreen = 5;
+inline constexpr ColorId kBlue = 6;
+inline constexpr ColorId kYellow = 7;
+inline constexpr ColorId kCyan = 8;
+inline constexpr ColorId kMagenta = 9;
+inline constexpr ColorId kOrange = 10;
+inline constexpr ColorId kPurple = 11;
+inline constexpr ColorId kPink = 12;
+inline constexpr ColorId kLime = 13;
+inline constexpr ColorId kTeal = 14;
+inline constexpr ColorId kSky = 15;
 /**
  * @brief Non-grey entries, the range random colors are picked from
  */
-inline constexpr ColorId FIRST_BRIGHT = RED;
-inline constexpr ColorId LAST_BRIGHT = SKY;
+inline constexpr ColorId kFirstBright = kRed;
+inline constexpr ColorId kLastBright = kSky;
 } // namespace sample_color
 
 struct DrawCircle
 {
     Vec2f center{};
     Scalar radius{};
-    ColorId color = sample_color::WHITE;
+    ColorId color = sample_color::kWhite;
 };
 
 struct DrawBox
 {
     Vec2f center{};
-    Vec2f halfSize{};
-    ColorId color = sample_color::WHITE;
+    Vec2f half_size{};
+    ColorId color = sample_color::kWhite;
 };
 
 struct DrawLine
 {
     Vec2f a{};
     Vec2f b{};
-    ColorId color = sample_color::WHITE;
+    ColorId color = sample_color::kWhite;
 };
 
 /**
@@ -111,11 +111,11 @@ struct DrawList
     /**
      * @brief Called once by the host: Clear keeps the capacity, so frames don't allocate
      */
-    void Reserve(std::size_t circleCount, std::size_t boxCount, std::size_t lineCount)
+    void Reserve(std::size_t circle_count, std::size_t box_count, std::size_t line_count)
     {
-        circles.reserve(circleCount);
-        boxes.reserve(boxCount);
-        lines.reserve(lineCount);
+        circles.reserve(circle_count);
+        boxes.reserve(box_count);
+        lines.reserve(line_count);
     }
 
     void Clear()
@@ -132,7 +132,7 @@ class SampleDrawer
 {
 public:
     virtual ~SampleDrawer() = default;
-    virtual void Render(const DrawList& drawList) = 0;
+    virtual void Render(const DrawList& draw_list) = 0;
 };
 
 } // namespace neko

@@ -50,9 +50,9 @@ TEST(Checksum, ColliderSwappedOffsetDiffers)
 TEST(Checksum, AabbSwappedHalfSizeDiffers)
 {
     neko::AabbCollider a{};
-    a.halfSize = { neko::Scalar{1}, neko::Scalar{2} };
+    a.half_size = { neko::Scalar{1}, neko::Scalar{2} };
     neko::AabbCollider b{};
-    b.halfSize = { neko::Scalar{2}, neko::Scalar{1} };
+    b.half_size = { neko::Scalar{2}, neko::Scalar{1} };
     EXPECT_NE(neko::GenerateChecksum(a), neko::GenerateChecksum(b));
 }
 

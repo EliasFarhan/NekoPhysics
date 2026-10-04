@@ -18,8 +18,8 @@ struct CollidingBody
 struct Contact
 {
     std::array<CollidingBody, 2> bodies{};
-    Vec2f contactNormal{};
-    Vec2f contactPoint{};
+    Vec2f contact_normal{};
+    Vec2f contact_point{};
     Scalar restitution{1};
     Scalar penetration{};
     void Resolve();

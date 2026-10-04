@@ -18,19 +18,19 @@ namespace neko
 class SweepAndPrune final : public BoundingSurfaceHierarchy
 {
 public:
-    SweepAndPrune(std::size_t maxColliders, std::size_t maxPairs, Allocator& allocator = DefaultAllocator());
+    SweepAndPrune(std::size_t max_colliders, std::size_t max_pairs, Allocator& allocator = DefaultAllocator());
 
-    void Insert(const ColliderAabb& colliderAabb) override;
+    void Insert(const ColliderAabb& collider_aabb) override;
     void CalculatePairs() override;
     void Clear() override;
-    void SetWorldAabb([[maybe_unused]] const Aabbf& worldAabb) override {}
-    [[nodiscard]] const ArrayList<ColliderPair>& GetPossiblePairs() const override { return possiblePairs_; }
+    void SetWorldAabb([[maybe_unused]] const Aabbf& world_aabb) override {}
+    [[nodiscard]] const ArrayList<ColliderPair>& GetPossiblePairs() const override { return possible_pairs_; }
 
 private:
-    std::size_t maxColliders_;
-    std::size_t maxPairs_;
+    std::size_t max_colliders_;
+    std::size_t max_pairs_;
     ArrayList<ColliderAabb> colliders_;
-    ArrayList<ColliderPair> possiblePairs_;
+    ArrayList<ColliderPair> possible_pairs_;
 };
 
 } // namespace neko

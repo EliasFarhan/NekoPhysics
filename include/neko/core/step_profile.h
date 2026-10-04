@@ -15,12 +15,12 @@ namespace neko
  */
 enum class StepPhase : std::uint8_t
 {
-    Integration,
-    Broadphase,
-    DetectContact,
-    Resolve,
-    SortAndNotify,
-    Count
+    kIntegration,
+    kBroadphase,
+    kDetectContact,
+    kResolve,
+    kSortAndNotify,
+    kCount
 };
 
 /**
@@ -28,7 +28,7 @@ enum class StepPhase : std::uint8_t
  */
 struct StepPhaseTicks
 {
-    std::uint32_t ticks[static_cast<std::size_t>(StepPhase::Count)] = {};
+    std::uint32_t ticks[static_cast<std::size_t>(StepPhase::kCount)] = {};
 };
 
 #if defined(NEKO_PLATFORM_NDS)
@@ -36,18 +36,18 @@ struct StepPhaseTicks
  * @brief Set by the DS test ROM before a profiling run; nullptr (the default) means "don't collect", so Step()
  * pays only a null check on every platform that isn't actively measuring.
  */
-inline StepPhaseTicks* g_stepPhaseTicks = nullptr;
+inline StepPhaseTicks* g_step_phase_ticks = nullptr;
 
 [[nodiscard]] inline std::uint32_t StepProfileNow() noexcept
 {
-    return g_stepPhaseTicks != nullptr ? cpuGetTiming() : 0;
+    return g_step_phase_ticks != nullptr ? cpuGetTiming() : 0;
 }
 
 inline void StepProfileMark(StepPhase phase, std::uint32_t since) noexcept
 {
-    if (g_stepPhaseTicks != nullptr)
+    if (g_step_phase_ticks != nullptr)
     {
-        g_stepPhaseTicks->ticks[static_cast<std::size_t>(phase)] += cpuGetTiming() - since;
+        g_step_phase_ticks->ticks[static_cast<std::size_t>(phase)] += cpuGetTiming() - since;
     }
 }
 #else

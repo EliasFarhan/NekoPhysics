@@ -5,79 +5,79 @@
 namespace neko
 {
 
-constexpr static Scalar circleRadius = Ratio(1, 2);
-constexpr static Vec2f groundHalfSize = Vec2f{ Scalar{ 5 }, Scalar{ 1 } };
-constexpr static Vec2f rectHalfSize = Vec2f{ Ratio(1, 2), Ratio(1, 2) };
-constexpr static ColorId groundColor = sample_color::GREEN;
-constexpr static ColorId circleColor = sample_color::BLUE;
-constexpr static ColorId collisionCircleColor = sample_color::MAGENTA;
-constexpr static ColorId rectColor = sample_color::WHITE;
+constexpr static Scalar kCircleRadius = Ratio(1, 2);
+constexpr static Vec2f kGroundHalfSize = Vec2f{ Scalar{ 5 }, Scalar{ 1 } };
+constexpr static Vec2f kRectHalfSize = Vec2f{ Ratio(1, 2), Ratio(1, 2) };
+constexpr static ColorId kGroundColor = sample_color::kGreen;
+constexpr static ColorId kCircleColor = sample_color::kBlue;
+constexpr static ColorId kCollisionCircleColor = sample_color::kMagenta;
+constexpr static ColorId kRectColor = sample_color::kWhite;
 
 void GroundSample::Begin(const SampleContext& context)
 {
     world_.SetContactListener(this);
-    world_.SetBSH(&quadTree_);
-    const auto worldCenter = context.worldBounds.GetCenter();
+    world_.SetBSH(&quad_tree_);
+    const auto world_center = context.world_bounds.GetCenter();
 
     //Implement ground
     {
-        groundBodyIndex_ = world_.AddBody();
-        Body& body = world_.body(groundBodyIndex_);
-        body.position = worldCenter + Vec2f{ Scalar{ 0 }, Scalar{ 3 } };
-        body.type = BodyType::STATIC;
-        body.inverseMass = Scalar{ 0 };
+        ground_body_index_ = world_.AddBody();
+        Body& body = world_.body(ground_body_index_);
+        body.position = world_center + Vec2f{ Scalar{ 0 }, Scalar{ 3 } };
+        body.type = BodyType::kStatic;
+        body.inverse_mass = Scalar{ 0 };
 
-        const auto colliderIndex = world_.AddAabbCollider(groundBodyIndex_);
-        auto& collider = world_.collider(colliderIndex);
-        world_.aabb(collider.shapeIndex).halfSize = groundHalfSize;
-        collider.isTrigger = false;
+        const auto collider_index = world_.AddAabbCollider(ground_body_index_);
+        auto& collider = world_.collider(collider_index);
+        world_.aabb(collider.shape_index).half_size = kGroundHalfSize;
+        collider.is_trigger = false;
         collider.restitution = Scalar{ 0 };
     }
 
     //Implement ball
     {
-        circleBodyIndex_ = world_.AddBody();
-        Body& body = world_.body(circleBodyIndex_);
-        body.position = worldCenter - Vec2f{ Scalar{ 2 }, Scalar{ 3 } };
-        body.type = BodyType::DYNAMIC;
-        body.inverseMass = Scalar{ 1 };
+        circle_body_index_ = world_.AddBody();
+        Body& body = world_.body(circle_body_index_);
+        body.position = world_center - Vec2f{ Scalar{ 2 }, Scalar{ 3 } };
+        body.type = BodyType::kDynamic;
+        body.inverse_mass = Scalar{ 1 };
 
-        const auto colliderIndex = world_.AddCircleCollider(circleBodyIndex_);
-        auto& collider = world_.collider(colliderIndex);
-        world_.circle(collider.shapeIndex).radius = circleRadius;
-        collider.isTrigger = false;
+        const auto collider_index = world_.AddCircleCollider(circle_body_index_);
+        auto& collider = world_.collider(collider_index);
+        world_.circle(collider.shape_index).radius = kCircleRadius;
+        collider.is_trigger = false;
         collider.restitution = Ratio(1, 2);
     }
 
     //Implement box
     {
-        rectBodyIndex_ = world_.AddBody();
-        Body& body = world_.body(rectBodyIndex_);
-        body.position = worldCenter - Vec2f{ Scalar{ -2 }, Scalar{ 3 } };
-        body.type = BodyType::DYNAMIC;
-        body.inverseMass = Scalar{ 1 };
+        rect_body_index_ = world_.AddBody();
+        Body& body = world_.body(rect_body_index_);
+        body.position = world_center - Vec2f{ Scalar{ -2 }, Scalar{ 3 } };
+        body.type = BodyType::kDynamic;
+        body.inverse_mass = Scalar{ 1 };
 
-        const auto colliderIndex = world_.AddAabbCollider(rectBodyIndex_);
-        auto& collider = world_.collider(colliderIndex);
-        world_.aabb(collider.shapeIndex).halfSize = rectHalfSize;
-        collider.isTrigger = false;
+        const auto collider_index = world_.AddAabbCollider(rect_body_index_);
+        auto& collider = world_.collider(collider_index);
+        world_.aabb(collider.shape_index).half_size = kRectHalfSize;
+        collider.is_trigger = false;
         collider.restitution = Scalar{ 0 };
     }
 }
 
-void GroundSample::Draw(DrawList& drawList) const
+void GroundSample::Draw(DrawList& draw_list) const
 {
-    drawList.circles.push_back({ world_.body(circleBodyIndex_).position, circleRadius,
-        collisionCount > 0 ? collisionCircleColor : circleColor });
-    drawList.boxes.push_back({ world_.body(groundBodyIndex_).position, groundHalfSize, groundColor });
-    drawList.boxes.push_back({ world_.body(rectBodyIndex_).position, rectHalfSize, rectColor });
+    draw_list.circles.push_back({ world_.body(circle_body_index_).position, kCircleRadius,
+        collision_count_ > 0 ? kCollisionCircleColor : kCircleColor });
+    draw_list.boxes.push_back({ world_.body(ground_body_index_).position, kGroundHalfSize, kGroundColor });
+    draw_list.boxes.push_back({ world_.body(rect_body_index_).position, kRectHalfSize, kRectColor });
 }
 
 void GroundSample::End()
 {
     world_.Clear();
-    quadTree_.Clear();
-    collisionCount = 0;
+    quad_tree_.Clear();
+    collision_count_ = 0;
 }
 
 void GroundSample::OnTriggerEnter([[maybe_unused]] const ColliderPair& p)
@@ -96,11 +96,11 @@ void GroundSample::FixedUpdate()
 
 void GroundSample::OnCollisionEnter([[maybe_unused]] const ColliderPair& p)
 {
-    collisionCount++;
+    collision_count_++;
 }
 
 void GroundSample::OnCollisionExit([[maybe_unused]] const ColliderPair& p)
 {
-    collisionCount--;
+    collision_count_--;
 }
 }

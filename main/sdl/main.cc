@@ -25,17 +25,17 @@ namespace
  * @brief Longest frame time fed to the accumulator: after a stall (a breakpoint, a window drag) the simulation slows
  * down instead of running hundreds of steps to catch up
  */
-constexpr float MAX_FRAME_TIME = 0.25f;
+constexpr float kMaxFrameTime = 0.25f;
 
 void DrawSampleMenu(neko::SampleRegistry& registry, const neko::SampleContext& context)
 {
     ImGui::Begin("Sample Manager");
-    const auto current = registry.currentIndex();
-    if (ImGui::BeginCombo("Samples", current == neko::SampleRegistry::NONE ? "None" : registry.name(current)))
+    const auto current = registry.current_index();
+    if (ImGui::BeginCombo("Samples", current == neko::SampleRegistry::kNone ? "None" : registry.name(current)))
     {
-        if (ImGui::Selectable("None", current == neko::SampleRegistry::NONE))
+        if (ImGui::Selectable("None", current == neko::SampleRegistry::kNone))
         {
-            registry.Select(neko::SampleRegistry::NONE, context);
+            registry.Select(neko::SampleRegistry::kNone, context);
         }
         for (std::size_t index = 0; index < registry.size(); index++)
         {
@@ -46,7 +46,7 @@ void DrawSampleMenu(neko::SampleRegistry& registry, const neko::SampleContext& c
         }
         ImGui::EndCombo();
     }
-    if (current != neko::SampleRegistry::NONE && ImGui::Button("Restart"))
+    if (current != neko::SampleRegistry::kNone && ImGui::Button("Restart"))
     {
         registry.Select(current, context);
     }
@@ -77,23 +77,23 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 
     {
         neko::SampleRegistry registry;
-        const neko::SampleContext context{ neko::sample_config::WORLD_BOUNDS };
+        const neko::SampleContext context{ neko::sample_config::kWorldBounds };
         registry.Select(0, context);
-        neko::DrawList drawList;
-        drawList.Reserve(neko::sample_config::MAX_DRAW_CIRCLES, neko::sample_config::MAX_DRAW_BOXES,
-            neko::sample_config::MAX_DRAW_LINES);
+        neko::DrawList draw_list;
+        draw_list.Reserve(neko::sample_config::kMaxDrawCircles, neko::sample_config::kMaxDrawBoxes,
+            neko::sample_config::kMaxDrawLines);
         neko::SdlSampleDrawer drawer{ renderer };
 
-        const float fixedDeltaTime = float{ neko::Sample::fixedDeltaTime };
+        const float fixed_delta_time = float{ neko::Sample::kFixedDeltaTime };
         float accumulator = 0.0f;
-        auto lastTick = SDL_GetPerformanceCounter();
-        bool isClosed = false;
-        while (!isClosed)
+        auto last_tick = SDL_GetPerformanceCounter();
+        bool is_closed = false;
+        while (!is_closed)
         {
-            const auto currentTick = SDL_GetPerformanceCounter();
-            const float frameTime = static_cast<float>(currentTick - lastTick) /
+            const auto current_tick = SDL_GetPerformanceCounter();
+            const float frame_time = static_cast<float>(current_tick - last_tick) /
                 static_cast<float>(SDL_GetPerformanceFrequency());
-            lastTick = currentTick;
+            last_tick = current_tick;
 
             SDL_Event event;
             while (SDL_PollEvent(&event))
@@ -101,15 +101,15 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
                 ImGui_ImplSDL3_ProcessEvent(&event);
                 if (event.type == SDL_EVENT_QUIT)
                 {
-                    isClosed = true;
+                    is_closed = true;
                 }
             }
 
-            accumulator += frameTime < MAX_FRAME_TIME ? frameTime : MAX_FRAME_TIME;
-            while (accumulator >= fixedDeltaTime)
+            accumulator += frame_time < kMaxFrameTime ? frame_time : kMaxFrameTime;
+            while (accumulator >= fixed_delta_time)
             {
                 registry.FixedUpdate();
-                accumulator -= fixedDeltaTime;
+                accumulator -= fixed_delta_time;
             }
 
             ImGui_ImplSDLRenderer3_NewFrame();
@@ -119,8 +119,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
             SDL_RenderClear(renderer);
-            registry.Draw(drawList);
-            drawer.Render(drawList);
+            registry.Draw(draw_list);
+            drawer.Render(draw_list);
 
             ImGui::Render();
             ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);

@@ -9,7 +9,7 @@
 namespace neko::scenes
 {
 
-inline constexpr int FALLING_PILE_DYNAMIC_COUNT = 64;
+inline constexpr int kFallingPileDynamicCount = 64;
 
 /**
  * @brief num / den computed in Scalar, so the scene is built without any float arithmetic
@@ -26,60 +26,60 @@ constexpr Scalar Ratio(int num, int den)
  */
 inline void BuildFallingPile(PhysicsWorld& world)
 {
-    const auto addStaticBox = [&world](Vec2f position, Vec2f halfSize)
+    const auto add_static_box = [&world](Vec2f position, Vec2f half_size)
     {
         const auto body = world.AddBody();
-        world.body(body).type = BodyType::STATIC;
+        world.body(body).type = BodyType::kStatic;
         world.body(body).position = position;
         const auto collider = world.AddAabbCollider(body);
-        world.collider(collider).isTrigger = false;
+        world.collider(collider).is_trigger = false;
         world.collider(collider).restitution = Ratio(1, 4);
-        world.aabb(world.collider(collider).shapeIndex).halfSize = halfSize;
+        world.aabb(world.collider(collider).shape_index).half_size = half_size;
     };
-    addStaticBox({ Scalar{0}, Ratio(-1, 2) }, { Scalar{8}, Ratio(1, 2) });
-    addStaticBox({ Ratio(-17, 2), Scalar{6} }, { Ratio(1, 2), Scalar{7} });
-    addStaticBox({ Ratio(17, 2), Scalar{6} }, { Ratio(1, 2), Scalar{7} });
+    add_static_box({ Scalar{0}, Ratio(-1, 2) }, { Scalar{8}, Ratio(1, 2) });
+    add_static_box({ Ratio(-17, 2), Scalar{6} }, { Ratio(1, 2), Scalar{7} });
+    add_static_box({ Ratio(17, 2), Scalar{6} }, { Ratio(1, 2), Scalar{7} });
 
-    for (int i = 0; i < FALLING_PILE_DYNAMIC_COUNT; ++i)
+    for (int i = 0; i < kFallingPileDynamicCount; ++i)
     {
         const auto body = world.AddBody();
         const int column = i % 16;
         const int row = i / 16;
         world.body(body).position = { Ratio(-70 + 9 * column + 2 * (row % 2), 10), Ratio(20 + 11 * row, 10) };
         world.body(body).velocity = { Ratio(7 * (i % 5 - 2), 10), static_cast<Scalar>(i % 3) };
-        world.body(body).inverseMass = i % 4 == 0 ? Ratio(1, 2) : Scalar{ 1 };
-        const bool isCircle = i % 3 != 0;
-        const auto collider = isCircle ? world.AddCircleCollider(body) : world.AddAabbCollider(body);
-        world.collider(collider).isTrigger = i % 11 == 5;
+        world.body(body).inverse_mass = i % 4 == 0 ? Ratio(1, 2) : Scalar{ 1 };
+        const bool is_circle = i % 3 != 0;
+        const auto collider = is_circle ? world.AddCircleCollider(body) : world.AddAabbCollider(body);
+        world.collider(collider).is_trigger = i % 11 == 5;
         world.collider(collider).restitution = Ratio(i % 4, 10);
-        if (isCircle)
+        if (is_circle)
         {
-            world.circle(world.collider(collider).shapeIndex).radius = Ratio(6 + i % 3, 20);
+            world.circle(world.collider(collider).shape_index).radius = Ratio(6 + i % 3, 20);
         }
         else
         {
-            world.aabb(world.collider(collider).shapeIndex).halfSize = { Ratio(7, 20), Ratio(5 + i % 2, 20) };
+            world.aabb(world.collider(collider).shape_index).half_size = { Ratio(7, 20), Ratio(5 + i % 2, 20) };
         }
     }
 
     const auto paddle = world.AddBody();
-    world.body(paddle).type = BodyType::KINEMATIC;
+    world.body(paddle).type = BodyType::kKinematic;
     world.body(paddle).position = { Scalar{-7}, Ratio(1, 2) };
     world.body(paddle).velocity = { Ratio(3, 2), Scalar{0} };
-    const auto paddleCollider = world.AddAabbCollider(paddle);
-    world.collider(paddleCollider).isTrigger = false;
-    world.aabb(world.collider(paddleCollider).shapeIndex).halfSize = { Ratio(1, 4), Ratio(1, 2) };
+    const auto paddle_collider = world.AddAabbCollider(paddle);
+    world.collider(paddle_collider).is_trigger = false;
+    world.aabb(world.collider(paddle_collider).shape_index).half_size = { Ratio(1, 4), Ratio(1, 2) };
 }
 
 /**
  * @brief Golden checksums of BuildFallingPile with Scalar = Fixed16, shared by tests/scene_test.cc and the DS test
  * ROM (nds/main.cc) so there is one source to re-pin when the simulation changes on purpose.
- * Re-pinned on 2026-09-27, most recently for the DetectContact reciprocal change (one division instead of two
+ * Re-pinned on 2026-09-27, most recently for the kDetectContact reciprocal change (one division instead of two
  * for the circle-circle and circle-AABB contact normal): verified with GCC 15.2 (-O2, -fno-exceptions -fno-rtti)
  * and the DS test ROM on melonDS; not re-checked against MSVC.
  * The DS test ROM must print the same values.
  */
-inline constexpr std::pair<int, std::uint32_t> FALLING_PILE_GOLDEN_CHECKSUMS[] = {
+inline constexpr std::pair<int, std::uint32_t> kFallingPileGoldenChecksums[] = {
     { 0, 0x61c2e799u },
     { 1, 0xfa00ce4cu },
     { 60, 0x1846fbd1u },

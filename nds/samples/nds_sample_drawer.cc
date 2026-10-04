@@ -12,17 +12,17 @@ static_assert(std::is_same_v<Scalar, Fixed16>, "The DS drawer maps Fixed16 raw v
 namespace
 {
 
-constexpr int SPRITE_COUNT_MAX = 128;
+constexpr int kSpriteCountMax = 128;
 /**
  * @brief Pixel coordinates are clamped to this range, so that a body far away can't make a line loop for long
  */
-constexpr std::int64_t PIXEL_LIMIT = 2048;
-constexpr int BUFFER_MAP_BASE_STRIDE = 4;
+constexpr std::int64_t kPixelLimit = 2048;
+constexpr int kBufferMapBaseStride = 4;
 /**
  * @brief 64 KB per 256x256 8bpp buffer, in u16
  */
-constexpr std::size_t BUFFER_HALFWORDS = 256 * 256 / 2;
-constexpr std::uint32_t VISIBLE_BITMAP_BYTES = 256 * 192;
+constexpr std::size_t kBufferHalfwords = 256 * 256 / 2;
+constexpr std::uint32_t kVisibleBitmapBytes = 256 * 192;
 
 constexpr u16 ToRgb15(const PaletteColor& color)
 {
@@ -32,16 +32,16 @@ constexpr u16 ToRgb15(const PaletteColor& color)
 /**
  * @brief Letterbox background: bitmap palette entry 0 is transparent and shows the backdrop color
  */
-constexpr u16 BACKDROP_COLOR = ToRgb15({ 20, 20, 26 });
+constexpr u16 kBackdropColor = ToRgb15({ 20, 20, 26 });
 
 /**
  * @brief Round(value * scale) with value and scale in 16.16, computed in 64 bits so that it can't overflow
  */
 int ToPixels(Scalar value, Scalar scale)
 {
-    const std::int64_t product = std::int64_t{ value.underlyingValue() } * std::int64_t{ scale.underlyingValue() };
+    const std::int64_t product = std::int64_t{ value.underlying_value() } * std::int64_t{ scale.underlying_value() };
     const std::int64_t pixels = (product + (std::int64_t{ 1 } << 31)) >> 32;
-    return static_cast<int>(std::clamp(pixels, -PIXEL_LIMIT, PIXEL_LIMIT));
+    return static_cast<int>(std::clamp(pixels, -kPixelLimit, kPixelLimit));
 }
 
 /**
@@ -52,10 +52,10 @@ template<typename Inside>
 void RasterizeSprite(u16* gfx, int width, int height, Inside inside)
 {
     volatile u16* out = gfx;
-    const int tilesX = width / 8;
-    for (int tileY = 0; tileY < height / 8; ++tileY)
+    const int tiles_x = width / 8;
+    for (int tile_y = 0; tile_y < height / 8; ++tile_y)
     {
-        for (int tileX = 0; tileX < tilesX; ++tileX)
+        for (int tile_x = 0; tile_x < tiles_x; ++tile_x)
         {
             for (int row = 0; row < 8; ++row)
             {
@@ -64,7 +64,7 @@ void RasterizeSprite(u16* gfx, int width, int height, Inside inside)
                     unsigned value = 0;
                     for (int i = 0; i < 4; ++i)
                     {
-                        if (inside(tileX * 8 + half * 4 + i, tileY * 8 + row))
+                        if (inside(tile_x * 8 + half * 4 + i, tile_y * 8 + row))
                         {
                             value |= 1u << (4 * i);
                         }
@@ -175,12 +175,12 @@ void NdsSampleDrawer::Init()
 
     bg_ = bgInit(3, BgType_Bmp8, BgSize_B8_256x256, 0, 0);
     bgSetPriority(bg_, 3);
-    dmaFillWords(0, BG_GFX, 2 * BUFFER_HALFWORDS * sizeof(u16));
+    dmaFillWords(0, BG_GFX, 2 * kBufferHalfwords * sizeof(u16));
     bgSetMapBase(bg_, 0);
-    frontBuffer_ = 0;
-    swapPending_ = false;
+    front_buffer_ = 0;
+    swap_pending_ = false;
 
-    BG_PALETTE[0] = BACKDROP_COLOR;
+    BG_PALETTE[0] = kBackdropColor;
     for (std::size_t color = 1; color < kSamplePalette.size(); ++color)
     {
         const u16 rgb = ToRgb15(kSamplePalette[color]);
@@ -188,20 +188,20 @@ void NdsSampleDrawer::Init()
         SPRITE_PALETTE[color * 16 + 1] = rgb;
     }
 
-    for (int radius = 1; radius <= MAX_SPRITE_RADIUS; ++radius)
+    for (int radius = 1; radius <= kMaxSpriteRadius; ++radius)
     {
         // 2 * radius <= 64: always found
         const auto shape = FindSpriteShape(2 * radius, 2 * radius).value_or(SpriteShape{});
         u16* gfx = oamAllocateGfx(&oamMain, shape.size, SpriteColorFormat_16Color);
         RasterizeSprite(gfx, shape.width, shape.height,
             [radius](int x, int y) { return InsideCircle(x, y, radius); });
-        circleGfx_[static_cast<std::size_t>(radius)] = { shape, gfx };
+        circle_gfx_[static_cast<std::size_t>(radius)] = { shape, gfx };
     }
 
-    bitmapShapes_.reserve(512);
-    frontHash_ = HashBitmapShapes();
+    bitmap_shapes_.reserve(512);
+    front_hash_ = HashBitmapShapes();
     stats_ = {};
-    previousSpriteCount_ = 0;
+    previous_sprite_count_ = 0;
 }
 
 void NdsSampleDrawer::AddSprite(int x, int y, const SpriteGfx& sprite, ColorId color)
@@ -210,28 +210,28 @@ void NdsSampleDrawer::AddSprite(int x, int y, const SpriteGfx& sprite, ColorId c
     {
         return;
     }
-    if (stats_.spritesUsed >= SPRITE_COUNT_MAX)
+    if (stats_.sprites_used >= kSpriteCountMax)
     {
-        ++stats_.droppedSprites;
+        ++stats_.dropped_sprites;
         return;
     }
     // x and y are 9 and 8 bits in OAM: negative values wrap, which shows the part of the sprite that is on screen
-    oamSet(&oamMain, stats_.spritesUsed, x, y, 0, color, sprite.shape.size, SpriteColorFormat_16Color, sprite.gfx, -1,
+    oamSet(&oamMain, stats_.sprites_used, x, y, 0, color, sprite.shape.size, SpriteColorFormat_16Color, sprite.gfx, -1,
         false, false, false, false, false);
-    ++stats_.spritesUsed;
+    ++stats_.sprites_used;
 }
 
 const NdsSampleDrawer::BoxGfx* NdsSampleDrawer::GetBoxGfx(int width, int height)
 {
-    for (std::size_t i = 0; i < boxGfxCount_; ++i)
+    for (std::size_t i = 0; i < box_gfx_count_; ++i)
     {
-        if (boxGfx_[i].width == width && boxGfx_[i].height == height)
+        if (box_gfx_[i].width == width && box_gfx_[i].height == height)
         {
-            return &boxGfx_[i];
+            return &box_gfx_[i];
         }
     }
     const auto shape = FindSpriteShape(width, height);
-    if (!shape.has_value() || boxGfxCount_ == boxGfx_.size())
+    if (!shape.has_value() || box_gfx_count_ == box_gfx_.size())
     {
         return nullptr;
     }
@@ -242,91 +242,91 @@ const NdsSampleDrawer::BoxGfx* NdsSampleDrawer::GetBoxGfx(int width, int height)
     }
     RasterizeSprite(gfx, shape->width, shape->height,
         [width, height](int x, int y) { return x < width && y < height; });
-    boxGfx_[boxGfxCount_] = { width, height, { *shape, gfx } };
-    return &boxGfx_[boxGfxCount_++];
+    box_gfx_[box_gfx_count_] = { width, height, { *shape, gfx } };
+    return &box_gfx_[box_gfx_count_++];
 }
 
-void NdsSampleDrawer::Render(const DrawList& drawList)
+void NdsSampleDrawer::Render(const DrawList& draw_list)
 {
-    const Vec2f origin = drawList.camera.minBound;
-    const Scalar cameraWidth = drawList.camera.maxBound.x - drawList.camera.minBound.x;
-    const Scalar scale = Scalar{ SCREEN_WIDTH } / cameraWidth;
-    const auto toScreenX = [origin, scale](Scalar x) { return ToPixels(x - origin.x, scale); };
-    const auto toScreenY = [origin, scale](Scalar y) { return ToPixels(y - origin.y, scale); };
+    const Vec2f origin = draw_list.camera.min_bound;
+    const Scalar camera_width = draw_list.camera.max_bound.x - draw_list.camera.min_bound.x;
+    const Scalar scale = Scalar{ SCREEN_WIDTH } / camera_width;
+    const auto to_screen_x = [origin, scale](Scalar x) { return ToPixels(x - origin.x, scale); };
+    const auto to_screen_y = [origin, scale](Scalar y) { return ToPixels(y - origin.y, scale); };
 
-    stats_.spritesUsed = 0;
-    stats_.droppedSprites = 0;
-    bitmapShapes_.clear();
+    stats_.sprites_used = 0;
+    stats_.dropped_sprites = 0;
+    bitmap_shapes_.clear();
 
-    for (const auto& circle : drawList.circles)
+    for (const auto& circle : draw_list.circles)
     {
         const int radius = std::max(1, ToPixels(circle.radius, scale));
-        const int x = toScreenX(circle.center.x);
-        const int y = toScreenY(circle.center.y);
-        if (radius <= MAX_SPRITE_RADIUS)
+        const int x = to_screen_x(circle.center.x);
+        const int y = to_screen_y(circle.center.y);
+        if (radius <= kMaxSpriteRadius)
         {
-            AddSprite(x - radius, y - radius, circleGfx_[static_cast<std::size_t>(radius)], circle.color);
+            AddSprite(x - radius, y - radius, circle_gfx_[static_cast<std::size_t>(radius)], circle.color);
         }
         else
         {
-            bitmapShapes_.push_back({ x, y, radius, 0, circle.color, BitmapShapeType::CIRCLE });
+            bitmap_shapes_.push_back({ x, y, radius, 0, circle.color, BitmapShapeType::kCircle });
         }
     }
-    for (const auto& box : drawList.boxes)
+    for (const auto& box : draw_list.boxes)
     {
-        const int x0 = toScreenX(box.center.x - box.halfSize.x);
-        const int y0 = toScreenY(box.center.y - box.halfSize.y);
-        const int width = std::max(1, toScreenX(box.center.x + box.halfSize.x) - x0);
-        const int height = std::max(1, toScreenY(box.center.y + box.halfSize.y) - y0);
-        const BoxGfx* gfx = width <= MAX_SPRITE_BOX && height <= MAX_SPRITE_BOX ? GetBoxGfx(width, height) : nullptr;
+        const int x0 = to_screen_x(box.center.x - box.half_size.x);
+        const int y0 = to_screen_y(box.center.y - box.half_size.y);
+        const int width = std::max(1, to_screen_x(box.center.x + box.half_size.x) - x0);
+        const int height = std::max(1, to_screen_y(box.center.y + box.half_size.y) - y0);
+        const BoxGfx* gfx = width <= kMaxSpriteBox && height <= kMaxSpriteBox ? GetBoxGfx(width, height) : nullptr;
         if (gfx != nullptr)
         {
             AddSprite(x0, y0, gfx->sprite, box.color);
         }
         else
         {
-            bitmapShapes_.push_back({ x0, y0, x0 + width, y0 + height, box.color, BitmapShapeType::RECT });
+            bitmap_shapes_.push_back({ x0, y0, x0 + width, y0 + height, box.color, BitmapShapeType::kRect });
         }
     }
-    for (const auto& line : drawList.lines)
+    for (const auto& line : draw_list.lines)
     {
-        bitmapShapes_.push_back({ toScreenX(line.a.x), toScreenY(line.a.y), toScreenX(line.b.x), toScreenY(line.b.y),
-            line.color, BitmapShapeType::LINE });
+        bitmap_shapes_.push_back({ to_screen_x(line.a.x), to_screen_y(line.a.y), to_screen_x(line.b.x), to_screen_y(line.b.y),
+            line.color, BitmapShapeType::kLine });
     }
 
-    if (stats_.spritesUsed < previousSpriteCount_)
+    if (stats_.sprites_used < previous_sprite_count_)
     {
-        oamClear(&oamMain, stats_.spritesUsed, previousSpriteCount_ - stats_.spritesUsed);
+        oamClear(&oamMain, stats_.sprites_used, previous_sprite_count_ - stats_.sprites_used);
     }
-    previousSpriteCount_ = stats_.spritesUsed;
+    previous_sprite_count_ = stats_.sprites_used;
 
-    stats_.bitmapShapes = static_cast<int>(bitmapShapes_.size());
+    stats_.bitmap_shapes = static_cast<int>(bitmap_shapes_.size());
     const std::uint32_t hash = HashBitmapShapes();
-    if (hash != frontHash_)
+    if (hash != front_hash_)
     {
-        RedrawBitmap(BG_GFX + BUFFER_HALFWORDS * static_cast<std::size_t>(1 - frontBuffer_));
-        frontHash_ = hash;
-        swapPending_ = true;
-        ++stats_.bitmapRedraws;
+        RedrawBitmap(BG_GFX + kBufferHalfwords * static_cast<std::size_t>(1 - front_buffer_));
+        front_hash_ = hash;
+        swap_pending_ = true;
+        ++stats_.bitmap_redraws;
     }
 }
 
 void NdsSampleDrawer::Present()
 {
     oamUpdate(&oamMain);
-    if (swapPending_)
+    if (swap_pending_)
     {
-        frontBuffer_ = 1 - frontBuffer_;
-        bgSetMapBase(bg_, static_cast<unsigned>(BUFFER_MAP_BASE_STRIDE * frontBuffer_));
-        swapPending_ = false;
+        front_buffer_ = 1 - front_buffer_;
+        bgSetMapBase(bg_, static_cast<unsigned>(kBufferMapBaseStride * front_buffer_));
+        swap_pending_ = false;
     }
 }
 
 std::uint32_t NdsSampleDrawer::HashBitmapShapes() const
 {
     std::uint32_t hash = 2166136261u;
-    hash = HashInt(hash, static_cast<int>(bitmapShapes_.size()));
-    for (const auto& shape : bitmapShapes_)
+    hash = HashInt(hash, static_cast<int>(bitmap_shapes_.size()));
+    for (const auto& shape : bitmap_shapes_)
     {
         hash = HashInt(hash, shape.x0);
         hash = HashInt(hash, shape.y0);
@@ -339,13 +339,13 @@ std::uint32_t NdsSampleDrawer::HashBitmapShapes() const
 
 void NdsSampleDrawer::RedrawBitmap(u16* buffer) const
 {
-    dmaFillWords(0, buffer, VISIBLE_BITMAP_BYTES);
+    dmaFillWords(0, buffer, kVisibleBitmapBytes);
     volatile u16* pixels = buffer;
-    for (const auto& shape : bitmapShapes_)
+    for (const auto& shape : bitmap_shapes_)
     {
         switch (shape.type)
         {
-        case BitmapShapeType::RECT:
+        case BitmapShapeType::kRect:
         {
             const int x0 = std::max(shape.x0, 0);
             const int x1 = std::min(shape.x1, SCREEN_WIDTH);
@@ -355,7 +355,7 @@ void NdsSampleDrawer::RedrawBitmap(u16* buffer) const
             }
             break;
         }
-        case BitmapShapeType::CIRCLE:
+        case BitmapShapeType::kCircle:
         {
             const int radius = shape.x1;
             const int left = shape.x0 - radius;
@@ -377,7 +377,7 @@ void NdsSampleDrawer::RedrawBitmap(u16* buffer) const
             }
             break;
         }
-        case BitmapShapeType::LINE:
+        case BitmapShapeType::kLine:
         {
             if (shape.y0 == shape.y1)
             {
@@ -406,8 +406,8 @@ void NdsSampleDrawer::RedrawBitmap(u16* buffer) const
             int y = shape.y0;
             const int dx = std::abs(shape.x1 - shape.x0);
             const int dy = -std::abs(shape.y1 - shape.y0);
-            const int stepX = shape.x0 < shape.x1 ? 1 : -1;
-            const int stepY = shape.y0 < shape.y1 ? 1 : -1;
+            const int step_x = shape.x0 < shape.x1 ? 1 : -1;
+            const int step_y = shape.y0 < shape.y1 ? 1 : -1;
             int error = dx + dy;
             while (true)
             {
@@ -419,16 +419,16 @@ void NdsSampleDrawer::RedrawBitmap(u16* buffer) const
                 {
                     break;
                 }
-                const int doubleError = 2 * error;
-                if (doubleError >= dy)
+                const int double_error = 2 * error;
+                if (double_error >= dy)
                 {
                     error += dy;
-                    x += stepX;
+                    x += step_x;
                 }
-                if (doubleError <= dx)
+                if (double_error <= dx)
                 {
                     error += dx;
-                    y += stepY;
+                    y += step_y;
                 }
             }
             break;

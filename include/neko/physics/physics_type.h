@@ -19,7 +19,7 @@ struct BodyIndex
     constexpr bool operator==(const BodyIndex& rhs) const noexcept = default;
 };
 
-constexpr auto INVALID_BODY_INDEX = BodyIndex{};
+constexpr auto kInvalidBodyIndex = BodyIndex{};
 
 struct ShapeIndex
 {
@@ -27,13 +27,13 @@ struct ShapeIndex
     constexpr bool operator==(const ShapeIndex& rhs) const noexcept = default;
 };
 
-constexpr auto INVALID_SHAPE_INDEX = ShapeIndex{};
+constexpr auto kInvalidShapeIndex = ShapeIndex{};
 
 enum class ShapeType : std::uint8_t
 {
-    AABB,
-    CIRCLE,
-    NONE
+    kAabb,
+    kCircle,
+    kNone
 };
 
 struct ColliderIndex
@@ -42,7 +42,7 @@ struct ColliderIndex
     constexpr auto operator<=>(const ColliderIndex& rhs) const noexcept = default;
 };
 
-constexpr auto INVALID_COLLIDER_INDEX = ColliderIndex{};
+constexpr auto kInvalidColliderIndex = ColliderIndex{};
 
 /**
  * @brief Unordered pair of colliders, stored with c1 < c2 so that it can be compared and sorted
@@ -59,7 +59,7 @@ struct ColliderPair
 
     constexpr auto operator<=>(const ColliderPair& rhs) const noexcept = default;
 
-    [[nodiscard]] constexpr bool contains(ColliderIndex c) const noexcept
+    [[nodiscard]] constexpr bool Contains(ColliderIndex c) const noexcept
     {
         return c == c1 || c == c2;
     }

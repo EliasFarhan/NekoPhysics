@@ -9,23 +9,23 @@ namespace neko
 template<typename T>
 struct Aabb
 {
-    Vec2<T> minBound{};
-    Vec2<T> maxBound{};
+    Vec2<T> min_bound{};
+    Vec2<T> max_bound{};
 
 
 
-    static constexpr Aabb FromCenter(Vec2<T> center, Vec2<T> halfSize)
+    static constexpr Aabb FromCenter(Vec2<T> center, Vec2<T> half_size)
     {
-        return { center - halfSize, center + halfSize };
+        return { center - half_size, center + half_size };
     }
-    [[nodiscard]] constexpr Vec2<T> GetCenter() const { return minBound + GetHalfSize(); }
-    [[nodiscard]] constexpr Vec2<T> GetHalfSize() const { return (maxBound - minBound) / T{2}; }
+    [[nodiscard]] constexpr Vec2<T> GetCenter() const { return min_bound + GetHalfSize(); }
+    [[nodiscard]] constexpr Vec2<T> GetHalfSize() const { return (max_bound - min_bound) / T{2}; }
 
     [[nodiscard]] constexpr bool Contains(Vec2<T> point) const noexcept
     {
         const auto center = GetCenter();
-        const auto halfSize = GetHalfSize();
-        return Abs(point.x - center.x) < halfSize.x && Abs(point.y - center.y) < halfSize.y;
+        const auto half_size = GetHalfSize();
+        return Abs(point.x - center.x) < half_size.x && Abs(point.y - center.y) < half_size.y;
     }
 };
 
@@ -49,8 +49,8 @@ struct Circle
 template<typename T>
 constexpr bool Intersect(const Aabb<T>& a, const Aabb<T>& b)
 {
-    if (a.maxBound.x < b.minBound.x || a.minBound.x > b.maxBound.x) return false;
-    if (a.maxBound.y < b.minBound.y || a.minBound.y > b.maxBound.y) return false;
+    if (a.max_bound.x < b.min_bound.x || a.min_bound.x > b.max_bound.x) return false;
+    if (a.max_bound.y < b.min_bound.y || a.min_bound.y > b.max_bound.y) return false;
     return true;
 }
 
@@ -66,7 +66,7 @@ template<typename T>
 template<typename T>
 [[nodiscard]] constexpr Vec2<T> ClosestPoint(const Aabb<T>& aabb, Vec2<T> point)
 {
-    return Vec2<T>::Clamp(point, aabb.minBound, aabb.maxBound);
+    return Vec2<T>::Clamp(point, aabb.min_bound, aabb.max_bound);
 }
 
 template<typename T>

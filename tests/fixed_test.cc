@@ -12,7 +12,7 @@ namespace
 {
 using neko::Fixed16;
 
-constexpr Fixed16 Raw(std::int32_t raw) { return Fixed16::fromUnderlyingValue(raw); }
+constexpr Fixed16 Raw(std::int32_t raw) { return Fixed16::FromUnderlyingValue(raw); }
 
 // numeric_limits (DS review D1.8)
 static_assert(std::numeric_limits<Fixed16>::is_specialized);
@@ -59,8 +59,8 @@ static_assert(neko::Sqrt(std::numeric_limits<Fixed16>::max()) == Raw(11863283));
 // Sin/Cos: compile-time table, radians turned into a phase by one multiplication (DS review D1.9)
 static_assert(neko::Sin(Fixed16{ 0 }) == Fixed16{ 0 });
 static_assert(neko::Cos(Fixed16{ 0 }) == Fixed16{ 1 });
-static_assert(neko::detail::sinTable[neko::detail::SIN_TABLE_SIZE / 4] == 65536);
-static_assert(neko::detail::sinTable[neko::detail::SIN_TABLE_SIZE] == 0);
+static_assert(neko::detail::kSinTable[neko::detail::kSinTableSize / 4] == 65536);
+static_assert(neko::detail::kSinTable[neko::detail::kSinTableSize] == 0);
 } // namespace
 
 TEST(Fixed16, SinCosMatchStd)
@@ -93,7 +93,7 @@ TEST(Fixed16, MulMatchesExactProductWithinHalfUlp)
             const auto result = Raw(a) * Raw(b);
             EXPECT_EQ(result, -(Raw(-a) * Raw(b))) << a << " * " << b;
             const double exact = static_cast<double>(a) * static_cast<double>(b) / 65536.0;
-            EXPECT_LE(std::abs(static_cast<double>(result.underlyingValue()) - exact), 0.5) << a << " * " << b;
+            EXPECT_LE(std::abs(static_cast<double>(result.underlying_value()) - exact), 0.5) << a << " * " << b;
         }
     }
 }
@@ -102,7 +102,7 @@ TEST(Fixed16, SqrtIsFloorOfExactRoot)
 {
     for (std::int64_t raw = 0; raw <= std::numeric_limits<std::int32_t>::max(); raw += 1'234'567)
     {
-        const auto root = static_cast<std::uint64_t>(neko::Sqrt(Raw(static_cast<std::int32_t>(raw))).underlyingValue());
+        const auto root = static_cast<std::uint64_t>(neko::Sqrt(Raw(static_cast<std::int32_t>(raw))).underlying_value());
         const auto square = static_cast<std::uint64_t>(raw) << 16;
         EXPECT_LE(root * root, square) << raw;
         EXPECT_GT((root + 1) * (root + 1), square) << raw;
@@ -158,7 +158,7 @@ TEST_P(FixedIntOperationFixture, Mul)
 
 }
 
-static constexpr float epsilon = 0.0001f;
+static constexpr float kEpsilon = 0.0001f;
 TEST_P(FixedIntOperationFixture, Div)
 {
     auto [i1, i2] = GetParam();
@@ -166,7 +166,7 @@ TEST_P(FixedIntOperationFixture, Div)
     const auto f2 = neko::Fixed{ i2 };
     const auto result = f1 / f2;
     EXPECT_NEAR(static_cast<float>(i1) / static_cast<float>(i2),
-        static_cast<float>(result), epsilon);
+        static_cast<float>(result), kEpsilon);
 
 }
 
@@ -202,7 +202,7 @@ TEST_P(FixedFloatOperationFixture, Add)
     const auto f1 = neko::Fixed{ i1 };
     const auto f2 = neko::Fixed{ i2 };
     const auto result = f1 + f2;
-    EXPECT_NEAR(i1 + i2, static_cast<float>(result), epsilon);
+    EXPECT_NEAR(i1 + i2, static_cast<float>(result), kEpsilon);
 
 }
 
@@ -212,7 +212,7 @@ TEST_P(FixedFloatOperationFixture, Sub)
     const auto f1 = neko::Fixed{ i1 };
     const auto f2 = neko::Fixed{ i2 };
     const auto result = f1 - f2;
-    EXPECT_NEAR(i1 - i2, static_cast<float>(result), epsilon);
+    EXPECT_NEAR(i1 - i2, static_cast<float>(result), kEpsilon);
 
 
 }
@@ -223,7 +223,7 @@ TEST_P(FixedFloatOperationFixture, Mul)
     const auto f1 = neko::Fixed{ i1 };
     const auto f2 = neko::Fixed{ i2 };
     const auto result = f1 * f2;
-    EXPECT_NEAR(i1 * i2, static_cast<float>(result), epsilon);
+    EXPECT_NEAR(i1 * i2, static_cast<float>(result), kEpsilon);
 
 }
 
@@ -233,7 +233,7 @@ TEST_P(FixedFloatOperationFixture, Div)
     const auto f1 = neko::Fixed{ i1 };
     const auto f2 = neko::Fixed{ i2 };
     const auto result = f1 / f2;
-    EXPECT_NEAR(i1 / i2, static_cast<float>(result), epsilon);
+    EXPECT_NEAR(i1 / i2, static_cast<float>(result), kEpsilon);
 
 }
 
@@ -256,46 +256,46 @@ INSTANTIATE_TEST_SUITE_P(NegativeNumbers,
         std::pair{ 23.0f,-32.0f }
     )
 );
-constexpr float sqrtPrecision = 0.0125f;
+constexpr float kSqrtPrecision = 0.0125f;
 TEST(LookupTable, Sqrt)
 {
-    EXPECT_NEAR(float(neko::Fixed16(0)), float(neko::Sqrt(neko::Fixed(0))), sqrtPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(1)), float(neko::Sqrt(neko::Fixed(1))), sqrtPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(3)), float(neko::Sqrt(neko::Fixed(9))), sqrtPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(7)), float(neko::Sqrt(neko::Fixed(49))), sqrtPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(9)), float(neko::Sqrt(neko::Fixed(81))), sqrtPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(10)), float(neko::Sqrt(neko::Fixed(100))), sqrtPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(11)), float(neko::Sqrt(neko::Fixed(121))), sqrtPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(16)), float(neko::Sqrt(neko::Fixed(256))), sqrtPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(0)), float(neko::Sqrt(neko::Fixed(0))), kSqrtPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(1)), float(neko::Sqrt(neko::Fixed(1))), kSqrtPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(3)), float(neko::Sqrt(neko::Fixed(9))), kSqrtPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(7)), float(neko::Sqrt(neko::Fixed(49))), kSqrtPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(9)), float(neko::Sqrt(neko::Fixed(81))), kSqrtPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(10)), float(neko::Sqrt(neko::Fixed(100))), kSqrtPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(11)), float(neko::Sqrt(neko::Fixed(121))), kSqrtPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(16)), float(neko::Sqrt(neko::Fixed(256))), kSqrtPrecision);
 }
 
-constexpr float sinPrecision = 0.0075f;
+constexpr float kSinPrecision = 0.0075f;
 TEST(LookupTable, Sin)
 {
-    EXPECT_NEAR(float(neko::Fixed16(-1, 2)), float(neko::Sin(-neko::Pi<neko::Fixed16>() / neko::Fixed(6))), sinPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(0)), float(neko::Sin(neko::Fixed(0))), sinPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(1, 2)), float(neko::Sin(neko::Pi<neko::Fixed16>() / neko::Fixed(6))), sinPrecision);
-    EXPECT_NEAR(float(neko::Sqrt(neko::Fixed16(2)) / neko::Fixed16(2)), float(neko::Sin(neko::Pi<neko::Fixed16>() / neko::Fixed(4))), sinPrecision);
-    EXPECT_NEAR(float(neko::Sqrt(neko::Fixed16(3)) / neko::Fixed16(2)), float(neko::Sin(neko::Pi<neko::Fixed16>() * neko::Fixed(1,3))), sinPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(1)), float(neko::Sin(neko::Pi<neko::Fixed16>() / neko::Fixed(2))), sinPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(0)), float(neko::Sin(neko::Pi<neko::Fixed16>())), sinPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(-1)), float(neko::Sin(neko::Pi<neko::Fixed16>()*neko::Fixed16(3, 2))), sinPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(0)), float(neko::Sin(neko::Pi<neko::Fixed16>()*neko::Fixed16(2))), sinPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(-1, 2)), float(neko::Sin(-neko::Pi<neko::Fixed16>() / neko::Fixed(6))), kSinPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(0)), float(neko::Sin(neko::Fixed(0))), kSinPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(1, 2)), float(neko::Sin(neko::Pi<neko::Fixed16>() / neko::Fixed(6))), kSinPrecision);
+    EXPECT_NEAR(float(neko::Sqrt(neko::Fixed16(2)) / neko::Fixed16(2)), float(neko::Sin(neko::Pi<neko::Fixed16>() / neko::Fixed(4))), kSinPrecision);
+    EXPECT_NEAR(float(neko::Sqrt(neko::Fixed16(3)) / neko::Fixed16(2)), float(neko::Sin(neko::Pi<neko::Fixed16>() * neko::Fixed(1,3))), kSinPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(1)), float(neko::Sin(neko::Pi<neko::Fixed16>() / neko::Fixed(2))), kSinPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(0)), float(neko::Sin(neko::Pi<neko::Fixed16>())), kSinPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(-1)), float(neko::Sin(neko::Pi<neko::Fixed16>()*neko::Fixed16(3, 2))), kSinPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(0)), float(neko::Sin(neko::Pi<neko::Fixed16>()*neko::Fixed16(2))), kSinPrecision);
 }
 
-constexpr float cosPrecision = 0.0075f;
+constexpr float kCosPrecision = 0.0075f;
 TEST(LookupTable, Cos)
 {
-    EXPECT_NEAR(float(neko::Sqrt(neko::Fixed16(3)) / neko::Fixed16(2)), float(neko::Cos(-neko::Pi<neko::Fixed16>() / neko::Fixed16{6})), cosPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(1)), float(neko::Cos(neko::Fixed(0))), cosPrecision);
-    EXPECT_NEAR(float(neko::Sqrt(neko::Fixed16(3))/neko::Fixed16(2)), float(neko::Cos(neko::Pi<neko::Fixed16>() / neko::Fixed16{6})), cosPrecision);
-    EXPECT_NEAR(float(neko::Sqrt(neko::Fixed16(2))/neko::Fixed16(2)), float(neko::Cos(neko::Pi<neko::Fixed16>() / neko::Fixed16{4})), cosPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(1,2)), float(neko::Cos(neko::Pi<neko::Fixed16>() / neko::Fixed16{3})), cosPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(0)), float(neko::Cos(neko::Pi<neko::Fixed16>() / neko::Fixed16{2})), cosPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(-1)), float(neko::Cos(neko::Pi<neko::Fixed16>())), cosPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(0)), float(neko::Cos(neko::Pi<neko::Fixed16>()*neko::Fixed16{3, 2})), cosPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(1)), float(neko::Cos(neko::Pi<neko::Fixed16>()*neko::Fixed16{2})), cosPrecision);
-    EXPECT_NEAR(float(neko::Fixed16(0)), float(neko::Cos(neko::Pi<neko::Fixed16>()*neko::Fixed16{5,2})), cosPrecision);
+    EXPECT_NEAR(float(neko::Sqrt(neko::Fixed16(3)) / neko::Fixed16(2)), float(neko::Cos(-neko::Pi<neko::Fixed16>() / neko::Fixed16{6})), kCosPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(1)), float(neko::Cos(neko::Fixed(0))), kCosPrecision);
+    EXPECT_NEAR(float(neko::Sqrt(neko::Fixed16(3))/neko::Fixed16(2)), float(neko::Cos(neko::Pi<neko::Fixed16>() / neko::Fixed16{6})), kCosPrecision);
+    EXPECT_NEAR(float(neko::Sqrt(neko::Fixed16(2))/neko::Fixed16(2)), float(neko::Cos(neko::Pi<neko::Fixed16>() / neko::Fixed16{4})), kCosPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(1,2)), float(neko::Cos(neko::Pi<neko::Fixed16>() / neko::Fixed16{3})), kCosPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(0)), float(neko::Cos(neko::Pi<neko::Fixed16>() / neko::Fixed16{2})), kCosPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(-1)), float(neko::Cos(neko::Pi<neko::Fixed16>())), kCosPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(0)), float(neko::Cos(neko::Pi<neko::Fixed16>()*neko::Fixed16{3, 2})), kCosPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(1)), float(neko::Cos(neko::Pi<neko::Fixed16>()*neko::Fixed16{2})), kCosPrecision);
+    EXPECT_NEAR(float(neko::Fixed16(0)), float(neko::Cos(neko::Pi<neko::Fixed16>()*neko::Fixed16{5,2})), kCosPrecision);
 }
 
 int main(int argc, char** argv)

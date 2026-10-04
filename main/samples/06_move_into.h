@@ -44,7 +44,7 @@ public:
 #endif
 	void Begin(const SampleContext& context) override;
 
-	void Draw(DrawList& drawList) const override;
+	void Draw(DrawList& draw_list) const override;
 
 	void End() override;
 
@@ -53,28 +53,28 @@ public:
 	void FixedUpdate() override;
 private:
 #ifndef NEKO_SAMPLE_BOX2D
-	static constexpr std::size_t bodyCount = 3;
-	static constexpr std::size_t maxPairs = 8;
-	PhysicsWorld world_{ {.gravity = Vec2f{Scalar{0}, Ratio(981, 100)}, .dt = fixedDeltaTime, .maxBodies = bodyCount,
-		.maxColliders = bodyCount, .maxTouchingPairs = maxPairs, .maxBroadphasePairs = 1} };
-	QuadTree quadTree_{ bodyCount, maxPairs };
+	static constexpr std::size_t kBodyCount = 3;
+	static constexpr std::size_t kMaxPairs = 8;
+	PhysicsWorld world_{ {.gravity = Vec2f{Scalar{0}, Ratio(981, 100)}, .dt = kFixedDeltaTime, .max_bodies = kBodyCount,
+		.max_colliders = kBodyCount, .max_touching_pairs = kMaxPairs, .max_broadphase_pairs = 1} };
+	QuadTree quad_tree_{ kBodyCount, kMaxPairs };
 
-	BodyIndex staticBodyIndex = INVALID_BODY_INDEX;
-	BodyIndex dynamicBodyIndex = INVALID_BODY_INDEX;
-	BodyIndex groundBodyIndex_ = INVALID_BODY_INDEX;
-	ColliderIndex groundColliderIndex_ = INVALID_COLLIDER_INDEX;
-	ColliderIndex staticColliderIndex_ = INVALID_COLLIDER_INDEX;
-	ColliderIndex dynamicColliderIndex_ = INVALID_COLLIDER_INDEX;
+	BodyIndex static_body_index_ = kInvalidBodyIndex;
+	BodyIndex dynamic_body_index_ = kInvalidBodyIndex;
+	BodyIndex ground_body_index_ = kInvalidBodyIndex;
+	ColliderIndex ground_collider_index_ = kInvalidColliderIndex;
+	ColliderIndex static_collider_index_ = kInvalidColliderIndex;
+	ColliderIndex dynamic_collider_index_ = kInvalidColliderIndex;
 #else
 	//Box 2d version
-	b2World b2World_{b2Vec2{0.0f,9.81f}};
-	b2Body* b2groundBody_;
-	b2Body* b2staticBody_;
-	b2Body* b2dynamicBody_;
+	b2World b2_world_{b2Vec2{0.0f,9.81f}};
+	b2Body* b2_ground_body_;
+	b2Body* b2_static_body_;
+	b2Body* b2_dynamic_body_;
 
 #endif
-	bool staticBodyOnGround_ = false;
-	bool dynamicBodyOnGround_ = false;
+	bool static_body_on_ground_ = false;
+	bool dynamic_body_on_ground_ = false;
 };
 }
 

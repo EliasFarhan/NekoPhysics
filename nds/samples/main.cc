@@ -1,5 +1,5 @@
 // DS samples ROM: the six NekoPhysicsSamples on the top screen (NdsSampleDrawer), a menu and timings on the bottom
-// screen console. One fixed step per VBlank (60 Hz = Sample::fixedDeltaTime), no accumulator.
+// screen console. One fixed step per VBlank (60 Hz = Sample::kFixedDeltaTime), no accumulator.
 //
 // Everything printed goes through newlib's integer-only iprintf/sniprintf, so the float printf code (and the
 // soft-float routines it pulls in) stays out of the ROM.
@@ -20,21 +20,21 @@
 namespace
 {
 
-constexpr int STATS_WINDOW = 60;
+constexpr int kStatsWindow = 60;
 /**
  * @brief The frame period is measured with calico's system tick counter (tickGetCount, TICK_FREQ = bus clock / 64).
  * Hardware timers 2 and 3 run that counter (cpuStartTiming reads it too), so they must not be reprogrammed.
  */
-constexpr std::uint64_t TICK_HZ_X10 = std::uint64_t{ TICK_FREQ } * 10;
+constexpr std::uint64_t kTickHzX10 = std::uint64_t{ TICK_FREQ } * 10;
 /**
  * @brief VBlanks per second (59.8261 Hz) x 10
  */
-constexpr std::uint32_t VBLANK_HZ_X10 = 598;
+constexpr std::uint32_t kVblankHzX10 = 598;
 
-constexpr int CONSOLE_COLUMNS = 32;
-constexpr int MENU_ROW = 2;
-constexpr int STATS_ROW = 10;
-constexpr int HELP_ROW = 20;
+constexpr int kConsoleColumns = 32;
+constexpr int kMenuRow = 2;
+constexpr int kStatsRow = 10;
+constexpr int kHelpRow = 20;
 
 struct TimingWindow
 {
@@ -56,15 +56,15 @@ struct TimingWindow
 };
 
 /**
- * @brief Values shown on the console, refreshed every STATS_WINDOW frames
+ * @brief Values shown on the console, refreshed every kStatsWindow frames
  */
 struct DisplayedStats
 {
-    std::uint32_t stepAverageUs = 0;
-    std::uint32_t stepMaxUs = 0;
-    std::uint32_t drawAverageUs = 0;
-    std::uint32_t drawMaxUs = 0;
-    std::uint32_t fpsX10 = 0;
+    std::uint32_t step_average_us = 0;
+    std::uint32_t step_max_us = 0;
+    std::uint32_t draw_average_us = 0;
+    std::uint32_t draw_max_us = 0;
+    std::uint32_t fps_x10 = 0;
 };
 
 /**
@@ -75,15 +75,15 @@ class ConsoleRows
 public:
     __attribute__((format(printf, 3, 4))) void Print(int row, const char* format, ...)
     {
-        std::array<char, CONSOLE_COLUMNS + 1> line{};
+        std::array<char, kConsoleColumns + 1> line{};
         va_list args;
         va_start(args, format);
         vsniprintf(line.data(), line.size(), format, args);
         va_end(args);
         // Pad to the full width, so a shorter text erases the previous one
         const std::size_t length = std::strlen(line.data());
-        std::memset(line.data() + length, ' ', CONSOLE_COLUMNS - length);
-        line[CONSOLE_COLUMNS] = '\0';
+        std::memset(line.data() + length, ' ', kConsoleColumns - length);
+        line[kConsoleColumns] = '\0';
         auto& previous = rows_[static_cast<std::size_t>(row)];
         if (std::strcmp(previous.data(), line.data()) != 0)
         {
@@ -94,7 +94,7 @@ public:
     }
 
 private:
-    std::array<std::array<char, CONSOLE_COLUMNS + 1>, 24> rows_{};
+    std::array<std::array<char, kConsoleColumns + 1>, 24> rows_{};
 };
 
 } // namespace
@@ -111,103 +111,103 @@ int main()
     consoleSelect(&console);
 
     neko::SampleRegistry registry;
-    const neko::SampleContext context{ neko::sample_config::WORLD_BOUNDS };
-    neko::DrawList drawList;
-    drawList.Reserve(neko::sample_config::MAX_DRAW_CIRCLES, neko::sample_config::MAX_DRAW_BOXES,
-        neko::sample_config::MAX_DRAW_LINES);
+    const neko::SampleContext context{ neko::sample_config::kWorldBounds };
+    neko::DrawList draw_list;
+    draw_list.Reserve(neko::sample_config::kMaxDrawCircles, neko::sample_config::kMaxDrawBoxes,
+        neko::sample_config::kMaxDrawLines);
     std::size_t cursor = 0;
     registry.Select(cursor, context);
 
     ConsoleRows rows;
     rows.Print(0, "NekoPhysics DS samples");
-    rows.Print(HELP_ROW, "Up/Down + A: select");
-    rows.Print(HELP_ROW + 1, "L/R: cycle  START: restart");
+    rows.Print(kHelpRow, "Up/Down + A: select");
+    rows.Print(kHelpRow + 1, "L/R: cycle  START: restart");
 
-    TimingWindow stepTiming;
-    TimingWindow drawTiming;
-    std::uint64_t windowFrameTicks = 0;
+    TimingWindow step_timing;
+    TimingWindow draw_timing;
+    std::uint64_t window_frame_ticks = 0;
     DisplayedStats displayed;
-    std::uint64_t lastFrameTick = tickGetCount();
+    std::uint64_t last_frame_tick = tickGetCount();
 
     while (pmMainLoop())
     {
         scanKeys();
         const auto keys = keysDown();
-        const std::size_t sampleCount = registry.size();
+        const std::size_t sample_count = registry.size();
         if ((keys & KEY_UP) != 0)
         {
-            cursor = (cursor + sampleCount - 1) % sampleCount;
+            cursor = (cursor + sample_count - 1) % sample_count;
         }
         if ((keys & KEY_DOWN) != 0)
         {
-            cursor = (cursor + 1) % sampleCount;
+            cursor = (cursor + 1) % sample_count;
         }
         if ((keys & (KEY_L | KEY_R)) != 0)
         {
-            const std::size_t current = registry.currentIndex();
-            cursor = (keys & KEY_L) != 0 ? (current + sampleCount - 1) % sampleCount : (current + 1) % sampleCount;
+            const std::size_t current = registry.current_index();
+            cursor = (keys & KEY_L) != 0 ? (current + sample_count - 1) % sample_count : (current + 1) % sample_count;
         }
-        if ((keys & (KEY_A | KEY_L | KEY_R)) != 0 && cursor != registry.currentIndex())
+        if ((keys & (KEY_A | KEY_L | KEY_R)) != 0 && cursor != registry.current_index())
         {
             registry.Select(cursor, context);
-            stepTiming = {};
-            drawTiming = {};
-            windowFrameTicks = 0;
+            step_timing = {};
+            draw_timing = {};
+            window_frame_ticks = 0;
         }
         if ((keys & KEY_START) != 0)
         {
-            registry.Select(registry.currentIndex(), context);
+            registry.Select(registry.current_index(), context);
         }
 
         cpuStartTiming(0);
         registry.FixedUpdate();
-        stepTiming.Add(cpuEndTiming());
+        step_timing.Add(cpuEndTiming());
 
         cpuStartTiming(0);
-        registry.Draw(drawList);
-        drawer.Render(drawList);
-        drawTiming.Add(cpuEndTiming());
+        registry.Draw(draw_list);
+        drawer.Render(draw_list);
+        draw_timing.Add(cpuEndTiming());
 
-        for (std::size_t i = 0; i < sampleCount; ++i)
+        for (std::size_t i = 0; i < sample_count; ++i)
         {
-            const char marker = i == registry.currentIndex() ? '*' : ' ';
-            rows.Print(MENU_ROW + static_cast<int>(i), "%c%c %s", i == cursor ? '>' : ' ', marker, registry.name(i));
+            const char marker = i == registry.current_index() ? '*' : ' ';
+            rows.Print(kMenuRow + static_cast<int>(i), "%c%c %s", i == cursor ? '>' : ' ', marker, registry.name(i));
         }
         const auto& stats = drawer.stats();
-        rows.Print(STATS_ROW, "Shapes  %3zu circles %2zu boxes", drawList.circles.size(), drawList.boxes.size());
-        rows.Print(STATS_ROW + 1, "Lines   %3zu", drawList.lines.size());
-        rows.Print(STATS_ROW + 2, "Sprites %3d used %3d dropped", stats.spritesUsed, stats.droppedSprites);
-        rows.Print(STATS_ROW + 3, "Bitmap  %3d shapes", stats.bitmapShapes);
-        rows.Print(STATS_ROW + 4, "Redraws %" PRIu32, stats.bitmapRedraws);
+        rows.Print(kStatsRow, "Shapes  %3zu circles %2zu boxes", draw_list.circles.size(), draw_list.boxes.size());
+        rows.Print(kStatsRow + 1, "Lines   %3zu", draw_list.lines.size());
+        rows.Print(kStatsRow + 2, "Sprites %3d used %3d dropped", stats.sprites_used, stats.dropped_sprites);
+        rows.Print(kStatsRow + 3, "Bitmap  %3d shapes", stats.bitmap_shapes);
+        rows.Print(kStatsRow + 4, "Redraws %" PRIu32, stats.bitmap_redraws);
 
         swiWaitForVBlank();
         drawer.Present();
 
-        const std::uint64_t frameTick = tickGetCount();
-        windowFrameTicks += frameTick - lastFrameTick;
-        lastFrameTick = frameTick;
-        if (stepTiming.count == STATS_WINDOW)
+        const std::uint64_t frame_tick = tickGetCount();
+        window_frame_ticks += frame_tick - last_frame_tick;
+        last_frame_tick = frame_tick;
+        if (step_timing.count == kStatsWindow)
         {
-            displayed.stepAverageUs = stepTiming.AverageUs();
-            displayed.stepMaxUs = stepTiming.MaxUs();
-            displayed.drawAverageUs = drawTiming.AverageUs();
-            displayed.drawMaxUs = drawTiming.MaxUs();
-            displayed.fpsX10 = windowFrameTicks == 0
+            displayed.step_average_us = step_timing.AverageUs();
+            displayed.step_max_us = step_timing.MaxUs();
+            displayed.draw_average_us = draw_timing.AverageUs();
+            displayed.draw_max_us = draw_timing.MaxUs();
+            displayed.fps_x10 = window_frame_ticks == 0
                 ? 0
-                : static_cast<std::uint32_t>(TICK_HZ_X10 * STATS_WINDOW / windowFrameTicks);
-            stepTiming = {};
-            drawTiming = {};
-            windowFrameTicks = 0;
+                : static_cast<std::uint32_t>(kTickHzX10 * kStatsWindow / window_frame_ticks);
+            step_timing = {};
+            draw_timing = {};
+            window_frame_ticks = 0;
         }
-        rows.Print(STATS_ROW + 6, "Step %5" PRIu32 " us avg %5" PRIu32 " max", displayed.stepAverageUs,
-            displayed.stepMaxUs);
-        rows.Print(STATS_ROW + 7, "Draw %5" PRIu32 " us avg %5" PRIu32 " max", displayed.drawAverageUs,
-            displayed.drawMaxUs);
+        rows.Print(kStatsRow + 6, "Step %5" PRIu32 " us avg %5" PRIu32 " max", displayed.step_average_us,
+            displayed.step_max_us);
+        rows.Print(kStatsRow + 7, "Draw %5" PRIu32 " us avg %5" PRIu32 " max", displayed.draw_average_us,
+            displayed.draw_max_us);
         // VBlanks per frame x 10, rounded
-        const std::uint32_t vblanksPerFrameX10 =
-            displayed.fpsX10 == 0 ? 0 : (VBLANK_HZ_X10 * 10 + displayed.fpsX10 / 2) / displayed.fpsX10;
-        rows.Print(STATS_ROW + 8, "FPS  %2" PRIu32 ".%" PRIu32 " (%" PRIu32 ".%" PRIu32 " VBlank/frame)",
-            displayed.fpsX10 / 10, displayed.fpsX10 % 10, vblanksPerFrameX10 / 10, vblanksPerFrameX10 % 10);
+        const std::uint32_t vblanks_per_frame_x10 =
+            displayed.fps_x10 == 0 ? 0 : (kVblankHzX10 * 10 + displayed.fps_x10 / 2) / displayed.fps_x10;
+        rows.Print(kStatsRow + 8, "FPS  %2" PRIu32 ".%" PRIu32 " (%" PRIu32 ".%" PRIu32 " VBlank/frame)",
+            displayed.fps_x10 / 10, displayed.fps_x10 % 10, vblanks_per_frame_x10 / 10, vblanks_per_frame_x10 % 10);
     }
     return 0;
 }

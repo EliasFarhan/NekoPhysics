@@ -55,8 +55,8 @@ struct ChecksumSample
 struct PairCountSample
 {
     int step = 0;
-    std::uint16_t broadphasePairs = 0;
-    std::uint16_t touchingPairs = 0;
+    std::uint16_t broadphase_pairs = 0;
+    std::uint16_t touching_pairs = 0;
 };
 
 /**
@@ -65,18 +65,18 @@ struct PairCountSample
  */
 struct Report
 {
-    bool hooksOk = false;
-    bool pileOk = false;
-    ChecksumSample pileChecksums[6] = {};
-    PairCountSample pilePairCounts[6] = {};
-    Timing pileTiming{};
+    bool hooks_ok = false;
+    bool pile_ok = false;
+    ChecksumSample pile_checksums[6] = {};
+    PairCountSample pile_pair_counts[6] = {};
+    Timing pile_timing{};
 
-    std::uint32_t heavyChecksum = 0;
-    PairCountSample heavyPairCounts[4] = {};
-    Timing heavyTiming{};
+    std::uint32_t heavy_checksum = 0;
+    PairCountSample heavy_pair_counts[4] = {};
+    Timing heavy_timing{};
 
-    neko::StepPhaseTicks heavyPhaseTicks{};
-    int heavyPhaseSteps = 0;
+    neko::StepPhaseTicks heavy_phase_ticks{};
+    int heavy_phase_steps = 0;
 };
 
 Report g_report;
@@ -103,9 +103,9 @@ void LogTiming(const char* name, const Timing& timing)
 
 PairCountSample SamplePairCounts(int step, const neko::PhysicsWorld& world)
 {
-    const PairCountSample sample{ step, static_cast<std::uint16_t>(world.broadphasePairCount()),
-                                   static_cast<std::uint16_t>(world.touchingPairs().size()) };
-    Log("  step %3d broadphase %3u touching %3u\n", sample.step, sample.broadphasePairs, sample.touchingPairs);
+    const PairCountSample sample{ step, static_cast<std::uint16_t>(world.BroadphasePairCount()),
+                                   static_cast<std::uint16_t>(world.touching_pairs().size()) };
+    Log("  step %3d broadphase %3u touching %3u\n", sample.step, sample.broadphase_pairs, sample.touching_pairs);
     return sample;
 }
 
@@ -124,7 +124,7 @@ std::uint64_t Next(std::uint64_t& state)
 bool CheckMathHooks()
 {
     int failures = 0;
-    const auto checkDiv = [&failures](std::int64_t num, std::int32_t den)
+    const auto check_div = [&failures](std::int64_t num, std::int32_t den)
     {
         if (den == 0 || (den == -1 && num == INT64_MIN))
         {
@@ -135,14 +135,14 @@ bool CheckMathHooks()
             Log("div %" PRId64 "/%" PRId32 " FAIL\n", num, den);
         }
     };
-    int sqrtFailuresByBits[65] = {};
-    const auto checkSqrt = [&failures, &sqrtFailuresByBits](std::uint64_t value)
+    int sqrt_failures_by_bits[65] = {};
+    const auto check_sqrt = [&failures, &sqrt_failures_by_bits](std::uint64_t value)
     {
         const std::uint32_t hardware = neko::detail::ISqrt64(value);
         const std::uint32_t portable = neko::detail::ISqrt64Portable(value);
         if (hardware != portable)
         {
-            ++sqrtFailuresByBits[64 - __builtin_clzll(value)];
+            ++sqrt_failures_by_bits[64 - __builtin_clzll(value)];
             if (failures++ < 2)
             {
                 Log("sqrt %" PRIx64 " hw %" PRIx32 " sw %" PRIx32 "\n", value, hardware, portable);
@@ -150,16 +150,16 @@ bool CheckMathHooks()
         }
     };
 
-    constexpr std::int32_t edgeDens[] = { 1, -1, 2, -2, 3, 7, 65536, -65536, INT32_MAX, INT32_MIN };
-    constexpr std::int64_t edgeNums[] = { 0, 1, -1, 7, -7, INT32_MAX, INT32_MIN, std::int64_t{ INT32_MAX } << 16,
+    constexpr std::int32_t edge_dens[] = { 1, -1, 2, -2, 3, 7, 65536, -65536, INT32_MAX, INT32_MIN };
+    constexpr std::int64_t edge_nums[] = { 0, 1, -1, 7, -7, INT32_MAX, INT32_MIN, std::int64_t{ INT32_MAX } << 16,
                                           std::int64_t{ INT32_MIN } << 16, INT64_MAX, INT64_MIN };
-    for (const auto num : edgeNums)
+    for (const auto num : edge_nums)
     {
-        for (const auto den : edgeDens)
+        for (const auto den : edge_dens)
         {
-            checkDiv(num, den);
+            check_div(num, den);
         }
-        checkSqrt(static_cast<std::uint64_t>(num));
+        check_sqrt(static_cast<std::uint64_t>(num));
     }
 
     std::uint64_t state = 0x9E3779B97F4A7C15u;
@@ -171,21 +171,21 @@ bool CheckMathHooks()
         // Fixed16 numerators (raw << 16) and denominators, then full-range ones
         const auto raw = static_cast<std::int32_t>(static_cast<std::uint32_t>(a));
         const auto den = static_cast<std::int32_t>(static_cast<std::uint32_t>(b));
-        const auto smallDen = static_cast<std::int32_t>(static_cast<std::int16_t>(static_cast<std::uint16_t>(b >> 32)));
-        checkDiv(std::int64_t{ raw } * 65536, den);
-        checkDiv(std::int64_t{ raw } * 65536, smallDen);
-        checkDiv(static_cast<std::int64_t>(a), den);
-        checkSqrt(a);
-        checkSqrt(a >> (b & 63u));
+        const auto small_den = static_cast<std::int32_t>(static_cast<std::int16_t>(static_cast<std::uint16_t>(b >> 32)));
+        check_div(std::int64_t{ raw } * 65536, den);
+        check_div(std::int64_t{ raw } * 65536, small_den);
+        check_div(static_cast<std::int64_t>(a), den);
+        check_sqrt(a);
+        check_sqrt(a >> (b & 63u));
         const auto root = static_cast<std::uint64_t>(static_cast<std::uint32_t>(b));
-        checkSqrt(root * root);
-        checkSqrt(root * root - 1u);
+        check_sqrt(root * root);
+        check_sqrt(root * root - 1u);
     }
     for (int bits = 0; bits <= 64; ++bits)
     {
-        if (sqrtFailuresByBits[bits] != 0)
+        if (sqrt_failures_by_bits[bits] != 0)
         {
-            Log("sqrt %d-bit inputs: %d errors\n", bits, sqrtFailuresByBits[bits]);
+            Log("sqrt %d-bit inputs: %d errors\n", bits, sqrt_failures_by_bits[bits]);
         }
     }
     Log("math hooks: %s (%d errors)\n", failures == 0 ? "OK" : "FAIL", failures);
@@ -198,23 +198,23 @@ bool RunFallingPile()
     neko::scenes::BuildFallingPile(world);
     bool ok = true;
     int step = 0;
-    int sampleIndex = 0;
-    for (const auto& [expectedStep, expected] : neko::scenes::FALLING_PILE_GOLDEN_CHECKSUMS)
+    int sample_index = 0;
+    for (const auto& [expected_step, expected] : neko::scenes::kFallingPileGoldenChecksums)
     {
-        while (step < expectedStep)
+        while (step < expected_step)
         {
-            TimedStep(world, g_report.pileTiming);
+            TimedStep(world, g_report.pile_timing);
             ++step;
         }
         const std::uint32_t checksum = world.GenerateChecksum();
         ok = ok && checksum == expected;
         Log("%3d %08" PRIx32 " %08" PRIx32 " %s\n", step, checksum, expected, checksum == expected ? "OK" : "FAIL");
-        g_report.pileChecksums[sampleIndex] = { step, checksum, expected };
-        g_report.pilePairCounts[sampleIndex] = SamplePairCounts(step, world);
-        ++sampleIndex;
+        g_report.pile_checksums[sample_index] = { step, checksum, expected };
+        g_report.pile_pair_counts[sample_index] = SamplePairCounts(step, world);
+        ++sample_index;
     }
     Log("pile: %s\n", ok ? "OK" : "FAIL");
-    LogTiming("67", g_report.pileTiming);
+    LogTiming("67", g_report.pile_timing);
     return ok;
 }
 
@@ -225,46 +225,46 @@ void BuildHeavyPile(neko::PhysicsWorld& world)
 {
     using neko::Scalar;
     using neko::scenes::Ratio;
-    const auto addStaticBox = [&world](neko::Vec2f position, neko::Vec2f halfSize)
+    const auto add_static_box = [&world](neko::Vec2f position, neko::Vec2f half_size)
     {
         const auto body = world.AddBody();
-        world.body(body).type = neko::BodyType::STATIC;
+        world.body(body).type = neko::BodyType::kStatic;
         world.body(body).position = position;
         const auto collider = world.AddAabbCollider(body);
-        world.collider(collider).isTrigger = false;
+        world.collider(collider).is_trigger = false;
         world.collider(collider).restitution = Ratio(1, 4);
-        world.aabb(world.collider(collider).shapeIndex).halfSize = halfSize;
+        world.aabb(world.collider(collider).shape_index).half_size = half_size;
     };
-    addStaticBox({ Scalar{ 0 }, Ratio(-1, 2) }, { Scalar{ 12 }, Ratio(1, 2) });
-    addStaticBox({ Ratio(-25, 2), Scalar{ 10 } }, { Ratio(1, 2), Scalar{ 11 } });
-    addStaticBox({ Ratio(25, 2), Scalar{ 10 } }, { Ratio(1, 2), Scalar{ 11 } });
+    add_static_box({ Scalar{ 0 }, Ratio(-1, 2) }, { Scalar{ 12 }, Ratio(1, 2) });
+    add_static_box({ Ratio(-25, 2), Scalar{ 10 } }, { Ratio(1, 2), Scalar{ 11 } });
+    add_static_box({ Ratio(25, 2), Scalar{ 10 } }, { Ratio(1, 2), Scalar{ 11 } });
 
-    constexpr int dynamicCount = 252;
+    constexpr int dynamic_count = 252;
     constexpr int columns = 18;
-    for (int i = 0; i < dynamicCount; ++i)
+    for (int i = 0; i < dynamic_count; ++i)
     {
         const auto body = world.AddBody();
         const int column = i % columns;
         const int row = i / columns;
         world.body(body).position = { Ratio(-102 + 12 * column + 3 * (row % 2), 10), Ratio(10 + 11 * row, 10) };
         world.body(body).velocity = { Ratio(7 * (i % 5 - 2), 10), static_cast<Scalar>(i % 3) };
-        world.body(body).inverseMass = i % 4 == 0 ? Ratio(1, 2) : Scalar{ 1 };
-        const bool isCircle = i % 3 != 0;
-        const auto collider = isCircle ? world.AddCircleCollider(body) : world.AddAabbCollider(body);
-        world.collider(collider).isTrigger = false;
+        world.body(body).inverse_mass = i % 4 == 0 ? Ratio(1, 2) : Scalar{ 1 };
+        const bool is_circle = i % 3 != 0;
+        const auto collider = is_circle ? world.AddCircleCollider(body) : world.AddAabbCollider(body);
+        world.collider(collider).is_trigger = false;
         world.collider(collider).restitution = Ratio(i % 4, 10);
-        if (isCircle)
+        if (is_circle)
         {
-            world.circle(world.collider(collider).shapeIndex).radius = Ratio(6 + i % 3, 20);
+            world.circle(world.collider(collider).shape_index).radius = Ratio(6 + i % 3, 20);
         }
         else
         {
-            world.aabb(world.collider(collider).shapeIndex).halfSize = { Ratio(7, 20), Ratio(5 + i % 2, 20) };
+            world.aabb(world.collider(collider).shape_index).half_size = { Ratio(7, 20), Ratio(5 + i % 2, 20) };
         }
     }
 }
 
-constexpr int HEAVY_STEPS = 600;
+constexpr int kHeavySteps = 600;
 
 /**
  * @brief Timing and checksum only, with no profiling overhead: the numbers reported for the 8ms budget
@@ -274,19 +274,19 @@ void RunHeavyPile()
     neko::PhysicsWorld world{};
     BuildHeavyPile(world);
 
-    int sampleIndex = 0;
-    for (int step = 0; step < HEAVY_STEPS; ++step)
+    int sample_index = 0;
+    for (int step = 0; step < kHeavySteps; ++step)
     {
-        TimedStep(world, g_report.heavyTiming);
-        if (step == 0 || step == 100 || step == 300 || step == HEAVY_STEPS - 1)
+        TimedStep(world, g_report.heavy_timing);
+        if (step == 0 || step == 100 || step == 300 || step == kHeavySteps - 1)
         {
-            g_report.heavyPairCounts[sampleIndex] = SamplePairCounts(step, world);
-            ++sampleIndex;
+            g_report.heavy_pair_counts[sample_index] = SamplePairCounts(step, world);
+            ++sample_index;
         }
     }
-    g_report.heavyChecksum = world.GenerateChecksum();
-    Log("255 bodies, %d steps: %08" PRIx32 "\n", HEAVY_STEPS, g_report.heavyChecksum);
-    LogTiming("255", g_report.heavyTiming);
+    g_report.heavy_checksum = world.GenerateChecksum();
+    Log("255 bodies, %d steps: %08" PRIx32 "\n", kHeavySteps, g_report.heavy_checksum);
+    LogTiming("255", g_report.heavy_timing);
 }
 
 /**
@@ -298,31 +298,31 @@ void RunHeavyPileProfile()
     neko::PhysicsWorld world{};
     BuildHeavyPile(world);
 
-    constexpr int warmupSteps = HEAVY_STEPS - 120;
+    constexpr int warmup_steps = kHeavySteps - 120;
     Timing warmup;
-    for (int step = 0; step < warmupSteps; ++step)
+    for (int step = 0; step < warmup_steps; ++step)
     {
         TimedStep(world, warmup);
     }
 
-    neko::g_stepPhaseTicks = &g_report.heavyPhaseTicks;
+    neko::g_step_phase_ticks = &g_report.heavy_phase_ticks;
     Timing profiled;
-    g_report.heavyPhaseSteps = HEAVY_STEPS - warmupSteps;
-    for (int step = 0; step < g_report.heavyPhaseSteps; ++step)
+    g_report.heavy_phase_steps = kHeavySteps - warmup_steps;
+    for (int step = 0; step < g_report.heavy_phase_steps; ++step)
     {
         TimedStep(world, profiled);
     }
-    neko::g_stepPhaseTicks = nullptr;
+    neko::g_step_phase_ticks = nullptr;
 
     const auto average = static_cast<std::uint32_t>(profiled.total / static_cast<std::uint64_t>(profiled.count));
     Log("255 phase breakdown, resting pile, %d steps (avg %" PRIu32 "us/step with profiling on):\n",
-        g_report.heavyPhaseSteps, timerTicks2usec(average));
+        g_report.heavy_phase_steps, timerTicks2usec(average));
     constexpr const char* names[] = { "integration", "broadphase", "detectContact", "resolve", "sortAndNotify" };
-    for (std::size_t i = 0; i < static_cast<std::size_t>(neko::StepPhase::Count); ++i)
+    for (std::size_t i = 0; i < static_cast<std::size_t>(neko::StepPhase::kCount); ++i)
     {
-        const auto ticksPerStep =
-            g_report.heavyPhaseTicks.ticks[i] / static_cast<std::uint32_t>(g_report.heavyPhaseSteps);
-        Log("  %-14s %6" PRIu32 "us/step\n", names[i], timerTicks2usec(ticksPerStep));
+        const auto ticks_per_step =
+            g_report.heavy_phase_ticks.ticks[i] / static_cast<std::uint32_t>(g_report.heavy_phase_steps);
+        Log("  %-14s %6" PRIu32 "us/step\n", names[i], timerTicks2usec(ticks_per_step));
     }
 }
 
@@ -339,11 +339,11 @@ int main()
 {
     consoleDemoInit();
     Log("NekoPhysics DS test\n");
-    g_report.hooksOk = CheckMathHooks();
-    g_report.pileOk = RunFallingPile();
+    g_report.hooks_ok = CheckMathHooks();
+    g_report.pile_ok = RunFallingPile();
     RunHeavyPile();
     RunHeavyPileProfile();
-    Log("DONE %s\n", g_report.hooksOk && g_report.pileOk ? "OK" : "FAIL");
+    Log("DONE %s\n", g_report.hooks_ok && g_report.pile_ok ? "OK" : "FAIL");
     TestsDone();
 
     while (pmMainLoop())

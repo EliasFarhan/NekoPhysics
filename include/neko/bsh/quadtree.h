@@ -12,20 +12,20 @@ namespace neko
 
 struct QuadNode
 {
-    static constexpr Index NONE = std::numeric_limits<Index>::max();
+    static constexpr Index kNone = std::numeric_limits<Index>::max();
 
     Aabbf aabb{};
     /**
-     * @brief The four children are contiguous, starting at firstChild
+     * @brief The four children are contiguous, starting at first_child
      */
-    Index firstChild = NONE;
+    Index first_child = kNone;
     /**
      * @brief Head of the linked list of colliders stored in this node
      */
-    Index firstEntry = NONE;
-    Index entryCount = 0;
+    Index first_entry = kNone;
+    Index entry_count = 0;
 
-    [[nodiscard]] constexpr bool IsLeaf() const noexcept { return firstChild == NONE; }
+    [[nodiscard]] constexpr bool IsLeaf() const noexcept { return first_child == kNone; }
 };
 
 /**
@@ -35,30 +35,30 @@ struct QuadNode
 class QuadTree final : public BoundingSurfaceHierarchy
 {
 public:
-    static constexpr std::size_t MAX_DEPTH = 3;
-    static constexpr std::size_t MAX_SIZE = 4;
-    static constexpr Index ROOT = 0;
+    static constexpr std::size_t kMaxDepth = 3;
+    static constexpr std::size_t kMaxSize = 4;
+    static constexpr Index kRoot = 0;
 
     /**
-     * @param maxDepth depth of the deepest nodes (the root is at depth 0)
-     * @param maxSize number of colliders above which a leaf splits
+     * @param max_depth depth of the deepest nodes (the root is at depth 0)
+     * @param max_size number of colliders above which a leaf splits
      */
-    explicit QuadTree(std::size_t maxColliders = 256, std::size_t maxPairs = 2048,
-        std::size_t maxDepth = MAX_DEPTH, std::size_t maxSize = MAX_SIZE, Allocator& allocator = DefaultAllocator());
+    explicit QuadTree(std::size_t max_colliders = 256, std::size_t max_pairs = 2048,
+        std::size_t max_depth = kMaxDepth, std::size_t max_size = kMaxSize, Allocator& allocator = DefaultAllocator());
 
-    void Insert(const ColliderAabb& colliderAabb) override;
+    void Insert(const ColliderAabb& collider_aabb) override;
     void CalculatePairs() override;
     void Clear() override;
-    void SetWorldAabb(const Aabbf& worldAabb) override;
-    [[nodiscard]] const ArrayList<ColliderPair>& GetPossiblePairs() const override { return possiblePairs_; }
+    void SetWorldAabb(const Aabbf& world_aabb) override;
+    [[nodiscard]] const ArrayList<ColliderPair>& GetPossiblePairs() const override { return possible_pairs_; }
 
     [[nodiscard]] const QuadNode& GetNode(Index index) const { return nodes_[index]; }
 
 private:
     struct Entry
     {
-        ColliderAabb colliderAabb;
-        Index next = QuadNode::NONE;
+        ColliderAabb collider_aabb;
+        Index next = QuadNode::kNone;
     };
 
     void InsertEntry(Index entry, Index node, std::size_t depth);
@@ -68,14 +68,14 @@ private:
     void AddPairsWithSubtree(Index entry, Index node);
     void AddPair(Index entry1, Index entry2);
 
-    std::size_t maxColliders_;
-    std::size_t maxPairs_;
-    std::size_t maxDepth_;
-    std::size_t maxSize_;
+    std::size_t max_colliders_;
+    std::size_t max_pairs_;
+    std::size_t max_depth_;
+    std::size_t max_size_;
     ArrayList<QuadNode> nodes_;
     ArrayList<Entry> entries_;
-    ArrayList<ColliderPair> possiblePairs_;
-    std::size_t usedNodes_ = 1;
+    ArrayList<ColliderPair> possible_pairs_;
+    std::size_t used_nodes_ = 1;
 };
 
 }

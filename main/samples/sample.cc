@@ -15,13 +15,13 @@ namespace neko
 
 void BounceInside(Body& body, const Aabbf& bounds)
 {
-    if ((body.velocity.x > Scalar{ 0 } && body.position.x > bounds.maxBound.x) ||
-        (body.velocity.x < Scalar{ 0 } && body.position.x < bounds.minBound.x))
+    if ((body.velocity.x > Scalar{ 0 } && body.position.x > bounds.max_bound.x) ||
+        (body.velocity.x < Scalar{ 0 } && body.position.x < bounds.min_bound.x))
     {
         body.velocity.x = -body.velocity.x;
     }
-    if ((body.velocity.y > Scalar{ 0 } && body.position.y > bounds.maxBound.y) ||
-        (body.velocity.y < Scalar{ 0 } && body.position.y < bounds.minBound.y))
+    if ((body.velocity.y > Scalar{ 0 } && body.position.y > bounds.max_bound.y) ||
+        (body.velocity.y < Scalar{ 0 } && body.position.y < bounds.min_bound.y))
     {
         body.velocity.y = -body.velocity.y;
     }
@@ -40,40 +40,40 @@ SampleRegistry::SampleRegistry()
 
 SampleRegistry::~SampleRegistry()
 {
-    Select(NONE, context_);
+    Select(kNone, context_);
 }
 
 void SampleRegistry::Select(std::size_t index, const SampleContext& context)
 {
-    if (currentIndex_ != NONE)
+    if (current_index_ != kNone)
     {
-        samples_[currentIndex_].sample->End();
+        samples_[current_index_].sample->End();
     }
-    currentIndex_ = index < samples_.size() ? index : NONE;
+    current_index_ = index < samples_.size() ? index : kNone;
     context_ = context;
-    if (currentIndex_ != NONE)
+    if (current_index_ != kNone)
     {
-        samples_[currentIndex_].sample->Begin(context_);
+        samples_[current_index_].sample->Begin(context_);
     }
 }
 
 void SampleRegistry::FixedUpdate()
 {
     NEKO_PROFILE_FUNCTION();
-    if (currentIndex_ != NONE)
+    if (current_index_ != kNone)
     {
-        samples_[currentIndex_].sample->FixedUpdate();
+        samples_[current_index_].sample->FixedUpdate();
     }
 }
 
-void SampleRegistry::Draw(DrawList& drawList) const
+void SampleRegistry::Draw(DrawList& draw_list) const
 {
     NEKO_PROFILE_FUNCTION();
-    drawList.Clear();
-    drawList.camera = context_.worldBounds;
-    if (currentIndex_ != NONE)
+    draw_list.Clear();
+    draw_list.camera = context_.world_bounds;
+    if (current_index_ != kNone)
     {
-        samples_[currentIndex_].sample->Draw(drawList);
+        samples_[current_index_].sample->Draw(draw_list);
     }
 }
 

@@ -10,32 +10,32 @@
 namespace
 {
 
-constexpr int SAMPLE_STEPS = 300;
+constexpr int kSampleSteps = 300;
 
 struct SampleRun
 {
-    std::uint32_t initialChecksum = 0;
-    std::uint32_t finalChecksum = 0;
-    std::size_t drawnShapes = 0;
+    std::uint32_t initial_checksum = 0;
+    std::uint32_t final_checksum = 0;
+    std::size_t drawn_shapes = 0;
     neko::Aabbf camera{};
 };
 
 SampleRun RunSample(neko::SampleRegistry& registry, std::size_t index)
 {
-    const neko::SampleContext context{ neko::sample_config::WORLD_BOUNDS };
+    const neko::SampleContext context{ neko::sample_config::kWorldBounds };
     SampleRun run;
     registry.Select(index, context);
-    run.initialChecksum = registry.current()->GenerateChecksum();
-    for (int step = 0; step < SAMPLE_STEPS; ++step)
+    run.initial_checksum = registry.current()->GenerateChecksum();
+    for (int step = 0; step < kSampleSteps; ++step)
     {
         registry.FixedUpdate();
     }
-    run.finalChecksum = registry.current()->GenerateChecksum();
-    neko::DrawList drawList;
-    registry.Draw(drawList);
-    run.drawnShapes = drawList.circles.size() + drawList.boxes.size() + drawList.lines.size();
-    run.camera = drawList.camera;
-    registry.Select(neko::SampleRegistry::NONE, context);
+    run.final_checksum = registry.current()->GenerateChecksum();
+    neko::DrawList draw_list;
+    registry.Draw(draw_list);
+    run.drawn_shapes = draw_list.circles.size() + draw_list.boxes.size() + draw_list.lines.size();
+    run.camera = draw_list.camera;
+    registry.Select(neko::SampleRegistry::kNone, context);
     return run;
 }
 
@@ -52,23 +52,23 @@ TEST_P(SampleTest, SameSeedGivesSameChecksum)
     neko::SampleRegistry registry;
     const auto first = RunSample(registry, GetParam());
     const auto restarted = RunSample(registry, GetParam());
-    neko::SampleRegistry otherRegistry;
-    const auto other = RunSample(otherRegistry, GetParam());
+    neko::SampleRegistry other_registry;
+    const auto other = RunSample(other_registry, GetParam());
 
-    EXPECT_NE(first.initialChecksum, first.finalChecksum) << registry.name(GetParam()) << " doesn't move";
-    EXPECT_EQ(first.initialChecksum, restarted.initialChecksum);
-    EXPECT_EQ(first.finalChecksum, restarted.finalChecksum);
-    EXPECT_EQ(first.initialChecksum, other.initialChecksum);
-    EXPECT_EQ(first.finalChecksum, other.finalChecksum);
+    EXPECT_NE(first.initial_checksum, first.final_checksum) << registry.name(GetParam()) << " doesn't move";
+    EXPECT_EQ(first.initial_checksum, restarted.initial_checksum);
+    EXPECT_EQ(first.final_checksum, restarted.final_checksum);
+    EXPECT_EQ(first.initial_checksum, other.initial_checksum);
+    EXPECT_EQ(first.final_checksum, other.final_checksum);
 }
 
 TEST_P(SampleTest, DrawsInsideTheWorldBounds)
 {
     neko::SampleRegistry registry;
     const auto run = RunSample(registry, GetParam());
-    EXPECT_GT(run.drawnShapes, 0u);
-    EXPECT_EQ(run.camera.minBound, neko::sample_config::WORLD_BOUNDS.minBound);
-    EXPECT_EQ(run.camera.maxBound, neko::sample_config::WORLD_BOUNDS.maxBound);
+    EXPECT_GT(run.drawn_shapes, 0u);
+    EXPECT_EQ(run.camera.min_bound, neko::sample_config::kWorldBounds.min_bound);
+    EXPECT_EQ(run.camera.max_bound, neko::sample_config::kWorldBounds.max_bound);
 }
 
 INSTANTIATE_TEST_SUITE_P(AllSamples, SampleTest, ::testing::Range(std::size_t{ 0 }, std::size_t{ 6 }));
@@ -83,30 +83,30 @@ TEST(SampleRegistry, HasSixSamples)
 TEST(SampleRng, IntegerRangeIsInclusive)
 {
     neko::SampleRng rng{ 42 };
-    bool sawMin = false;
-    bool sawMax = false;
+    bool saw_min = false;
+    bool saw_max = false;
     for (int i = 0; i < 1000; ++i)
     {
         const int value = rng.Range(-2, 2);
         ASSERT_GE(value, -2);
         ASSERT_LE(value, 2);
-        sawMin = sawMin || value == -2;
-        sawMax = sawMax || value == 2;
+        saw_min = saw_min || value == -2;
+        saw_max = saw_max || value == 2;
     }
-    EXPECT_TRUE(sawMin);
-    EXPECT_TRUE(sawMax);
+    EXPECT_TRUE(saw_min);
+    EXPECT_TRUE(saw_max);
 }
 
 TEST(SampleRng, ScalarRangeStaysInBounds)
 {
     neko::SampleRng rng{ 7 };
-    const auto minValue = neko::Ratio(-3, 2);
-    const auto maxValue = neko::Ratio(36, 5);
+    const auto min_value = neko::Ratio(-3, 2);
+    const auto max_value = neko::Ratio(36, 5);
     for (int i = 0; i < 1000; ++i)
     {
-        const auto value = rng.Range(minValue, maxValue);
-        ASSERT_GE(value, minValue);
-        ASSERT_LE(value, maxValue);
+        const auto value = rng.Range(min_value, max_value);
+        ASSERT_GE(value, min_value);
+        ASSERT_LE(value, max_value);
     }
 }
 
@@ -126,8 +126,8 @@ TEST(SampleRng, RandomColorsAreBright)
     for (int i = 0; i < 1000; ++i)
     {
         const auto color = rng.RandomColor();
-        ASSERT_GE(color, neko::sample_color::FIRST_BRIGHT);
-        ASSERT_LE(color, neko::sample_color::LAST_BRIGHT);
+        ASSERT_GE(color, neko::sample_color::kFirstBright);
+        ASSERT_LE(color, neko::sample_color::kLastBright);
     }
 }
 

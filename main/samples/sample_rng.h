@@ -16,7 +16,7 @@ namespace neko
 class SampleRng
 {
 public:
-    explicit constexpr SampleRng(std::uint32_t seed) noexcept : state_(seed != 0 ? seed : DEFAULT_SEED)
+    explicit constexpr SampleRng(std::uint32_t seed) noexcept : state_(seed != 0 ? seed : kDefaultSeed)
     {
     }
 
@@ -29,20 +29,20 @@ public:
     }
 
     /**
-     * @brief Integer in [minValue, maxValue]
+     * @brief Integer in [min_value, max_value]
      */
-    constexpr int Range(int minValue, int maxValue) noexcept
+    constexpr int Range(int min_value, int max_value) noexcept
     {
-        const auto span = static_cast<std::uint32_t>(maxValue - minValue) + 1u;
-        return minValue + static_cast<int>(Next() % span);
+        const auto span = static_cast<std::uint32_t>(max_value - min_value) + 1u;
+        return min_value + static_cast<int>(Next() % span);
     }
 
     /**
-     * @brief Scalar in [minValue, maxValue], in RESOLUTION steps
+     * @brief Scalar in [min_value, max_value], in kResolution steps
      */
-    constexpr Scalar Range(Scalar minValue, Scalar maxValue) noexcept
+    constexpr Scalar Range(Scalar min_value, Scalar max_value) noexcept
     {
-        return minValue + (maxValue - minValue) * Ratio(Range(0, RESOLUTION), RESOLUTION);
+        return min_value + (max_value - min_value) * Ratio(Range(0, kResolution), kResolution);
     }
 
     /**
@@ -50,12 +50,12 @@ public:
      */
     constexpr ColorId RandomColor() noexcept
     {
-        return static_cast<ColorId>(Range(sample_color::FIRST_BRIGHT, sample_color::LAST_BRIGHT));
+        return static_cast<ColorId>(Range(sample_color::kFirstBright, sample_color::kLastBright));
     }
 
 private:
-    static constexpr std::uint32_t DEFAULT_SEED = 0x9E3779B9u;
-    static constexpr int RESOLUTION = 4096;
+    static constexpr std::uint32_t kDefaultSeed = 0x9E3779B9u;
+    static constexpr int kResolution = 4096;
     std::uint32_t state_;
 };
 

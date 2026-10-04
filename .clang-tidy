@@ -25,14 +25,15 @@ CheckOptions:
   - { key: readability-identifier-naming.ProtectedMemberSuffix,      value: _ }
   - { key: readability-identifier-naming.EnumConstantCase,           value: CamelCase }
   - { key: readability-identifier-naming.EnumConstantPrefix,         value: k }
-  - { key: readability-identifier-naming.ConstexprVariableCase,      value: CamelCase }
-  - { key: readability-identifier-naming.ConstexprVariablePrefix,    value: k }
   - { key: readability-identifier-naming.GlobalConstantCase,         value: CamelCase }
   - { key: readability-identifier-naming.GlobalConstantPrefix,       value: k }
   - { key: readability-identifier-naming.StaticConstantCase,         value: CamelCase }
   - { key: readability-identifier-naming.StaticConstantPrefix,       value: k }
-  - { key: readability-identifier-naming.MemberConstantCase,         value: CamelCase }
-  - { key: readability-identifier-naming.MemberConstantPrefix,       value: k }
+  - { key: readability-identifier-naming.ClassConstantCase,          value: CamelCase }
+  - { key: readability-identifier-naming.ClassConstantPrefix,        value: k }
+  - { key: readability-identifier-naming.LocalConstantCase,          value: lower_case }
+  # Accessors are named like variables (cppguide.html#Function_Names); clang-tidy can't tell them apart
+  - { key: readability-identifier-naming.MethodIgnoredRegexp,        value: '^(body|collider|aabb|circle|gravity|dt|touching_pairs|value|underlying_value|size|name|current|current_index|empty|stats)$' }
   - { key: readability-identifier-naming.GlobalVariableCase,         value: lower_case }
   - { key: readability-identifier-naming.GlobalVariablePrefix,       value: g_ }
   - { key: readability-identifier-naming.MacroDefinitionCase,        value: UPPER_CASE }

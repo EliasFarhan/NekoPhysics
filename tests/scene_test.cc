@@ -7,7 +7,7 @@
 #include <type_traits>
 #include <utility>
 
-// A change here means the simulation changed: either on purpose (update neko::scenes::FALLING_PILE_GOLDEN_CHECKSUMS,
+// A change here means the simulation changed: either on purpose (update neko::scenes::kFallingPileGoldenChecksums,
 // and the ROM expectations), or determinism broke.
 TEST(Scene, FallingPileGoldenChecksums)
 {
@@ -20,9 +20,9 @@ TEST(Scene, FallingPileGoldenChecksums)
         neko::PhysicsWorld world{};
         neko::scenes::BuildFallingPile(world);
         int step = 0;
-        for (const auto& [expectedStep, checksum] : neko::scenes::FALLING_PILE_GOLDEN_CHECKSUMS)
+        for (const auto& [expected_step, checksum] : neko::scenes::kFallingPileGoldenChecksums)
         {
-            while (step < expectedStep)
+            while (step < expected_step)
             {
                 world.Step();
                 ++step;

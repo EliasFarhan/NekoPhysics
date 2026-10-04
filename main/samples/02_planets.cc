@@ -4,32 +4,32 @@
 namespace neko
 {
 
-constexpr static auto G = Scalar{ 10 };
-constexpr static auto blackHoleMass = Scalar{ 10 };
-constexpr static auto circleRadius = Ratio(1, 10);
-constexpr static auto innerRadius = Scalar{ 1 };
-constexpr static auto outerRadius = Scalar{ 6 };
-constexpr static auto speedDisturbanceFactor = Scalar{ 2 };
-constexpr static std::uint32_t seed = 0x02C0FFEEu;
+constexpr static auto kG = Scalar{ 10 };
+constexpr static auto kBlackHoleMass = Scalar{ 10 };
+constexpr static auto kCircleRadius = Ratio(1, 10);
+constexpr static auto kInnerRadius = Scalar{ 1 };
+constexpr static auto kOuterRadius = Scalar{ 6 };
+constexpr static auto kSpeedDisturbanceFactor = Scalar{ 2 };
+constexpr static std::uint32_t kSeed = 0x02C0FFEEu;
 
 void PlanetSample::Begin(const SampleContext& context)
 {
-    center_ = context.worldBounds.GetCenter();
-    SampleRng rng{ seed };
-    colors_.reserve(circleCount);
-    for (Index i = 0; i < circleCount; ++i)
+    center_ = context.world_bounds.GetCenter();
+    SampleRng rng{ kSeed };
+    colors_.reserve(kCircleCount);
+    for (Index i = 0; i < kCircleCount; ++i)
     {
         const auto index = world_.AddBody();
         Body& body = world_.body(index);
-        body.inverseMass = Scalar{ 1 };
-        const auto distance = rng.Range(innerRadius, outerRadius);
+        body.inverse_mass = Scalar{ 1 };
+        const auto distance = rng.Range(kInnerRadius, kOuterRadius);
         const auto angle = rng.Range(Scalar{ 0 }, Scalar{ 2 } * Pi<Scalar>());
-        body.position = center_ + (Vec2f::up() * distance).Rotate(angle);
+        body.position = center_ + (Vec2f::Up() * distance).Rotate(angle);
         const auto delta = body.position - center_;
-        const auto force = G * blackHoleMass / (delta.SquareLength() * body.inverseMass);
-        const auto speed = Sqrt(force * body.inverseMass * delta.Length());
+        const auto force = kG * kBlackHoleMass / (delta.SquareLength() * body.inverse_mass);
+        const auto speed = Sqrt(force * body.inverse_mass * delta.Length());
         body.velocity = speed * delta.Perpendicular().Normalized();
-        body.velocity += rng.Range(Scalar{ -1 }, Scalar{ 1 }) * speedDisturbanceFactor * body.velocity.Perpendicular().Normalized();
+        body.velocity += rng.Range(Scalar{ -1 }, Scalar{ 1 }) * kSpeedDisturbanceFactor * body.velocity.Perpendicular().Normalized();
         colors_.push_back(rng.RandomColor());
     }
 }
@@ -40,17 +40,17 @@ void PlanetSample::FixedUpdate()
     {
         auto& body = world_.body({ i });
         const auto delta = body.position - center_;
-        const auto force = G * blackHoleMass / (delta.SquareLength() * body.inverseMass);
+        const auto force = kG * kBlackHoleMass / (delta.SquareLength() * body.inverse_mass);
         body.force += force * (-delta).Normalized();
     }
     world_.Step();
 }
 
-void PlanetSample::Draw(DrawList& drawList) const
+void PlanetSample::Draw(DrawList& draw_list) const
 {
     for (Index i = 0; i < colors_.size(); ++i)
     {
-        drawList.circles.push_back({ world_.body({ i }).position, circleRadius, colors_[i] });
+        draw_list.circles.push_back({ world_.body({ i }).position, kCircleRadius, colors_[i] });
     }
 }
 

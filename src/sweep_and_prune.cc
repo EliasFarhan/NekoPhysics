@@ -9,25 +9,25 @@
 namespace neko
 {
 
-SweepAndPrune::SweepAndPrune(std::size_t maxColliders, std::size_t maxPairs, Allocator& allocator) :
-    maxColliders_(maxColliders),
-    maxPairs_(maxPairs),
+SweepAndPrune::SweepAndPrune(std::size_t max_colliders, std::size_t max_pairs, Allocator& allocator) :
+    max_colliders_(max_colliders),
+    max_pairs_(max_pairs),
     colliders_(StandardAllocator<ColliderAabb>{allocator}),
-    possiblePairs_(StandardAllocator<ColliderPair>{allocator})
+    possible_pairs_(StandardAllocator<ColliderPair>{allocator})
 {
-    colliders_.reserve(maxColliders_);
-    possiblePairs_.reserve(maxPairs_);
+    colliders_.reserve(max_colliders_);
+    possible_pairs_.reserve(max_pairs_);
 }
 
-void SweepAndPrune::Insert(const ColliderAabb& colliderAabb)
+void SweepAndPrune::Insert(const ColliderAabb& collider_aabb)
 {
-    if (colliders_.size() < maxColliders_)
+    if (colliders_.size() < max_colliders_)
     {
-        colliders_.push_back(colliderAabb);
+        colliders_.push_back(collider_aabb);
     }
     else
     {
-        assert(false && "SweepAndPrune: maxColliders reached");
+        assert(false && "SweepAndPrune: max_colliders reached");
     }
 }
 
@@ -37,27 +37,27 @@ NEKO_HOT void SweepAndPrune::CalculatePairs()
     // std::sort doesn't allocate; the order is total, so every implementation gives the same result
     std::sort(colliders_.begin(), colliders_.end(), [](const ColliderAabb& a, const ColliderAabb& b)
     {
-        if (a.aabb.minBound.x != b.aabb.minBound.x)
+        if (a.aabb.min_bound.x != b.aabb.min_bound.x)
         {
-            return a.aabb.minBound.x < b.aabb.minBound.x;
+            return a.aabb.min_bound.x < b.aabb.min_bound.x;
         }
-        return a.colliderIndex < b.colliderIndex;
+        return a.collider_index < b.collider_index;
     });
     for (auto it = colliders_.begin(); it != colliders_.end(); ++it)
     {
-        for (auto other = it + 1; other != colliders_.end() && !(it->aabb.maxBound.x < other->aabb.minBound.x); ++other)
+        for (auto other = it + 1; other != colliders_.end() && !(it->aabb.max_bound.x < other->aabb.min_bound.x); ++other)
         {
-            if (it->aabb.maxBound.y < other->aabb.minBound.y || other->aabb.maxBound.y < it->aabb.minBound.y)
+            if (it->aabb.max_bound.y < other->aabb.min_bound.y || other->aabb.max_bound.y < it->aabb.min_bound.y)
             {
                 continue;
             }
-            if (possiblePairs_.size() < maxPairs_)
+            if (possible_pairs_.size() < max_pairs_)
             {
-                possiblePairs_.emplace_back(it->colliderIndex, other->colliderIndex);
+                possible_pairs_.emplace_back(it->collider_index, other->collider_index);
             }
             else
             {
-                assert(false && "SweepAndPrune: maxPairs reached");
+                assert(false && "SweepAndPrune: max_pairs reached");
             }
         }
     }
@@ -66,7 +66,7 @@ NEKO_HOT void SweepAndPrune::CalculatePairs()
 void SweepAndPrune::Clear()
 {
     colliders_.clear();
-    possiblePairs_.clear();
+    possible_pairs_.clear();
 }
 
 } // namespace neko

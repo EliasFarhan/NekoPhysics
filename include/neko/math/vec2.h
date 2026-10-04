@@ -23,7 +23,7 @@ template<typename T>
 {
     if constexpr (std::is_same_v<T, Fixed16>)
     {
-        const auto raw = static_cast<std::int64_t>(value.underlyingValue());
+        const auto raw = static_cast<std::int64_t>(value.underlying_value());
         return static_cast<std::uint64_t>(raw * raw);
     }
     else
@@ -38,7 +38,7 @@ struct Vec2
 {
     T x{}, y{};
 
-    constexpr Vec2(T xArg, T yArg): x(xArg), y(yArg){}
+    constexpr Vec2(T x_arg, T y_arg): x(x_arg), y(y_arg){}
     constexpr Vec2()= default;
     constexpr Vec2(T scalar): x(scalar), y(scalar){}
 	template<typename OtherT>
@@ -52,7 +52,7 @@ struct Vec2
 	}
 
 	template<typename OtherT>
-	constexpr explicit Vec2(OtherT xArg, OtherT yArg): x(static_cast<T>(xArg)), y(static_cast<T>(yArg)){}
+	constexpr explicit Vec2(OtherT x_arg, OtherT y_arg): x(static_cast<T>(x_arg)), y(static_cast<T>(y_arg)){}
     constexpr Vec2 operator+(Vec2 other) const
     {
         return { x + other.x, y + other.y };
@@ -110,12 +110,12 @@ struct Vec2
     {
         return v1.x * v2.x + v1.y * v2.y;
     }
-    static constexpr Vec2 zero() { return {}; }
-    static constexpr Vec2 up() { return Vec2{ Scalar{0},Scalar{1} }; }
-    static constexpr Vec2 down() { return Vec2{ Scalar{0},Scalar{-1} }; }
-    static constexpr Vec2 left() { return Vec2{ Scalar{-1},Scalar{0} }; }
-    static constexpr Vec2 right() { return Vec2{ Scalar{1},Scalar{0} }; }
-    static constexpr Vec2 one() { return Vec2{ Scalar{1},Scalar{1} }; }
+    static constexpr Vec2 Zero() { return {}; }
+    static constexpr Vec2 Up() { return Vec2{ Scalar{0},Scalar{1} }; }
+    static constexpr Vec2 Down() { return Vec2{ Scalar{0},Scalar{-1} }; }
+    static constexpr Vec2 Left() { return Vec2{ Scalar{-1},Scalar{0} }; }
+    static constexpr Vec2 Right() { return Vec2{ Scalar{1},Scalar{0} }; }
+    static constexpr Vec2 One() { return Vec2{ Scalar{1},Scalar{1} }; }
 
     /**
      *  @brief Rotate the 2d vector of a radian angle
@@ -148,8 +148,8 @@ struct Vec2
         {
             // Sum of squares in Q32.32: SquareLength() overflows past ~181 and rounds to zero below ~1/256
             const auto root = detail::ISqrt64(detail::WideSquare(x) + detail::WideSquare(y));
-            constexpr auto maxRaw = static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max());
-            return T::fromUnderlyingValue(static_cast<std::int32_t>(root > maxRaw ? maxRaw : root));
+            constexpr auto max_raw = static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max());
+            return T::FromUnderlyingValue(static_cast<std::int32_t>(root > max_raw ? max_raw : root));
         }
         else
         {
@@ -164,13 +164,13 @@ struct Vec2
         const auto length = Length();
         if (length == T{ 0 })
         {
-            return zero();
+            return Zero();
         }
         return { x / length, y / length };
     }
-    [[nodiscard]] constexpr static Vec2 Clamp(Vec2 v, Vec2 minV, Vec2 maxV)
+    [[nodiscard]] constexpr static Vec2 Clamp(Vec2 v, Vec2 min_v, Vec2 max_v)
     {
-        return { neko::Clamp(v.x, minV.x, maxV.x), neko::Clamp(v.y, minV.y, maxV.y) };
+        return { neko::Clamp(v.x, min_v.x, max_v.x), neko::Clamp(v.y, min_v.y, max_v.y) };
     }
 
     constexpr bool operator==(Vec2 other) const
@@ -191,13 +191,13 @@ struct Vec2
 template<typename T>
 [[nodiscard]] constexpr int CompareLength(Vec2<T> v, T length) noexcept
 {
-    const auto squareLength = detail::WideSquare(v.x) + detail::WideSquare(v.y);
-    const auto lengthSquare = detail::WideSquare(length);
-    if (squareLength < lengthSquare)
+    const auto square_length = detail::WideSquare(v.x) + detail::WideSquare(v.y);
+    const auto length_square = detail::WideSquare(length);
+    if (square_length < length_square)
     {
         return -1;
     }
-    return lengthSquare < squareLength ? 1 : 0;
+    return length_square < square_length ? 1 : 0;
 }
 
 template<typename T>

@@ -13,7 +13,7 @@ namespace neko
 struct ColliderAabb
 {
     Aabbf aabb;
-    ColliderIndex colliderIndex = INVALID_COLLIDER_INDEX;
+    ColliderIndex collider_index = kInvalidColliderIndex;
 };
 
 class BoundingSurfaceHierarchy
@@ -23,10 +23,10 @@ public:
     /**
      * @brief Insert a ColliderAabb in the BSH. Needs to be called after Clear and SetWorldAabb
      */
-    virtual void Insert(const ColliderAabb& colliderAabb) = 0;
+    virtual void Insert(const ColliderAabb& collider_aabb) = 0;
     virtual void CalculatePairs() = 0;
     virtual void Clear() = 0;
-    virtual void SetWorldAabb(const Aabbf& worldAabb) = 0;
+    virtual void SetWorldAabb(const Aabbf& world_aabb) = 0;
     [[nodiscard]] virtual const ArrayList<ColliderPair>& GetPossiblePairs() const = 0;
 };
 

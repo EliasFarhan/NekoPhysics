@@ -29,33 +29,33 @@ public:
 
 TEST(PhysicsWorld, TwoBodiesOneFrame)
 {
-    neko::PhysicsWorld world{ {.gravity = neko::Vec2f::zero(), .dt = neko::Scalar{ 0.1f }} };
+    neko::PhysicsWorld world{ {.gravity = neko::Vec2f::Zero(), .dt = neko::Scalar{ 0.1f }} };
 
     const auto b1 = world.AddBody();
     {
         auto& body1 = world.body(b1);
-        body1.inverseMass = neko::Scalar{ 1 };
+        body1.inverse_mass = neko::Scalar{ 1 };
     }
     const auto b2 = world.AddBody();
     {
         auto& body2 = world.body(b2);
-        body2.inverseMass = neko::Scalar{ 1 };
+        body2.inverse_mass = neko::Scalar{ 1 };
     }
     const auto c1 = world.AddAabbCollider(b1);
     {
         const auto& collider1 = world.collider(c1);
-        auto& [halfSize] = world.aabb(collider1.shapeIndex);
-        halfSize = {neko::Scalar{1}, neko::Scalar{1} };
+        auto& [half_size] = world.aabb(collider1.shape_index);
+        half_size = {neko::Scalar{1}, neko::Scalar{1} };
     }
     const auto c2 = world.AddAabbCollider(b2);
     {
         const auto& collider2 = world.collider(c2);
-        auto& [halfSize] = world.aabb(collider2.shapeIndex);
-        halfSize = { neko::Scalar{1}, neko::Scalar{1} };
+        auto& [half_size] = world.aabb(collider2.shape_index);
+        half_size = { neko::Scalar{1}, neko::Scalar{1} };
     }
 
-    neko::HeapAllocator allocator_;
-    neko::ArrayList<neko::ColliderPair> pairs((neko::StandardAllocator<neko::ColliderPair>(allocator_)));
+    neko::HeapAllocator allocator;
+    neko::ArrayList<neko::ColliderPair> pairs((neko::StandardAllocator<neko::ColliderPair>(allocator)));
 	pairs.emplace_back(c1, c2);
 
     MockBSH bsh;
@@ -79,11 +79,11 @@ TEST(PhysicsWorld, TwoBodiesOneFrame)
         .WillOnce(testing::ReturnRef(pairs));
     world.SetBSH(&bsh);
 
-    MockContactListener contactListener;
-    EXPECT_CALL(contactListener, OnTriggerEnter)
+    MockContactListener contact_listener;
+    EXPECT_CALL(contact_listener, OnTriggerEnter)
         .Times(1)
         .InSequence(s1, s2);
-    world.SetContactListener(&contactListener);
+    world.SetContactListener(&contact_listener);
 
     //Actual Action
     world.Step();

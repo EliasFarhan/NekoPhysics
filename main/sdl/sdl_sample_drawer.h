@@ -18,19 +18,19 @@ class SdlSampleDrawer final : public SampleDrawer
 {
 public:
     explicit SdlSampleDrawer(SDL_Renderer* renderer) : renderer_(renderer) {}
-    void Render(const DrawList& drawList) override;
+    void Render(const DrawList& draw_list) override;
 
 private:
     struct Viewport
     {
         float scale = 1.0f;
-        float offsetX = 0.0f;
-        float offsetY = 0.0f;
+        float offset_x = 0.0f;
+        float offset_y = 0.0f;
     };
     [[nodiscard]] Viewport FitCamera(const Aabbf& camera) const;
-    void RenderCircles(const DrawList& drawList, const Viewport& viewport);
-    void RenderBoxes(const DrawList& drawList, const Viewport& viewport);
-    void RenderLines(const DrawList& drawList, const Viewport& viewport);
+    void RenderCircles(const DrawList& draw_list, const Viewport& viewport);
+    void RenderBoxes(const DrawList& draw_list, const Viewport& viewport);
+    void RenderLines(const DrawList& draw_list, const Viewport& viewport);
     void SetDrawColor(ColorId color);
 
     SDL_Renderer* renderer_;

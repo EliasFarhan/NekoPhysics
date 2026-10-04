@@ -16,14 +16,14 @@ public:
     {
         return static_cast<T*>(Allocate(count, sizeof(T)));
     }
-    virtual void* Allocate(std::size_t count, std::size_t typeSize) = 0;
+    virtual void* Allocate(std::size_t count, std::size_t type_size) = 0;
     virtual void Deallocate(void* ptr) = 0;
 };
 
 class HeapAllocator final : public Allocator
 {
 public:
-    void* Allocate(std::size_t count, std::size_t typeSize) override;
+    void* Allocate(std::size_t count, std::size_t type_size) override;
 
     void Deallocate(void *ptr) override;
 
@@ -50,12 +50,14 @@ template<typename T>
 class StandardAllocator
 {
 public:
+    // NOLINTNEXTLINE(readability-identifier-naming): allocator requirements
     using value_type = T;
     StandardAllocator() noexcept : allocator_(&DefaultAllocator()) {}
     explicit StandardAllocator(Allocator& allocator) noexcept : allocator_(&allocator) {}
     template <class U>
     StandardAllocator(const StandardAllocator<U>& allocator) noexcept : allocator_(&allocator.GetAllocator()) {}
 
+    // NOLINTNEXTLINE(readability-identifier-naming): allocator requirements
     [[nodiscard]] T* allocate(std::size_t n)
     {
         if (n > std::numeric_limits<std::size_t>::max() / sizeof(T))
@@ -70,6 +72,7 @@ public:
         return static_cast<T*>(ptr);
     }
 
+    // NOLINTNEXTLINE(readability-identifier-naming): allocator requirements
     void deallocate(T* ptr, [[maybe_unused]] std::size_t n) noexcept
     {
         allocator_->Deallocate(ptr);

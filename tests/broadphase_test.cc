@@ -36,13 +36,13 @@ std::vector<neko::ColliderAabb> RandomAabbs(std::size_t count, std::uint32_t see
     for (std::size_t i = 0; i < count; ++i)
     {
         const neko::Vec2f center{ Scalar{random.Range(-10, 10)}, Scalar{random.Range(-8, 8)} };
-        const neko::Vec2f halfSize{ Scalar{random.Range(0.05f, 1.5f)}, Scalar{random.Range(0.05f, 1.5f)} };
-        aabbs.push_back({ neko::Aabbf::FromCenter(center, halfSize), neko::ColliderIndex{static_cast<neko::Index>(i)} });
+        const neko::Vec2f half_size{ Scalar{random.Range(0.05f, 1.5f)}, Scalar{random.Range(0.05f, 1.5f)} };
+        aabbs.push_back({ neko::Aabbf::FromCenter(center, half_size), neko::ColliderIndex{static_cast<neko::Index>(i)} });
     }
     // Same minimum x, to exercise the tie-break: move the whole box so it stays valid
-    const auto shift = aabbs[0].aabb.minBound.x - aabbs[1].aabb.minBound.x;
-    aabbs[1].aabb.minBound.x += shift;
-    aabbs[1].aabb.maxBound.x += shift;
+    const auto shift = aabbs[0].aabb.min_bound.x - aabbs[1].aabb.min_bound.x;
+    aabbs[1].aabb.min_bound.x += shift;
+    aabbs[1].aabb.max_bound.x += shift;
     return aabbs;
 }
 
@@ -55,7 +55,7 @@ std::set<neko::ColliderPair> IntersectingPairs(const std::vector<neko::ColliderA
         {
             if (neko::Intersect(aabbs[i].aabb, aabbs[j].aabb))
             {
-                pairs.emplace(aabbs[i].colliderIndex, aabbs[j].colliderIndex);
+                pairs.emplace(aabbs[i].collider_index, aabbs[j].collider_index);
             }
         }
     }
@@ -67,8 +67,8 @@ neko::Aabbf Bounds(const std::vector<neko::ColliderAabb>& aabbs)
     auto bounds = aabbs.front().aabb;
     for (const auto& aabb : aabbs)
     {
-        bounds.minBound = { neko::Min(bounds.minBound.x, aabb.aabb.minBound.x), neko::Min(bounds.minBound.y, aabb.aabb.minBound.y) };
-        bounds.maxBound = { neko::Max(bounds.maxBound.x, aabb.aabb.maxBound.x), neko::Max(bounds.maxBound.y, aabb.aabb.maxBound.y) };
+        bounds.min_bound = { neko::Min(bounds.min_bound.x, aabb.aabb.min_bound.x), neko::Min(bounds.min_bound.y, aabb.aabb.min_bound.y) };
+        bounds.max_bound = { neko::Max(bounds.max_bound.x, aabb.aabb.max_bound.x), neko::Max(bounds.max_bound.y, aabb.aabb.max_bound.y) };
     }
     return bounds;
 }
@@ -86,15 +86,15 @@ std::vector<neko::ColliderPair> CollectPairs(neko::BoundingSurfaceHierarchy& bro
     return { pairs.begin(), pairs.end() };
 }
 
-constexpr std::size_t colliderCount = 200;
+constexpr std::size_t kColliderCount = 200;
 } // namespace
 
 TEST(SweepAndPrune, FindsExactlyTheIntersectingPairs)
 {
-    neko::SweepAndPrune sap{ colliderCount, colliderCount * colliderCount / 2 };
+    neko::SweepAndPrune sap{ kColliderCount, kColliderCount * kColliderCount / 2 };
     for (std::uint32_t seed = 1; seed <= 5; ++seed)
     {
-        const auto aabbs = RandomAabbs(colliderCount, seed);
+        const auto aabbs = RandomAabbs(kColliderCount, seed);
         const auto pairs = CollectPairs(sap, aabbs);
         const std::set<neko::ColliderPair> found{ pairs.begin(), pairs.end() };
         EXPECT_EQ(found.size(), pairs.size()) << "duplicate pairs, seed " << seed;
@@ -104,8 +104,8 @@ TEST(SweepAndPrune, FindsExactlyTheIntersectingPairs)
 
 TEST(SweepAndPrune, IsDeterministicAcrossClears)
 {
-    neko::SweepAndPrune sap{ colliderCount, colliderCount * colliderCount / 2 };
-    const auto aabbs = RandomAabbs(colliderCount, 42);
+    neko::SweepAndPrune sap{ kColliderCount, kColliderCount * kColliderCount / 2 };
+    const auto aabbs = RandomAabbs(kColliderCount, 42);
     const auto first = CollectPairs(sap, aabbs);
     auto reversed = aabbs;
     std::reverse(reversed.begin(), reversed.end());
@@ -117,9 +117,9 @@ TEST(QuadTree, FindsAllIntersectingPairsOnce)
 {
     for (std::uint32_t seed = 1; seed <= 5; ++seed)
     {
-        neko::QuadTree quadTree{ colliderCount, colliderCount * colliderCount / 2 };
-        const auto aabbs = RandomAabbs(colliderCount, seed);
-        const auto pairs = CollectPairs(quadTree, aabbs);
+        neko::QuadTree quad_tree{ kColliderCount, kColliderCount * kColliderCount / 2 };
+        const auto aabbs = RandomAabbs(kColliderCount, seed);
+        const auto pairs = CollectPairs(quad_tree, aabbs);
         const std::set<neko::ColliderPair> found{ pairs.begin(), pairs.end() };
         EXPECT_EQ(found.size(), pairs.size()) << "duplicate pairs, seed " << seed;
         for (const auto& pair : IntersectingPairs(aabbs))
@@ -127,23 +127,23 @@ TEST(QuadTree, FindsAllIntersectingPairsOnce)
             EXPECT_TRUE(found.contains(pair)) << pair.c1.index << "-" << pair.c2.index << ", seed " << seed;
         }
         // The tree must actually prune something
-        EXPECT_LT(pairs.size(), colliderCount * (colliderCount - 1) / 2);
+        EXPECT_LT(pairs.size(), kColliderCount * (kColliderCount - 1) / 2);
     }
 }
 
-// The split copied MAX_SIZE colliders whatever maxSize was: out of bounds below 4, dropped colliders above
+// The split copied kMaxSize colliders whatever max_size was: out of bounds below 4, dropped colliders above
 TEST(QuadTree, AnyNodeSizeKeepsAllPairs)
 {
     const auto aabbs = RandomAabbs(64, 7);
     const auto expected = IntersectingPairs(aabbs);
-    for (std::size_t maxSize : { 1u, 2u, 3u, 8u, 16u })
+    for (std::size_t max_size : { 1u, 2u, 3u, 8u, 16u })
     {
-        neko::QuadTree quadTree{ 64, 64 * 63 / 2, 4, maxSize };
-        const auto pairs = CollectPairs(quadTree, aabbs);
+        neko::QuadTree quad_tree{ 64, 64 * 63 / 2, 4, max_size };
+        const auto pairs = CollectPairs(quad_tree, aabbs);
         const std::set<neko::ColliderPair> found{ pairs.begin(), pairs.end() };
         for (const auto& pair : expected)
         {
-            EXPECT_TRUE(found.contains(pair)) << "maxSize " << maxSize;
+            EXPECT_TRUE(found.contains(pair)) << "max_size " << max_size;
         }
     }
 }

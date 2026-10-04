@@ -107,47 +107,47 @@ public:
     requires std::is_floating_point_v<OtherT>
     constexpr explicit Fixed(OtherT f)
     {
-        const OtherT scaled = f * static_cast<OtherT>(one);
-        underlyingValue_ = static_cast<T>(scaled >= OtherT{ 0 } ? scaled + OtherT{ 0.5 } : scaled - OtherT{ 0.5 });
+        const OtherT scaled = f * static_cast<OtherT>(kOne);
+        underlying_value_ = static_cast<T>(scaled >= OtherT{ 0 } ? scaled + OtherT{ 0.5 } : scaled - OtherT{ 0.5 });
     }
 
     template<class OtherT>
     requires std::is_integral_v<OtherT>
-    constexpr explicit Fixed(OtherT n) : underlyingValue_(static_cast<T>(static_cast<T>(n) * one))
+    constexpr explicit Fixed(OtherT n) : underlying_value_(static_cast<T>(static_cast<T>(n) * kOne))
     {
     }
 
-    constexpr explicit Fixed(T up, T down) : underlyingValue_((Fixed{ up } / Fixed{ down }).underlyingValue_)
+    constexpr explicit Fixed(T up, T down) : underlying_value_((Fixed{ up } / Fixed{ down }).underlying_value_)
     {
     }
 
     template<typename OtherT, OtherT OtherExp, typename OtherMulT>
     constexpr explicit Fixed(Fixed<OtherT, OtherExp, OtherMulT> other)
     {
-        const auto otherValue = static_cast<MulT>(other.underlyingValue());
+        const auto other_value = static_cast<MulT>(other.underlying_value());
         if constexpr (Exp >= OtherExp)
         {
-            underlyingValue_ = static_cast<T>(otherValue * (MulT{ 1 } << (Exp - OtherExp)));
+            underlying_value_ = static_cast<T>(other_value * (MulT{ 1 } << (Exp - OtherExp)));
         }
         else
         {
-            underlyingValue_ = static_cast<T>(otherValue / (MulT{ 1 } << (OtherExp - Exp)));
+            underlying_value_ = static_cast<T>(other_value / (MulT{ 1 } << (OtherExp - Exp)));
         }
     }
 
     [[nodiscard]] explicit constexpr operator float() const noexcept
     {
-        return static_cast<float>(underlyingValue_) / static_cast<float>(one);
+        return static_cast<float>(underlying_value_) / static_cast<float>(kOne);
     }
 
     [[nodiscard]] explicit constexpr operator T() const noexcept
     {
-        return static_cast<T>(underlyingValue_ / one);
+        return static_cast<T>(underlying_value_ / kOne);
     }
 
     [[nodiscard]] constexpr Fixed operator+(Fixed other) const noexcept
     {
-        return fromUnderlyingValue(static_cast<T>(underlyingValue_ + other.underlyingValue_));
+        return FromUnderlyingValue(static_cast<T>(underlying_value_ + other.underlying_value_));
     }
 
     constexpr Fixed& operator+=(Fixed other) noexcept
@@ -157,7 +157,7 @@ public:
 
     [[nodiscard]] constexpr Fixed operator-(Fixed other) const noexcept
     {
-        return fromUnderlyingValue(static_cast<T>(underlyingValue_ - other.underlyingValue_));
+        return FromUnderlyingValue(static_cast<T>(underlying_value_ - other.underlying_value_));
     }
 
     constexpr Fixed& operator-=(Fixed other) noexcept
@@ -167,16 +167,16 @@ public:
 
     [[nodiscard]] constexpr Fixed operator-() const noexcept
     {
-        return fromUnderlyingValue(static_cast<T>(-underlyingValue_));
+        return FromUnderlyingValue(static_cast<T>(-underlying_value_));
     }
 
     [[nodiscard]] constexpr Fixed operator*(Fixed other) const noexcept
     {
-        const MulT product = static_cast<MulT>(underlyingValue_) * static_cast<MulT>(other.underlyingValue_);
+        const MulT product = static_cast<MulT>(underlying_value_) * static_cast<MulT>(other.underlying_value_);
         // + half, minus one ulp of the product when negative, then floor: rounds half away from zero
         constexpr MulT half = MulT{ 1 } << (Exp - 1);
         const MulT negative = product < 0 ? MulT{ 1 } : MulT{ 0 };
-        return fromUnderlyingValue(static_cast<T>((product + half - negative) >> Exp));
+        return FromUnderlyingValue(static_cast<T>((product + half - negative) >> Exp));
     }
 
     constexpr Fixed& operator*=(Fixed other) noexcept
@@ -186,23 +186,23 @@ public:
 
     [[nodiscard]] constexpr Fixed operator/(Fixed other) const noexcept
     {
-        if (other.underlyingValue_ == 0)
+        if (other.underlying_value_ == 0)
         {
-            if (underlyingValue_ == 0)
+            if (underlying_value_ == 0)
             {
                 return Fixed{};
             }
-            return fromUnderlyingValue(underlyingValue_ > 0 ? std::numeric_limits<T>::max() : std::numeric_limits<T>::min());
+            return FromUnderlyingValue(underlying_value_ > 0 ? std::numeric_limits<T>::max() : std::numeric_limits<T>::min());
         }
-        const MulT numerator = static_cast<MulT>(underlyingValue_) * static_cast<MulT>(one);
+        const MulT numerator = static_cast<MulT>(underlying_value_) * static_cast<MulT>(kOne);
         if constexpr (std::is_same_v<T, std::int32_t> && std::is_same_v<MulT, std::int64_t>)
         {
             // Hardware divider on the DS
-            return fromUnderlyingValue(detail::Div64(numerator, other.underlyingValue_));
+            return FromUnderlyingValue(detail::Div64(numerator, other.underlying_value_));
         }
         else
         {
-            return fromUnderlyingValue(static_cast<T>(numerator / static_cast<MulT>(other.underlyingValue_)));
+            return FromUnderlyingValue(static_cast<T>(numerator / static_cast<MulT>(other.underlying_value_)));
         }
     }
 
@@ -214,44 +214,49 @@ public:
     [[nodiscard]] constexpr bool operator==(const Fixed& other) const noexcept = default;
     [[nodiscard]] constexpr auto operator<=>(const Fixed& other) const noexcept = default;
 
-    [[nodiscard]] static constexpr Fixed fromUnderlyingValue(T value) noexcept
+    [[nodiscard]] static constexpr Fixed FromUnderlyingValue(T value) noexcept
     {
         Fixed f;
-        f.underlyingValue_ = value;
+        f.underlying_value_ = value;
         return f;
     }
-    [[nodiscard]] constexpr T underlyingValue() const noexcept { return underlyingValue_; }
+    [[nodiscard]] constexpr T underlying_value() const noexcept { return underlying_value_; }
 
 private:
-    static constexpr T one = T{ 1 } << Exp;
-    T underlyingValue_ = 0;
+    static constexpr T kOne = T{ 1 } << Exp;
+    T underlying_value_ = 0;
 };
 
 using Fixed16 = Fixed<std::int32_t, 16, std::int64_t>;
 using Fixed8 = Fixed<std::int8_t, 6, std::int16_t>;
 
+// Named like a standard type trait (std::is_floating_point_v)
+// NOLINTBEGIN(readability-identifier-naming)
 template<typename T>
 inline constexpr bool is_fixed_v = false;
 
 template<typename T, T Exp, typename MulT>
 inline constexpr bool is_fixed_v<Fixed<T, Exp, MulT>> = true;
+// NOLINTEND(readability-identifier-naming)
 
 /**
  * @brief Exact square root (floor), negative values return 0.
  */
 [[nodiscard]] constexpr Fixed16 Sqrt(Fixed16 value) noexcept
 {
-    if (value.underlyingValue() <= 0)
+    if (value.underlying_value() <= 0)
     {
         return Fixed16{};
     }
     // sqrt(raw / 2^16) * 2^16 == sqrt(raw * 2^16)
-    const auto squared = static_cast<std::uint64_t>(value.underlyingValue()) << 16;
-    return Fixed16::fromUnderlyingValue(static_cast<std::int32_t>(detail::ISqrt64(squared)));
+    const auto squared = static_cast<std::uint64_t>(value.underlying_value()) << 16;
+    return Fixed16::FromUnderlyingValue(static_cast<std::int32_t>(detail::ISqrt64(squared)));
 }
 
 } // namespace neko
 
+// Standard library interface names
+// NOLINTBEGIN(readability-identifier-naming)
 template<typename T, T Exp, typename MulT>
 class std::numeric_limits<neko::Fixed<T, Exp, MulT>>
 {
@@ -270,11 +275,12 @@ public:
     static constexpr int digits = std::numeric_limits<T>::digits;
     static constexpr std::float_round_style round_style = std::round_to_nearest;
 
-    [[nodiscard]] static constexpr Fixed min() noexcept { return Fixed::fromUnderlyingValue(T{ 1 }); }
-    [[nodiscard]] static constexpr Fixed max() noexcept { return Fixed::fromUnderlyingValue(std::numeric_limits<T>::max()); }
-    [[nodiscard]] static constexpr Fixed lowest() noexcept { return Fixed::fromUnderlyingValue(std::numeric_limits<T>::min()); }
-    [[nodiscard]] static constexpr Fixed epsilon() noexcept { return Fixed::fromUnderlyingValue(T{ 1 }); }
+    [[nodiscard]] static constexpr Fixed min() noexcept { return Fixed::FromUnderlyingValue(T{ 1 }); }
+    [[nodiscard]] static constexpr Fixed max() noexcept { return Fixed::FromUnderlyingValue(std::numeric_limits<T>::max()); }
+    [[nodiscard]] static constexpr Fixed lowest() noexcept { return Fixed::FromUnderlyingValue(std::numeric_limits<T>::min()); }
+    [[nodiscard]] static constexpr Fixed epsilon() noexcept { return Fixed::FromUnderlyingValue(T{ 1 }); }
     [[nodiscard]] static constexpr Fixed round_error() noexcept { return Fixed{ 0.5f }; }
 };
+// NOLINTEND(readability-identifier-naming)
 
 #endif  // NEKO_MATH_FIXED_H_

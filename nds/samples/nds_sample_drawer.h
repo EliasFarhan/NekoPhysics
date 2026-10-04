@@ -26,16 +26,16 @@ class NdsSampleDrawer final : public SampleDrawer
 public:
     struct Stats
     {
-        int spritesUsed = 0;
+        int sprites_used = 0;
         /**
          * @brief Shapes that needed a sprite past the 128th, in the last Render
          */
-        int droppedSprites = 0;
-        int bitmapShapes = 0;
+        int dropped_sprites = 0;
+        int bitmap_shapes = 0;
         /**
          * @brief Number of bitmap redraws since Init
          */
-        std::uint32_t bitmapRedraws = 0;
+        std::uint32_t bitmap_redraws = 0;
     };
 
     /**
@@ -43,7 +43,7 @@ public:
      * and bank C to the console.
      */
     void Init();
-    void Render(const DrawList& drawList) override;
+    void Render(const DrawList& draw_list) override;
     /**
      * @brief Call right after swiWaitForVBlank: OAM update and bitmap buffer swap, during VBlank
      */
@@ -51,15 +51,15 @@ public:
     [[nodiscard]] const Stats& stats() const { return stats_; }
 
 private:
-    static constexpr int MAX_SPRITE_RADIUS = 32;
-    static constexpr int MAX_SPRITE_BOX = 64;
-    static constexpr std::size_t MAX_BOX_GFX = 16;
+    static constexpr int kMaxSpriteRadius = 32;
+    static constexpr int kMaxSpriteBox = 64;
+    static constexpr std::size_t kMaxBoxGfx = 16;
 
     enum class BitmapShapeType : std::uint8_t
     {
-        RECT,
-        CIRCLE,
-        LINE
+        kRect,
+        kCircle,
+        kLine
     };
     /**
      * @brief In pixels. RECT: [x0, x1) x [y0, y1); CIRCLE: center (x0, y0), radius x1; LINE: (x0, y0) to (x1, y1)
@@ -70,8 +70,8 @@ private:
         int y0 = 0;
         int x1 = 0;
         int y1 = 0;
-        ColorId color = sample_color::EMPTY;
-        BitmapShapeType type = BitmapShapeType::RECT;
+        ColorId color = sample_color::kEmpty;
+        BitmapShapeType type = BitmapShapeType::kRect;
     };
     struct SpriteShape
     {
@@ -99,21 +99,21 @@ private:
 
     Stats stats_{};
     /**
-     * @brief Indexed by radius in pixels, from 1 to MAX_SPRITE_RADIUS
+     * @brief Indexed by radius in pixels, from 1 to kMaxSpriteRadius
      */
-    std::array<SpriteGfx, MAX_SPRITE_RADIUS + 1> circleGfx_{};
-    std::array<BoxGfx, MAX_BOX_GFX> boxGfx_{};
-    std::size_t boxGfxCount_ = 0;
-    int previousSpriteCount_ = 0;
+    std::array<SpriteGfx, kMaxSpriteRadius + 1> circle_gfx_{};
+    std::array<BoxGfx, kMaxBoxGfx> box_gfx_{};
+    std::size_t box_gfx_count_ = 0;
+    int previous_sprite_count_ = 0;
 
     int bg_ = -1;
     /**
      * @brief Index (0 or 1) of the buffer on screen: buffer i is at map base 4 * i (64 KB each in bank A)
      */
-    int frontBuffer_ = 0;
-    bool swapPending_ = false;
-    std::uint32_t frontHash_ = 0;
-    std::vector<BitmapShape> bitmapShapes_;
+    int front_buffer_ = 0;
+    bool swap_pending_ = false;
+    std::uint32_t front_hash_ = 0;
+    std::vector<BitmapShape> bitmap_shapes_;
 };
 
 } // namespace neko
