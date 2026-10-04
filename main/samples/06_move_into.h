@@ -1,9 +1,9 @@
 #pragma once
 
-#include "physics/physics.h"
-#include "bsh/quadtree.h"
-#include "sample.h"
-#include "sample_config.h"
+#include "neko/physics/physics.h"
+#include "neko/bsh/quadtree.h"
+#include "main/samples/sample.h"
+#include "main/samples/sample_config.h"
 
 // Box2D comparison, PC only: define USE_BOX2D (and link box2d::box2d to NekoPhysicsSamples) to enable it
 #if defined(USE_BOX2D) && !defined(NEKO_PLATFORM_NDS)

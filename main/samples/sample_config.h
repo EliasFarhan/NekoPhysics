@@ -1,8 +1,8 @@
 #pragma once
 
-#include "math/const.h"
-#include "math/shape.h"
-#include "physics/physics_type.h"
+#include "neko/math/const.h"
+#include "neko/math/shape.h"
+#include "neko/physics/physics_type.h"
 
 #include <cstddef>
 

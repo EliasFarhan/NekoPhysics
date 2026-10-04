@@ -1,8 +1,8 @@
 #pragma once
 
-#include "sample.h"
-#include "sample_config.h"
-#include "physics/physics.h"
+#include "main/samples/sample.h"
+#include "main/samples/sample_config.h"
+#include "neko/physics/physics.h"
 
 #include <vector>
 

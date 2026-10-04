@@ -1,6 +1,6 @@
 #pragma once
 
-#include "samples/draw_list.h"
+#include "main/samples/draw_list.h"
 
 #include <nds.h>
 

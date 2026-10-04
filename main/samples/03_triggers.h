@@ -1,8 +1,8 @@
 #pragma once
-#include "physics/physics.h"
-#include "bsh/quadtree.h"
-#include "sample.h"
-#include "sample_config.h"
+#include "neko/physics/physics.h"
+#include "neko/bsh/quadtree.h"
+#include "main/samples/sample.h"
+#include "main/samples/sample_config.h"
 
 #include <vector>
 

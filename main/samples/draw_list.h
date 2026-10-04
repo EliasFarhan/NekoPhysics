@@ -1,7 +1,7 @@
 #pragma once
 
-#include "math/shape.h"
-#include "math/vec2.h"
+#include "neko/math/shape.h"
+#include "neko/math/vec2.h"
 
 #include <array>
 #include <cstddef>

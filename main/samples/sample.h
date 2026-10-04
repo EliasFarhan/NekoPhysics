@@ -1,8 +1,8 @@
 #pragma once
 
-#include "draw_list.h"
-#include "math/const.h"
-#include "math/shape.h"
+#include "main/samples/draw_list.h"
+#include "neko/math/const.h"
+#include "neko/math/shape.h"
 
 #include <cstddef>
 #include <cstdint>

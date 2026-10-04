@@ -1,6 +1,6 @@
 #pragma once
 
-#include "physics/physics.h"
+#include "neko/physics/physics.h"
 
 #include <cstdint>
 #include <utility>
@@ -71,8 +71,8 @@ inline void BuildFallingPile(PhysicsWorld& world)
 }
 
 /**
- * @brief Golden checksums of BuildFallingPile with Scalar = Fixed16, shared by tests/scene_test.cpp and the DS test
- * ROM (nds/main.cpp) so there is one source to re-pin when the simulation changes on purpose.
+ * @brief Golden checksums of BuildFallingPile with Scalar = Fixed16, shared by tests/scene_test.cc and the DS test
+ * ROM (nds/main.cc) so there is one source to re-pin when the simulation changes on purpose.
  * Re-pinned on 2026-09-27, most recently for the DetectContact reciprocal change (one division instead of two
  * for the circle-circle and circle-AABB contact normal): verified with GCC 15.2 (-O2, -fno-exceptions -fno-rtti)
  * and the DS test ROM on melonDS; not re-checked against MSVC.

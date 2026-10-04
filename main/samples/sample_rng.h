@@ -1,7 +1,7 @@
 #pragma once
 
-#include "draw_list.h"
-#include "sample_config.h"
+#include "main/samples/draw_list.h"
+#include "main/samples/sample_config.h"
 
 #include <cstdint>
 
