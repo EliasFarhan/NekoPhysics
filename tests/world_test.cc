@@ -29,7 +29,7 @@ TEST(ColliderPair, IsNormalized)
     constexpr neko::ColliderPair p1{ neko::ColliderIndex{3}, neko::ColliderIndex{1} };
     constexpr neko::ColliderPair p2{ neko::ColliderIndex{1}, neko::ColliderIndex{3} };
     static_assert(p1 == p2);
-    static_assert(p1.c1 == neko::ColliderIndex{ 1 } && p1.c2 == neko::ColliderIndex{ 3 });
+    static_assert(p1.c1() == neko::ColliderIndex{ 1 } && p1.c2() == neko::ColliderIndex{ 3 });
     static_assert(neko::ColliderPair{ neko::ColliderIndex{0}, neko::ColliderIndex{5} } < p1);
 }
 

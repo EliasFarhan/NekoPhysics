@@ -121,11 +121,12 @@ void QuadTree::Split(Index node, std::size_t depth)
     const std::size_t first_child = used_nodes_;
     used_nodes_ += 4;
     // Exact quadrants: no gap between children because of rounding
-    const auto [min_bound, max_bound] = nodes_[node].aabb;
+    const auto min_bound = nodes_[node].aabb.min_bound();
+    const auto max_bound = nodes_[node].aabb.max_bound();
     const auto center = nodes_[node].aabb.GetCenter();
     nodes_[first_child] = QuadNode{ {min_bound, center} };
-    nodes_[first_child + 1] = QuadNode{ {{center.x, min_bound.y}, {max_bound.x, center.y}} };
-    nodes_[first_child + 2] = QuadNode{ {{min_bound.x, center.y}, {center.x, max_bound.y}} };
+    nodes_[first_child + 1] = QuadNode{ {{center.x(), min_bound.y()}, {max_bound.x(), center.y()}} };
+    nodes_[first_child + 2] = QuadNode{ {{min_bound.x(), center.y()}, {center.x(), max_bound.y()}} };
     nodes_[first_child + 3] = QuadNode{ {center, max_bound} };
 
     auto entry = nodes_[node].first_entry;

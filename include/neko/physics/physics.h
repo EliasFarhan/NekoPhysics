@@ -145,8 +145,8 @@ public:
      */
     void SortNewTouchingPairs();
 
-    [[nodiscard]] Body& body(BodyIndex index) { return bodies_[index.index]; }
-    [[nodiscard]] const Body& body(BodyIndex index) const { return bodies_[index.index]; }
+    [[nodiscard]] Body& body(BodyIndex index) { return bodies_[index.index()]; }
+    [[nodiscard]] const Body& body(BodyIndex index) const { return bodies_[index.index()]; }
 
     /**
      * @brief Return kInvalidColliderIndex when max_colliders are in use
@@ -155,13 +155,13 @@ public:
 	ColliderIndex AddAabbCollider(BodyIndex body);
     void RemoveCollider(ColliderIndex index);
 
-	[[nodiscard]] Collider& collider(ColliderIndex collider_index) { return colliders_[collider_index.index]; }
-	[[nodiscard]] const Collider& collider(ColliderIndex collider_index) const { return colliders_[collider_index.index]; }
+	[[nodiscard]] Collider& collider(ColliderIndex collider_index) { return colliders_[collider_index.index()]; }
+	[[nodiscard]] const Collider& collider(ColliderIndex collider_index) const { return colliders_[collider_index.index()]; }
 
-	[[nodiscard]] AabbCollider& aabb(ShapeIndex shape_index) { return aabbs_[shape_index.index]; }
-	[[nodiscard]] const AabbCollider& aabb(ShapeIndex shape_index) const { return aabbs_[shape_index.index]; }
-	[[nodiscard]] CircleCollider& circle(ShapeIndex shape_index) { return circles_[shape_index.index]; }
-    [[nodiscard]] const CircleCollider& circle(ShapeIndex shape_index) const { return circles_[shape_index.index]; }
+	[[nodiscard]] AabbCollider& aabb(ShapeIndex shape_index) { return aabbs_[shape_index.index()]; }
+	[[nodiscard]] const AabbCollider& aabb(ShapeIndex shape_index) const { return aabbs_[shape_index.index()]; }
+	[[nodiscard]] CircleCollider& circle(ShapeIndex shape_index) { return circles_[shape_index.index()]; }
+    [[nodiscard]] const CircleCollider& circle(ShapeIndex shape_index) const { return circles_[shape_index.index()]; }
 
     /**
      * @brief Replaces the default broadphase (sort and sweep); nullptr restores it

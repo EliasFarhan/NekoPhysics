@@ -28,8 +28,8 @@ void TriggersSample::Begin(const SampleContext& context)
     {
         const auto index = world_.AddBody();
         Body& body = world_.body(index);
-        body.position = { rng.Range(bounds_.min_bound.x, bounds_.max_bound.x),
-            rng.Range(bounds_.min_bound.y, bounds_.max_bound.y) };
+        body.position = { rng.Range(bounds_.min_bound().x(), bounds_.max_bound().x()),
+            rng.Range(bounds_.min_bound().y(), bounds_.max_bound().y()) };
         body.velocity = Vec2f{ rng.Range(Scalar{ -1 }, Scalar{ 1 }), rng.Range(Scalar{ -1 }, Scalar{ 1 }) } * kMaxSpeed;
         body.inverse_mass = Scalar{ 1 };
 
@@ -46,18 +46,18 @@ void TriggersSample::Draw(DrawList& draw_list) const
     for (Index i = 0; i < bodies_.size(); ++i)
     {
         const auto& trigger_body = bodies_[i];
-        draw_list.circles.push_back({ world_.body({ i }).position, trigger_body.circle_radius,
+        draw_list.circles.push_back({ world_.body(BodyIndex{ i }).position, trigger_body.circle_radius,
             trigger_body.count == 0 ? kUntriggerColor : kTriggerColor });
     }
     // Children are exact quadrants of their parent: the root's outline plus a cross through every split node draws
     // each edge once (the children's outlines would redraw their parent's edges)
     const auto& root = quad_tree_.GetNode(QuadTree::kRoot).aabb;
-    const Vec2f top_right{ root.max_bound.x, root.min_bound.y };
-    const Vec2f bottom_left{ root.min_bound.x, root.max_bound.y };
-    draw_list.lines.push_back({ root.min_bound, top_right, kQuadTreeColor });
-    draw_list.lines.push_back({ top_right, root.max_bound, kQuadTreeColor });
-    draw_list.lines.push_back({ root.max_bound, bottom_left, kQuadTreeColor });
-    draw_list.lines.push_back({ bottom_left, root.min_bound, kQuadTreeColor });
+    const Vec2f top_right{ root.max_bound().x(), root.min_bound().y() };
+    const Vec2f bottom_left{ root.min_bound().x(), root.max_bound().y() };
+    draw_list.lines.push_back({ root.min_bound(), top_right, kQuadTreeColor });
+    draw_list.lines.push_back({ top_right, root.max_bound(), kQuadTreeColor });
+    draw_list.lines.push_back({ root.max_bound(), bottom_left, kQuadTreeColor });
+    draw_list.lines.push_back({ bottom_left, root.min_bound(), kQuadTreeColor });
     // Depth-first walk with an explicit stack: each pop pushes at most 4 children, one level deeper
     std::array<Index, 3 * QuadTree::kMaxDepth + 1> stack{};
     std::size_t stack_size = 0;
@@ -71,8 +71,8 @@ void TriggersSample::Draw(DrawList& draw_list) const
         }
         const auto& aabb = node.aabb;
         const auto center = aabb.GetCenter();
-        draw_list.lines.push_back({ Vec2f{ aabb.min_bound.x, center.y }, Vec2f{ aabb.max_bound.x, center.y }, kQuadTreeColor });
-        draw_list.lines.push_back({ Vec2f{ center.x, aabb.min_bound.y }, Vec2f{ center.x, aabb.max_bound.y }, kQuadTreeColor });
+        draw_list.lines.push_back({ Vec2f{ aabb.min_bound().x(), center.y() }, Vec2f{ aabb.max_bound().x(), center.y() }, kQuadTreeColor });
+        draw_list.lines.push_back({ Vec2f{ center.x(), aabb.min_bound().y() }, Vec2f{ center.x(), aabb.max_bound().y() }, kQuadTreeColor });
         for (Index child = node.first_child; child < node.first_child + 4; ++child)
         {
             stack[stack_size++] = child;
@@ -89,14 +89,14 @@ void TriggersSample::End()
 
 void TriggersSample::OnTriggerEnter(const ColliderPair& p)
 {
-    bodies_[world_.collider(p.c1).body_index.index].count++;
-    bodies_[world_.collider(p.c2).body_index.index].count++;
+    bodies_[world_.collider(p.c1()).body_index.index()].count++;
+    bodies_[world_.collider(p.c2()).body_index.index()].count++;
 }
 
 void TriggersSample::OnTriggerExit(const ColliderPair& p)
 {
-    bodies_[world_.collider(p.c1).body_index.index].count--;
-    bodies_[world_.collider(p.c2).body_index.index].count--;
+    bodies_[world_.collider(p.c1()).body_index.index()].count--;
+    bodies_[world_.collider(p.c2()).body_index.index()].count--;
 }
 
 void TriggersSample::FixedUpdate()
@@ -105,7 +105,7 @@ void TriggersSample::FixedUpdate()
     world_.Step();
     for (Index i = 0; i < bodies_.size(); ++i)
     {
-        BounceInside(world_.body({ i }), bounds_);
+        BounceInside(world_.body(BodyIndex{ i }), bounds_);
     }
 }
 

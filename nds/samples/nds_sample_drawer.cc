@@ -248,11 +248,11 @@ const NdsSampleDrawer::BoxGfx* NdsSampleDrawer::GetBoxGfx(int width, int height)
 
 void NdsSampleDrawer::Render(const DrawList& draw_list)
 {
-    const Vec2f origin = draw_list.camera.min_bound;
-    const Scalar camera_width = draw_list.camera.max_bound.x - draw_list.camera.min_bound.x;
+    const Vec2f origin = draw_list.camera.min_bound();
+    const Scalar camera_width = draw_list.camera.max_bound().x() - draw_list.camera.min_bound().x();
     const Scalar scale = Scalar{ SCREEN_WIDTH } / camera_width;
-    const auto to_screen_x = [origin, scale](Scalar x) { return ToPixels(x - origin.x, scale); };
-    const auto to_screen_y = [origin, scale](Scalar y) { return ToPixels(y - origin.y, scale); };
+    const auto to_screen_x = [origin, scale](Scalar x) { return ToPixels(x - origin.x(), scale); };
+    const auto to_screen_y = [origin, scale](Scalar y) { return ToPixels(y - origin.y(), scale); };
 
     stats_.sprites_used = 0;
     stats_.dropped_sprites = 0;
@@ -261,8 +261,8 @@ void NdsSampleDrawer::Render(const DrawList& draw_list)
     for (const auto& circle : draw_list.circles)
     {
         const int radius = std::max(1, ToPixels(circle.radius, scale));
-        const int x = to_screen_x(circle.center.x);
-        const int y = to_screen_y(circle.center.y);
+        const int x = to_screen_x(circle.center.x());
+        const int y = to_screen_y(circle.center.y());
         if (radius <= kMaxSpriteRadius)
         {
             AddSprite(x - radius, y - radius, circle_gfx_[static_cast<std::size_t>(radius)], circle.color);
@@ -274,10 +274,10 @@ void NdsSampleDrawer::Render(const DrawList& draw_list)
     }
     for (const auto& box : draw_list.boxes)
     {
-        const int x0 = to_screen_x(box.center.x - box.half_size.x);
-        const int y0 = to_screen_y(box.center.y - box.half_size.y);
-        const int width = std::max(1, to_screen_x(box.center.x + box.half_size.x) - x0);
-        const int height = std::max(1, to_screen_y(box.center.y + box.half_size.y) - y0);
+        const int x0 = to_screen_x(box.center.x() - box.half_size.x());
+        const int y0 = to_screen_y(box.center.y() - box.half_size.y());
+        const int width = std::max(1, to_screen_x(box.center.x() + box.half_size.x()) - x0);
+        const int height = std::max(1, to_screen_y(box.center.y() + box.half_size.y()) - y0);
         const BoxGfx* gfx = width <= kMaxSpriteBox && height <= kMaxSpriteBox ? GetBoxGfx(width, height) : nullptr;
         if (gfx != nullptr)
         {
@@ -290,7 +290,7 @@ void NdsSampleDrawer::Render(const DrawList& draw_list)
     }
     for (const auto& line : draw_list.lines)
     {
-        bitmap_shapes_.push_back({ to_screen_x(line.a.x), to_screen_y(line.a.y), to_screen_x(line.b.x), to_screen_y(line.b.y),
+        bitmap_shapes_.push_back({ to_screen_x(line.a.x()), to_screen_y(line.a.y()), to_screen_x(line.b.x()), to_screen_y(line.b.y()),
             line.color, BitmapShapeType::kLine });
     }
 

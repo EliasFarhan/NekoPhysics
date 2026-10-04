@@ -86,8 +86,8 @@ TEST(Integrator, GravityDoesNotDependOnMass)
     }
     for (const auto body : { light, heavy, infinite })
     {
-        EXPECT_NEAR(F(world.body(body).velocity.y), -9.81f, kTolerance);
-        EXPECT_NEAR(F(world.body(body).velocity.x), 0.0f, kTolerance);
+        EXPECT_NEAR(F(world.body(body).velocity.y()), -9.81f, kTolerance);
+        EXPECT_NEAR(F(world.body(body).velocity.x()), 0.0f, kTolerance);
     }
 }
 
@@ -98,7 +98,7 @@ TEST(Integrator, ForceIsScaledByInverseMass)
     world.body(body).inverse_mass = Scalar{ 0.5f };
     world.body(body).force = V(60, 0);
     world.Step();
-    EXPECT_NEAR(F(world.body(body).velocity.x), 60.0f * 0.5f / 60.0f, kTolerance);
+    EXPECT_NEAR(F(world.body(body).velocity.x()), 60.0f * 0.5f / 60.0f, kTolerance);
     EXPECT_EQ(world.body(body).force, Vec2f::Zero());
 }
 
@@ -114,8 +114,8 @@ TEST(Collisions, ResolvedWithoutContactListener)
     world.body(b.body).velocity = V(-1, 0);
     world.Step();
     // Equal masses, restitution 1: velocities are exchanged
-    EXPECT_NEAR(F(world.body(a.body).velocity.x), -1.0f, kTolerance);
-    EXPECT_NEAR(F(world.body(b.body).velocity.x), 1.0f, kTolerance);
+    EXPECT_NEAR(F(world.body(a.body).velocity.x()), -1.0f, kTolerance);
+    EXPECT_NEAR(F(world.body(b.body).velocity.x()), 1.0f, kTolerance);
 }
 
 TEST_F(PhysicsWorldTest, HeadOnWithoutRestitution)
@@ -127,11 +127,11 @@ TEST_F(PhysicsWorldTest, HeadOnWithoutRestitution)
     world_.body(a.body).velocity = V(1, 0);
     world_.body(b.body).velocity = V(-1, 0);
     world_.Step();
-    EXPECT_NEAR(F(world_.body(a.body).velocity.x), 0.0f, kTolerance);
-    EXPECT_NEAR(F(world_.body(b.body).velocity.x), 0.0f, kTolerance);
+    EXPECT_NEAR(F(world_.body(a.body).velocity.x()), 0.0f, kTolerance);
+    EXPECT_NEAR(F(world_.body(b.body).velocity.x()), 0.0f, kTolerance);
     EXPECT_EQ(listener_.collision_enter, 1);
     // Pushed apart until they just touch
-    EXPECT_NEAR(F(world_.body(b.body).position.x - world_.body(a.body).position.x), 2.0f, kTolerance);
+    EXPECT_NEAR(F(world_.body(b.body).position.x() - world_.body(a.body).position.x()), 2.0f, kTolerance);
 }
 
 // A static body left with the default inverse mass of 1 used to absorb half the impulse (review S2.7)
@@ -141,10 +141,10 @@ TEST_F(PhysicsWorldTest, StaticBodyHasInfiniteMass)
     const auto ball = AddCircle(world_, V(1.5f, 0), Scalar{ 0.6f });
     world_.body(ball.body).velocity = V(-1, 0);
     world_.Step();
-    EXPECT_NEAR(F(world_.body(ball.body).velocity.x), 1.0f, kTolerance);
+    EXPECT_NEAR(F(world_.body(ball.body).velocity.x()), 1.0f, kTolerance);
     EXPECT_EQ(world_.body(wall.body).position, V(0, 0));
     // The whole penetration goes to the ball
-    EXPECT_NEAR(F(world_.body(ball.body).position.x), 1.6f, kTolerance);
+    EXPECT_NEAR(F(world_.body(ball.body).position.x()), 1.6f, kTolerance);
 }
 
 TEST_F(PhysicsWorldTest, KinematicBodyHasInfiniteMass)
@@ -153,7 +153,7 @@ TEST_F(PhysicsWorldTest, KinematicBodyHasInfiniteMass)
     const auto ball = AddCircle(world_, V(1.5f, 0), Scalar{ 0.6f });
     world_.body(ball.body).velocity = V(-1, 0);
     world_.Step();
-    EXPECT_NEAR(F(world_.body(ball.body).velocity.x), 1.0f, kTolerance);
+    EXPECT_NEAR(F(world_.body(ball.body).velocity.x()), 1.0f, kTolerance);
     EXPECT_EQ(world_.body(paddle.body).velocity, Vec2f::Zero());
 }
 
@@ -163,8 +163,8 @@ TEST_F(PhysicsWorldTest, CircleCenterInsideBoxIsPushedOutOfNearestFace)
     AddBox(world_, V(0, 0), V(1, 1), neko::BodyType::kStatic);
     const auto ball = AddCircle(world_, V(0.8f, 0.1f), Scalar{ 0.5f });
     world_.Step();
-    EXPECT_NEAR(F(world_.body(ball.body).position.x), 1.5f, kTolerance);
-    EXPECT_NEAR(F(world_.body(ball.body).position.y), 0.1f, kTolerance);
+    EXPECT_NEAR(F(world_.body(ball.body).position.x()), 1.5f, kTolerance);
+    EXPECT_NEAR(F(world_.body(ball.body).position.y()), 0.1f, kTolerance);
 }
 
 TEST_F(PhysicsWorldTest, CircleCenterInsideBoxIsPushedOutWhenCircleComesFirst)
@@ -172,8 +172,8 @@ TEST_F(PhysicsWorldTest, CircleCenterInsideBoxIsPushedOutWhenCircleComesFirst)
     const auto ball = AddCircle(world_, V(-0.1f, -0.7f), Scalar{ 0.5f });
     AddBox(world_, V(0, 0), V(1, 1), neko::BodyType::kStatic);
     world_.Step();
-    EXPECT_NEAR(F(world_.body(ball.body).position.x), -0.1f, kTolerance);
-    EXPECT_NEAR(F(world_.body(ball.body).position.y), -1.5f, kTolerance);
+    EXPECT_NEAR(F(world_.body(ball.body).position.x()), -0.1f, kTolerance);
+    EXPECT_NEAR(F(world_.body(ball.body).position.y()), -1.5f, kTolerance);
 }
 
 // Circles at the same position used to divide by a zero distance
@@ -184,8 +184,8 @@ TEST_F(PhysicsWorldTest, CoincidentCirclesSeparate)
     world_.Step();
     const auto delta = world_.body(b.body).position - world_.body(a.body).position;
     EXPECT_NEAR(F(delta.Length()), 1.0f, kTolerance);
-    EXPECT_LT(std::abs(F(world_.body(a.body).position.x)), 10.0f);
-    EXPECT_LT(std::abs(F(world_.body(a.body).position.y)), 10.0f);
+    EXPECT_LT(std::abs(F(world_.body(a.body).position.x())), 10.0f);
+    EXPECT_LT(std::abs(F(world_.body(a.body).position.y())), 10.0f);
 }
 
 TEST(Collisions, BoxComesToRestOnStaticGround)
@@ -202,9 +202,9 @@ TEST(Collisions, BoxComesToRestOnStaticGround)
     {
         world.Step();
     }
-    EXPECT_NEAR(F(world.body(box.body).position.y), 1.0f, 0.02f);
-    EXPECT_NEAR(F(world.body(box.body).velocity.y), 0.0f, kTolerance);
-    EXPECT_NEAR(F(world.body(box.body).position.x), 0.0f, kTolerance);
+    EXPECT_NEAR(F(world.body(box.body).position.y()), 1.0f, 0.02f);
+    EXPECT_NEAR(F(world.body(box.body).velocity.y()), 0.0f, kTolerance);
+    EXPECT_NEAR(F(world.body(box.body).position.x()), 0.0f, kTolerance);
 }
 
 // A pair stored as a trigger dereferenced an empty optional once a collider became solid (DS review D2.2)
@@ -217,7 +217,7 @@ TEST_F(PhysicsWorldTest, TriggerBecomingSolidIsResolved)
     EXPECT_EQ(listener_.trigger_enter, 1);
     world_.collider(a.collider).is_trigger = false;
     world_.Step();
-    EXPECT_NEAR(F(world_.body(b.body).position.x - world_.body(a.body).position.x), 2.0f, kTolerance);
+    EXPECT_NEAR(F(world_.body(b.body).position.x() - world_.body(a.body).position.x()), 2.0f, kTolerance);
 }
 
 // The contact point was on the far side of the first body (review S2.5)
@@ -228,13 +228,13 @@ TEST_F(PhysicsWorldTest, ContactPointIsBetweenBodies)
     neko::Contact contact{};
     ASSERT_TRUE(world_.DetectContact(world_.body(c1.body), world_.collider(c1.collider),
         world_.body(c2.body), world_.collider(c2.collider), &contact));
-    EXPECT_NEAR(F(contact.contact_point.x), 0.75f, kTolerance);
+    EXPECT_NEAR(F(contact.contact_point.x()), 0.75f, kTolerance);
 
     const auto b1 = AddBox(world_, V(10, 0), V(1, 1));
     const auto b2 = AddBox(world_, V(11.5f, 0), V(1, 1));
     ASSERT_TRUE(world_.DetectContact(world_.body(b1.body), world_.collider(b1.collider),
         world_.body(b2.body), world_.collider(b2.collider), &contact));
-    EXPECT_NEAR(F(contact.contact_point.x), 10.75f, kTolerance);
+    EXPECT_NEAR(F(contact.contact_point.x()), 10.75f, kTolerance);
 }
 
 int main(int argc, char** argv)

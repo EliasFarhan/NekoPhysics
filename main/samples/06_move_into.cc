@@ -95,13 +95,13 @@ void MoveIntoSample::Begin(const SampleContext& context)
 		collider.restitution = Scalar{ 0 };
 #else
 		b2BodyDef body_def{};
-		body_def.position = b2Vec2{ float{ground_position.x}, float{ground_position.y} };
+		body_def.position = b2Vec2{ float{ground_position.x()}, float{ground_position.y()} };
 		body_def.type = b2_staticBody;
 		body_def.fixedRotation = true;
 		b2_ground_body_ = b2_world_.CreateBody(&body_def);
 
 		b2PolygonShape shape;
-		shape.SetAsBox(float{kGroundHalfSize.x}, float{kGroundHalfSize.y});
+		shape.SetAsBox(float{kGroundHalfSize.x()}, float{kGroundHalfSize.y()});
 		b2FixtureDef fixture_def{};
 		fixture_def.shape = &shape;
 		fixture_def.friction = 0.0f;
@@ -127,13 +127,13 @@ void MoveIntoSample::Begin(const SampleContext& context)
 		collider.restitution = Scalar{ 0 };
 #else
 		b2BodyDef body_def{};
-		body_def.position = { float{static_rect_position.x}, float{static_rect_position.y} };
+		body_def.position = { float{static_rect_position.x()}, float{static_rect_position.y()} };
 		body_def.type = b2_dynamicBody;
 		body_def.fixedRotation = true;
 		b2_static_body_ = b2_world_.CreateBody(&body_def);
 
 		b2PolygonShape shape{};
-		shape.SetAsBox(float{kRectHalfSize.x}, float{kRectHalfSize.y});
+		shape.SetAsBox(float{kRectHalfSize.x()}, float{kRectHalfSize.y()});
 
 		b2FixtureDef fixture_def{};
 		fixture_def.shape = &shape;
@@ -162,13 +162,13 @@ void MoveIntoSample::Begin(const SampleContext& context)
 		collider.restitution = Scalar{ 0 };
 #else
 		b2BodyDef body_def{};
-		body_def.position = { float{dynamic_rect_position.x}, float{dynamic_rect_position.y} };
+		body_def.position = { float{dynamic_rect_position.x()}, float{dynamic_rect_position.y()} };
 		body_def.type = b2_dynamicBody;
 		body_def.fixedRotation = true;
 		b2_dynamic_body_ = b2_world_.CreateBody(&body_def);
 
 		b2PolygonShape shape{};
-		shape.SetAsBox(float{kRectHalfSize.x}, float{kRectHalfSize.y});
+		shape.SetAsBox(float{kRectHalfSize.x()}, float{kRectHalfSize.y()});
 
 		b2FixtureDef fixture_def{};
 		fixture_def.shape = &shape;
@@ -238,7 +238,7 @@ void MoveIntoSample::FixedUpdate()
 		{
 			force = force.Normalized() * kMaxForce;
 		}
-		b2_dynamic_body_->ApplyForceToCenter({float{force.x}, float{force.y}}, true);
+		b2_dynamic_body_->ApplyForceToCenter({float{force.x()}, float{force.y()}}, true);
 #else
 		Body& dynamic_body = world_.body(dynamic_body_index_);
 		//Move dynamic object to the right
@@ -262,7 +262,7 @@ void MoveIntoSample::FixedUpdate()
 		{
 			force = force.Normalized() * kMaxForce;
 		}
-		b2_static_body_->ApplyForceToCenter({float{force.x}, float{force.y}}, true);
+		b2_static_body_->ApplyForceToCenter({float{force.x()}, float{force.y()}}, true);
 #else
 		//Use force to make object static
 		Body& static_body = world_.body(static_body_index_);

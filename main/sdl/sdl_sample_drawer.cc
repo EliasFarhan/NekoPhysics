@@ -35,16 +35,16 @@ SdlSampleDrawer::Viewport SdlSampleDrawer::FitCamera(const Aabbf& camera) const
     int width = 0;
     int height = 0;
     SDL_GetCurrentRenderOutputSize(renderer_, &width, &height);
-    const auto camera_size = camera.max_bound - camera.min_bound;
-    const float camera_width = float{ camera_size.x };
-    const float camera_height = float{ camera_size.y };
+    const auto camera_size = camera.max_bound() - camera.min_bound();
+    const float camera_width = float{ camera_size.x() };
+    const float camera_height = float{ camera_size.y() };
     if (camera_width <= 0.0f || camera_height <= 0.0f)
     {
         return {};
     }
     const float scale = std::min(static_cast<float>(width) / camera_width, static_cast<float>(height) / camera_height);
-    return { scale, (static_cast<float>(width) - camera_width * scale) / 2.0f - float{ camera.min_bound.x } * scale,
-        (static_cast<float>(height) - camera_height * scale) / 2.0f - float{ camera.min_bound.y } * scale };
+    return { scale, (static_cast<float>(width) - camera_width * scale) / 2.0f - float{ camera.min_bound().x() } * scale,
+        (static_cast<float>(height) - camera_height * scale) / 2.0f - float{ camera.min_bound().y() } * scale };
 }
 
 void SdlSampleDrawer::Render(const DrawList& draw_list)
@@ -52,10 +52,10 @@ void SdlSampleDrawer::Render(const DrawList& draw_list)
     NEKO_PROFILE_FUNCTION();
     const auto viewport = FitCamera(draw_list.camera);
 
-    const SDL_FRect background{ float{ draw_list.camera.min_bound.x } * viewport.scale + viewport.offset_x,
-        float{ draw_list.camera.min_bound.y } * viewport.scale + viewport.offset_y,
-        float{ draw_list.camera.max_bound.x - draw_list.camera.min_bound.x } * viewport.scale,
-        float{ draw_list.camera.max_bound.y - draw_list.camera.min_bound.y } * viewport.scale };
+    const SDL_FRect background{ float{ draw_list.camera.min_bound().x() } * viewport.scale + viewport.offset_x,
+        float{ draw_list.camera.min_bound().y() } * viewport.scale + viewport.offset_y,
+        float{ draw_list.camera.max_bound().x() - draw_list.camera.min_bound().x() } * viewport.scale,
+        float{ draw_list.camera.max_bound().y() - draw_list.camera.min_bound().y() } * viewport.scale };
     SDL_SetRenderDrawColorFloat(renderer_, kBackgroundColor.r, kBackgroundColor.g, kBackgroundColor.b,
         kBackgroundColor.a);
     SDL_RenderFillRect(renderer_, &background);
@@ -71,8 +71,8 @@ void SdlSampleDrawer::RenderCircles(const DrawList& draw_list, const Viewport& v
     indices_.clear();
     for (const auto& circle : draw_list.circles)
     {
-        const SDL_FPoint center{ float{ circle.center.x } * viewport.scale + viewport.offset_x,
-            float{ circle.center.y } * viewport.scale + viewport.offset_y };
+        const SDL_FPoint center{ float{ circle.center.x() } * viewport.scale + viewport.offset_x,
+            float{ circle.center.y() } * viewport.scale + viewport.offset_y };
         const float radius = float{ circle.radius } * viewport.scale;
         const int segments = std::clamp(static_cast<int>(radius), kMinCircleSegments, kMaxCircleSegments);
         const auto color = ToSdlColor(circle.color);
@@ -109,9 +109,9 @@ void SdlSampleDrawer::RenderBoxes(const DrawList& draw_list, const Viewport& vie
         {
             const auto& box = draw_list.boxes[end];
             const auto top_left = box.center - box.half_size;
-            rects_.push_back({ float{ top_left.x } * viewport.scale + viewport.offset_x,
-                float{ top_left.y } * viewport.scale + viewport.offset_y,
-                float{ box.half_size.x } * 2.0f * viewport.scale, float{ box.half_size.y } * 2.0f * viewport.scale });
+            rects_.push_back({ float{ top_left.x() } * viewport.scale + viewport.offset_x,
+                float{ top_left.y() } * viewport.scale + viewport.offset_y,
+                float{ box.half_size.x() } * 2.0f * viewport.scale, float{ box.half_size.y() } * 2.0f * viewport.scale });
         }
         SetDrawColor(color);
         SDL_RenderFillRects(renderer_, rects_.data(), static_cast<int>(rects_.size()));
@@ -130,9 +130,9 @@ void SdlSampleDrawer::RenderLines(const DrawList& draw_list, const Viewport& vie
             SetDrawColor(line.color);
             current_color = line.color;
         }
-        SDL_RenderLine(renderer_, float{ line.a.x } * viewport.scale + viewport.offset_x,
-            float{ line.a.y } * viewport.scale + viewport.offset_y, float{ line.b.x } * viewport.scale + viewport.offset_x,
-            float{ line.b.y } * viewport.scale + viewport.offset_y);
+        SDL_RenderLine(renderer_, float{ line.a.x() } * viewport.scale + viewport.offset_x,
+            float{ line.a.y() } * viewport.scale + viewport.offset_y, float{ line.b.x() } * viewport.scale + viewport.offset_x,
+            float{ line.b.y() } * viewport.scale + viewport.offset_y);
     }
 }
 

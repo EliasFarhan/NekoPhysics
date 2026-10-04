@@ -22,8 +22,8 @@ void CollisionsSample::Begin(const SampleContext& context)
     {
         const auto index = world_.AddBody();
         Body& body = world_.body(index);
-        body.position = { rng.Range(bounds_.min_bound.x, bounds_.max_bound.x),
-            rng.Range(bounds_.min_bound.y, bounds_.max_bound.y) };
+        body.position = { rng.Range(bounds_.min_bound().x(), bounds_.max_bound().x()),
+            rng.Range(bounds_.min_bound().y(), bounds_.max_bound().y()) };
         body.velocity = Vec2f{ rng.Range(Scalar{ -1 }, Scalar{ 1 }), rng.Range(Scalar{ -1 }, Scalar{ 1 }) } * kMaxSpeed;
         body.inverse_mass = Scalar{ 1 };
 
@@ -41,7 +41,7 @@ void CollisionsSample::Draw(DrawList& draw_list) const
     for (Index i = 0; i < bodies_.size(); ++i)
     {
         const auto& colliding_body = bodies_[i];
-        draw_list.circles.push_back({ world_.body({ i }).position, colliding_body.circle_radius,
+        draw_list.circles.push_back({ world_.body(BodyIndex{ i }).position, colliding_body.circle_radius,
             colliding_body.count == 0 ? kNotCollidingColor : kCollidingColor });
     }
 }
@@ -58,20 +58,20 @@ void CollisionsSample::FixedUpdate()
     world_.Step();
     for (Index i = 0; i < bodies_.size(); ++i)
     {
-        BounceInside(world_.body({ i }), bounds_);
+        BounceInside(world_.body(BodyIndex{ i }), bounds_);
     }
 }
 
 void CollisionsSample::OnCollisionEnter(const ColliderPair& p)
 {
-    bodies_[world_.collider(p.c1).body_index.index].count++;
-    bodies_[world_.collider(p.c2).body_index.index].count++;
+    bodies_[world_.collider(p.c1()).body_index.index()].count++;
+    bodies_[world_.collider(p.c2()).body_index.index()].count++;
 }
 
 void CollisionsSample::OnCollisionExit(const ColliderPair& p)
 {
-    bodies_[world_.collider(p.c1).body_index.index].count--;
-    bodies_[world_.collider(p.c2).body_index.index].count--;
+    bodies_[world_.collider(p.c1()).body_index.index()].count--;
+    bodies_[world_.collider(p.c2()).body_index.index()].count--;
 }
 
 void CollisionsSample::OnTriggerEnter([[maybe_unused]] const ColliderPair& p)

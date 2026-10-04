@@ -40,9 +40,9 @@ std::vector<neko::ColliderAabb> RandomAabbs(std::size_t count, std::uint32_t see
         aabbs.push_back({ neko::Aabbf::FromCenter(center, half_size), neko::ColliderIndex{static_cast<neko::Index>(i)} });
     }
     // Same minimum x, to exercise the tie-break: move the whole box so it stays valid
-    const auto shift = aabbs[0].aabb.min_bound.x - aabbs[1].aabb.min_bound.x;
-    aabbs[1].aabb.min_bound.x += shift;
-    aabbs[1].aabb.max_bound.x += shift;
+    const auto shift = aabbs[0].aabb.min_bound().x() - aabbs[1].aabb.min_bound().x();
+    aabbs[1].aabb.set_min_bound(aabbs[1].aabb.min_bound() + neko::Vec2f{ shift, neko::Scalar{ 0 } });
+    aabbs[1].aabb.set_max_bound(aabbs[1].aabb.max_bound() + neko::Vec2f{ shift, neko::Scalar{ 0 } });
     return aabbs;
 }
 
@@ -67,8 +67,8 @@ neko::Aabbf Bounds(const std::vector<neko::ColliderAabb>& aabbs)
     auto bounds = aabbs.front().aabb;
     for (const auto& aabb : aabbs)
     {
-        bounds.min_bound = { neko::Min(bounds.min_bound.x, aabb.aabb.min_bound.x), neko::Min(bounds.min_bound.y, aabb.aabb.min_bound.y) };
-        bounds.max_bound = { neko::Max(bounds.max_bound.x, aabb.aabb.max_bound.x), neko::Max(bounds.max_bound.y, aabb.aabb.max_bound.y) };
+        bounds.set_min_bound({ neko::Min(bounds.min_bound().x(), aabb.aabb.min_bound().x()), neko::Min(bounds.min_bound().y(), aabb.aabb.min_bound().y()) });
+        bounds.set_max_bound({ neko::Max(bounds.max_bound().x(), aabb.aabb.max_bound().x()), neko::Max(bounds.max_bound().y(), aabb.aabb.max_bound().y()) });
     }
     return bounds;
 }
@@ -124,7 +124,7 @@ TEST(QuadTree, FindsAllIntersectingPairsOnce)
         EXPECT_EQ(found.size(), pairs.size()) << "duplicate pairs, seed " << seed;
         for (const auto& pair : IntersectingPairs(aabbs))
         {
-            EXPECT_TRUE(found.contains(pair)) << pair.c1.index << "-" << pair.c2.index << ", seed " << seed;
+            EXPECT_TRUE(found.contains(pair)) << pair.c1().index() << "-" << pair.c2().index() << ", seed " << seed;
         }
         // The tree must actually prune something
         EXPECT_LT(pairs.size(), kColliderCount * (kColliderCount - 1) / 2);

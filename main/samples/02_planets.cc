@@ -38,7 +38,7 @@ void PlanetSample::FixedUpdate()
 {
     for (Index i = 0; i < colors_.size(); ++i)
     {
-        auto& body = world_.body({ i });
+        auto& body = world_.body(BodyIndex{ i });
         const auto delta = body.position - center_;
         const auto force = kG * kBlackHoleMass / (delta.SquareLength() * body.inverse_mass);
         body.force += force * (-delta).Normalized();
@@ -50,7 +50,7 @@ void PlanetSample::Draw(DrawList& draw_list) const
 {
     for (Index i = 0; i < colors_.size(); ++i)
     {
-        draw_list.circles.push_back({ world_.body({ i }).position, kCircleRadius, colors_[i] });
+        draw_list.circles.push_back({ world_.body(BodyIndex{ i }).position, kCircleRadius, colors_[i] });
     }
 }
 

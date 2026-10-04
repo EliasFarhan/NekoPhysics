@@ -67,8 +67,8 @@ TEST_P(SampleTest, DrawsInsideTheWorldBounds)
     neko::SampleRegistry registry;
     const auto run = RunSample(registry, GetParam());
     EXPECT_GT(run.drawn_shapes, 0u);
-    EXPECT_EQ(run.camera.min_bound, neko::sample_config::kWorldBounds.min_bound);
-    EXPECT_EQ(run.camera.max_bound, neko::sample_config::kWorldBounds.max_bound);
+    EXPECT_EQ(run.camera.min_bound(), neko::sample_config::kWorldBounds.min_bound());
+    EXPECT_EQ(run.camera.max_bound(), neko::sample_config::kWorldBounds.max_bound());
 }
 
 INSTANTIATE_TEST_SUITE_P(AllSamples, SampleTest, ::testing::Range(std::size_t{ 0 }, std::size_t{ 6 }));

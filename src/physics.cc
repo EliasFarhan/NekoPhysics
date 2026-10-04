@@ -41,16 +41,16 @@ public:
     }
     void Add(Vec2f value) noexcept
     {
-        Add(value.x);
-        Add(value.y);
+        Add(value.x());
+        Add(value.y());
     }
     void Add(bool value) noexcept { Add(static_cast<std::uint32_t>(value)); }
     template<typename E>
     requires std::is_enum_v<E>
     void Add(E value) noexcept { Add(static_cast<std::uint32_t>(value)); }
     template<typename I>
-    requires std::is_same_v<decltype(I::index), Index>
-    void Add(I value) noexcept { Add(static_cast<std::uint32_t>(value.index)); }
+    requires std::is_same_v<decltype(std::declval<I>().index()), Index>
+    void Add(I value) noexcept { Add(static_cast<std::uint32_t>(value.index())); }
 
     [[nodiscard]] std::uint32_t Get() const noexcept { return hash_; }
 private:
@@ -96,7 +96,7 @@ Allocator& ConfigAllocator(const PhysicsWorldConfig& config)
 constexpr bool IsFreeBody(const Body& body) { return body.type == BodyType::kNone; }
 constexpr bool IsFreeCollider(const Collider& collider) { return collider.type == ShapeType::kNone; }
 constexpr bool IsFreeCircle(const CircleCollider& circle) { return circle.radius < Scalar{0}; }
-constexpr bool IsFreeAabb(const AabbCollider& aabb) { return aabb.half_size.x < Scalar{0}; }
+constexpr bool IsFreeAabb(const AabbCollider& aabb) { return aabb.half_size.x() < Scalar{0}; }
 } // namespace
 
 std::uint32_t GenerateChecksum(const Body& body)
@@ -166,7 +166,7 @@ BodyIndex PhysicsWorld::AddBody()
 
 void PhysicsWorld::RemoveBody(BodyIndex index)
 {
-    bodies_[index.index].type = BodyType::kNone;
+    bodies_[index.index()].type = BodyType::kNone;
     for (const auto& collider : colliders_)
     {
         if (collider.body_index == index && collider.type != ShapeType::kNone)
@@ -202,24 +202,24 @@ NEKO_HOT bool PhysicsWorld::DetectContact(
         {
             const auto center1 = body1.position + collider1.offset;
             const auto center2 = body2.position + collider2.offset;
-            const auto half1 = aabbs_[collider1.shape_index.index].half_size;
-            const auto half2 = aabbs_[collider2.shape_index.index].half_size;
+            const auto half1 = aabbs_[collider1.shape_index.index()].half_size;
+            const auto half2 = aabbs_[collider2.shape_index.index()].half_size;
             does_intersect = Intersect(Aabbf::FromCenter(center1, half1), Aabbf::FromCenter(center2, half2));
 			if(collision && does_intersect)
 			{
 				const auto delta = center1 - center2;
 				contact->contact_point = center1 - delta * Scalar{0.5f};
 
-				const auto penetration_x = half1.x+half2.x-Abs(delta.x);
-				const auto penetration_y = half1.y+half2.y-Abs(delta.y);
+				const auto penetration_x = half1.x()+half2.x()-Abs(delta.x());
+				const auto penetration_y = half1.y()+half2.y()-Abs(delta.y());
 				if(penetration_x < penetration_y)
 				{
-					contact->contact_normal = delta.x > neko::Scalar{0} ? Vec2f::Right() : Vec2f::Left();
+					contact->contact_normal = delta.x() > neko::Scalar{0} ? Vec2f::Right() : Vec2f::Left();
 					contact->penetration = penetration_x;
 				}
 				else
 				{
-					contact->contact_normal = delta.y > neko::Scalar{0} ? Vec2f::Up() : Vec2f::Down();
+					contact->contact_normal = delta.y() > neko::Scalar{0} ? Vec2f::Up() : Vec2f::Down();
 					contact->penetration = penetration_y;
 				}
 			}
@@ -228,17 +228,17 @@ NEKO_HOT bool PhysicsWorld::DetectContact(
         case ShapeType::kCircle:
         {
             const auto center = body1.position + collider1.offset;
-            const auto half_size = aabbs_[collider1.shape_index.index].half_size;
+            const auto half_size = aabbs_[collider1.shape_index.index()].half_size;
 			const Aabbf aabb1 = Aabbf::FromCenter(center, half_size);
-			const Circlef circle = Circlef{ body2.position + collider2.offset, circles_[collider2.shape_index.index].radius };
+			const Circlef circle = Circlef{ body2.position + collider2.offset, circles_[collider2.shape_index.index()].radius };
 			does_intersect = Intersect(circle, aabb1);
 			if(!collision || !does_intersect)
 			{
 				break;
 			}
 			// The normal points from the circle (body 2) to the box (body 1)
-			const auto closest_point = ClosestPoint(aabb1, circle.position);
-			const auto box_to_circle = circle.position - closest_point;
+			const auto closest_point = ClosestPoint(aabb1, circle.position());
+			const auto box_to_circle = circle.position() - closest_point;
 			if(box_to_circle != Vec2f::Zero())
 			{
 				const auto distance = box_to_circle.Length();
@@ -246,26 +246,26 @@ NEKO_HOT bool PhysicsWorld::DetectContact(
 				const auto inv_distance = Scalar{1} / distance;
 				contact->contact_normal = -(box_to_circle * inv_distance);
 				contact->contact_point = closest_point;
-				contact->penetration = circle.radius - distance;
+				contact->penetration = circle.radius() - distance;
 				break;
 			}
 			// The circle center is inside the box: push it out through the nearest face
-			const auto delta = circle.position - center;
-			const auto distance_x = half_size.x - Abs(delta.x);
-			const auto distance_y = half_size.y - Abs(delta.y);
+			const auto delta = circle.position() - center;
+			const auto distance_x = half_size.x() - Abs(delta.x());
+			const auto distance_y = half_size.y() - Abs(delta.y());
 			if(distance_x < distance_y)
 			{
-				const auto outward = delta.x < Scalar{0} ? Vec2f::Left() : Vec2f::Right();
+				const auto outward = delta.x() < Scalar{0} ? Vec2f::Left() : Vec2f::Right();
 				contact->contact_normal = -outward;
-				contact->contact_point = { center.x + outward.x * half_size.x, circle.position.y };
-				contact->penetration = circle.radius + distance_x;
+				contact->contact_point = { center.x() + outward.x() * half_size.x(), circle.position().y() };
+				contact->penetration = circle.radius() + distance_x;
 			}
 			else
 			{
-				const auto outward = delta.y < Scalar{0} ? Vec2f::Down() : Vec2f::Up();
+				const auto outward = delta.y() < Scalar{0} ? Vec2f::Down() : Vec2f::Up();
 				contact->contact_normal = -outward;
-				contact->contact_point = { circle.position.x, center.y + outward.y * half_size.y };
-				contact->penetration = circle.radius + distance_y;
+				contact->contact_point = { circle.position().x(), center.y() + outward.y() * half_size.y() };
+				contact->penetration = circle.radius() + distance_y;
 			}
             break;
         }
@@ -282,20 +282,20 @@ NEKO_HOT bool PhysicsWorld::DetectContact(
         }
         case ShapeType::kCircle:
         {
-            const Circlef c1 = { body1.position + collider1.offset, circles_[collider1.shape_index.index].radius };
-            const Circlef c2 = { body2.position + collider2.offset, circles_[collider2.shape_index.index].radius };
+            const Circlef c1 = { body1.position + collider1.offset, circles_[collider1.shape_index.index()].radius };
+            const Circlef c2 = { body2.position + collider2.offset, circles_[collider2.shape_index.index()].radius };
 
             does_intersect = Intersect(c1, c2);
             if(collision && does_intersect)
             {
-                const auto midline = c1.position - c2.position;
+                const auto midline = c1.position() - c2.position();
                 const auto distance = midline.Length();
                 // Same position: any direction separates them, pick a deterministic one. Otherwise one
                 // reciprocal and two multiplies instead of dividing both components by distance.
                 contact->contact_normal =
                     distance == Scalar{0} ? Vec2f::Up() : midline * (Scalar{1} / distance);
-                contact->contact_point = c1.position - midline * Scalar{0.5f};
-                contact->penetration = c1.radius + c2.radius - distance;
+                contact->contact_point = c1.position() - midline * Scalar{0.5f};
+                contact->penetration = c1.radius() + c2.radius() - distance;
             }
             break;
         }
@@ -313,11 +313,11 @@ NEKO_HOT void PhysicsWorld::ResolveNarrowphase()
     new_touching_pairs_.clear();
     for(const auto& pair : Broadphase().GetPossiblePairs())
     {
-        auto& collider1 = colliders_[pair.c1.index];
-        auto& collider2 = colliders_[pair.c2.index];
+        auto& collider1 = colliders_[pair.c1().index()];
+        auto& collider2 = colliders_[pair.c2().index()];
 
-        auto& body1 = bodies_[collider1.body_index.index];
-        auto& body2 = bodies_[collider2.body_index.index];
+        auto& body1 = bodies_[collider1.body_index.index()];
+        auto& body2 = bodies_[collider2.body_index.index()];
 		if(!body1.is_active || !body2.is_active)
 		{
 			continue;
@@ -367,7 +367,7 @@ NEKO_HOT void PhysicsWorld::SortNewTouchingPairs()
     std::fill(touching_pair_bucket_count_.begin(), touching_pair_bucket_count_.end(), std::uint32_t{ 0 });
     for (const auto& touching_pair : new_touching_pairs_)
     {
-        ++touching_pair_bucket_count_[touching_pair.pair.c1.index];
+        ++touching_pair_bucket_count_[touching_pair.pair.c1().index()];
     }
 
     // Exclusive prefix sum: bucketStart[k] is where collider k's pairs begin in the sorted output
@@ -384,7 +384,7 @@ NEKO_HOT void PhysicsWorld::SortNewTouchingPairs()
     std::copy(touching_pair_bucket_start_.begin(), touching_pair_bucket_start_.end() - 1, touching_pair_bucket_count_.begin());
     for (const auto& touching_pair : new_touching_pairs_)
     {
-        sorted_touching_pairs_[touching_pair_bucket_count_[touching_pair.pair.c1.index]++] = touching_pair;
+        sorted_touching_pairs_[touching_pair_bucket_count_[touching_pair.pair.c1().index()]++] = touching_pair;
     }
 
     // Each bucket only holds one collider's contacts (typically a handful): insertion sort by c2 finishes the order
@@ -400,7 +400,7 @@ NEKO_HOT void PhysicsWorld::SortNewTouchingPairs()
         {
             const TouchingPair value = *it;
             auto insert_at = it;
-            while (insert_at > bucket_begin && value.pair.c2 < (insert_at - 1)->pair.c2)
+            while (insert_at > bucket_begin && value.pair.c2() < (insert_at - 1)->pair.c2())
             {
                 *insert_at = *(insert_at - 1);
                 --insert_at;
@@ -479,8 +479,8 @@ ColliderIndex PhysicsWorld::AddCircleCollider(BodyIndex body)
     circles_[*shape_slot].radius = Scalar{ 0 };
     auto& collider = colliders_[*collider_slot];
     collider.body_index = body;
-    collider.collider_index = { *collider_slot };
-    collider.shape_index = { *shape_slot };
+    collider.collider_index = ColliderIndex{ *collider_slot };
+    collider.shape_index = ShapeIndex{ *shape_slot };
     collider.type = ShapeType::kCircle;
     return collider.collider_index;
 }
@@ -496,22 +496,22 @@ ColliderIndex PhysicsWorld::AddAabbCollider(BodyIndex body)
     aabbs_[*shape_slot].half_size = Vec2f::Zero();
     auto& collider = colliders_[*collider_slot];
     collider.body_index = body;
-    collider.collider_index = { *collider_slot };
-    collider.shape_index = { *shape_slot };
+    collider.collider_index = ColliderIndex{ *collider_slot };
+    collider.shape_index = ShapeIndex{ *shape_slot };
     collider.type = ShapeType::kAabb;
     return collider.collider_index;
 }
 
 void PhysicsWorld::RemoveCollider(ColliderIndex index)
 {
-    auto& collider = colliders_[index.index];
+    auto& collider = colliders_[index.index()];
     switch (collider.type)
     {
     case ShapeType::kAabb:
-        aabbs_[collider.shape_index.index] = AabbCollider{};
+        aabbs_[collider.shape_index.index()] = AabbCollider{};
         break;
     case ShapeType::kCircle:
-        circles_[collider.shape_index.index] = CircleCollider{};
+        circles_[collider.shape_index.index()] = CircleCollider{};
         break;
     default:
         break;
@@ -569,12 +569,12 @@ void PhysicsWorld::Clear()
 
 NEKO_HOT Aabbf PhysicsWorld::GetAabb(const Collider& collider) const
 {
-    const auto center = bodies_[collider.body_index.index].position + collider.offset;
+    const auto center = bodies_[collider.body_index.index()].position + collider.offset;
     if (collider.type == ShapeType::kAabb)
     {
-        return Aabbf::FromCenter(center, aabbs_[collider.shape_index.index].half_size);
+        return Aabbf::FromCenter(center, aabbs_[collider.shape_index.index()].half_size);
     }
-    return Circlef{ center, circles_[collider.shape_index.index].radius }.GetAabb();
+    return Circlef{ center, circles_[collider.shape_index.index()].radius }.GetAabb();
 }
 
 NEKO_HOT void PhysicsWorld::ResolveBroadphase()
@@ -587,7 +587,7 @@ NEKO_HOT void PhysicsWorld::ResolveBroadphase()
 
     const auto is_inserted = [this](const Collider& collider)
     {
-        return collider.type != ShapeType::kNone && bodies_[collider.body_index.index].is_active;
+        return collider.type != ShapeType::kNone && bodies_[collider.body_index.index()].is_active;
     };
     // World box from the collider extents, starting from the first one (no infinite bounds to overflow). Each
     // Aabbf is computed once here and cached, since a BSH may need SetWorldAabb called before any Insert.
@@ -607,8 +607,8 @@ NEKO_HOT void PhysicsWorld::ResolveBroadphase()
             has_collider = true;
             continue;
         }
-        world_box.min_bound = { Min(world_box.min_bound.x, aabb.min_bound.x), Min(world_box.min_bound.y, aabb.min_bound.y) };
-        world_box.max_bound = { Max(world_box.max_bound.x, aabb.max_bound.x), Max(world_box.max_bound.y, aabb.max_bound.y) };
+        world_box.set_min_bound({ Min(world_box.min_bound().x(), aabb.min_bound().x()), Min(world_box.min_bound().y(), aabb.min_bound().y()) });
+        world_box.set_max_bound({ Max(world_box.max_bound().x(), aabb.max_bound().x()), Max(world_box.max_bound().y(), aabb.max_bound().y()) });
     }
     if (has_collider)
     {
@@ -658,8 +658,8 @@ std::uint32_t PhysicsWorld::GenerateChecksum() const
     }
     for (const auto& touching_pair : touching_pairs_)
     {
-        checksum.Add(touching_pair.pair.c1);
-        checksum.Add(touching_pair.pair.c2);
+        checksum.Add(touching_pair.pair.c1());
+        checksum.Add(touching_pair.pair.c2());
         checksum.Add(touching_pair.is_trigger);
     }
     return checksum.Get();

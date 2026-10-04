@@ -37,17 +37,17 @@ NEKO_HOT void SweepAndPrune::CalculatePairs()
     // std::sort doesn't allocate; the order is total, so every implementation gives the same result
     std::sort(colliders_.begin(), colliders_.end(), [](const ColliderAabb& a, const ColliderAabb& b)
     {
-        if (a.aabb.min_bound.x != b.aabb.min_bound.x)
+        if (a.aabb.min_bound().x() != b.aabb.min_bound().x())
         {
-            return a.aabb.min_bound.x < b.aabb.min_bound.x;
+            return a.aabb.min_bound().x() < b.aabb.min_bound().x();
         }
         return a.collider_index < b.collider_index;
     });
     for (auto it = colliders_.begin(); it != colliders_.end(); ++it)
     {
-        for (auto other = it + 1; other != colliders_.end() && !(it->aabb.max_bound.x < other->aabb.min_bound.x); ++other)
+        for (auto other = it + 1; other != colliders_.end() && !(it->aabb.max_bound().x() < other->aabb.min_bound().x()); ++other)
         {
-            if (it->aabb.max_bound.y < other->aabb.min_bound.y || other->aabb.max_bound.y < it->aabb.min_bound.y)
+            if (it->aabb.max_bound().y() < other->aabb.min_bound().y() || other->aabb.max_bound().y() < it->aabb.min_bound().y())
             {
                 continue;
             }

@@ -15,15 +15,15 @@ namespace neko
 
 void BounceInside(Body& body, const Aabbf& bounds)
 {
-    if ((body.velocity.x > Scalar{ 0 } && body.position.x > bounds.max_bound.x) ||
-        (body.velocity.x < Scalar{ 0 } && body.position.x < bounds.min_bound.x))
+    if ((body.velocity.x() > Scalar{ 0 } && body.position.x() > bounds.max_bound().x()) ||
+        (body.velocity.x() < Scalar{ 0 } && body.position.x() < bounds.min_bound().x()))
     {
-        body.velocity.x = -body.velocity.x;
+        body.velocity.set_x(-body.velocity.x());
     }
-    if ((body.velocity.y > Scalar{ 0 } && body.position.y > bounds.max_bound.y) ||
-        (body.velocity.y < Scalar{ 0 } && body.position.y < bounds.min_bound.y))
+    if ((body.velocity.y() > Scalar{ 0 } && body.position.y() > bounds.max_bound().y()) ||
+        (body.velocity.y() < Scalar{ 0 } && body.position.y() < bounds.min_bound().y()))
     {
-        body.velocity.y = -body.velocity.y;
+        body.velocity.set_y(-body.velocity.y());
     }
 }
 

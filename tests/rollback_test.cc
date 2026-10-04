@@ -83,7 +83,8 @@ TEST(Checksum, WorldChecksumFollowsState)
     BuildScene(a);
     BuildScene(b);
     EXPECT_EQ(a.GenerateChecksum(), b.GenerateChecksum());
-    b.body({ 3 }).position.x += Scalar{ 0.001f };
+    auto& tweaked = b.body(neko::BodyIndex{ 3 }).position;
+    tweaked.set_x(tweaked.x() + Scalar{ 0.001f });
     EXPECT_NE(a.GenerateChecksum(), b.GenerateChecksum());
 }
 
