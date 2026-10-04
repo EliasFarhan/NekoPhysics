@@ -8,656 +8,632 @@
 #include <type_traits>
 
 #include "neko/core/platform.h"
+#include "neko/core/profile.h"
 #include "neko/core/step_profile.h"
 #include "neko/math/vec2.h"
 #include "neko/physics/contact_solver.h"
 
-#include "neko/core/profile.h"
-
-
-
-namespace neko
-{
-namespace
-{
-// FNV-1a over the bytes of each 32-bit word: order-dependent, so equal or swapped fields don't cancel out
-class Checksum
-{
-public:
-    void Add(std::uint32_t word) noexcept
-    {
-        for (int shift = 0; shift < 32; shift += 8)
-        {
-            hash_ ^= (word >> shift) & 0xFFu;
-            hash_ *= kPrime;
-        }
+namespace neko {
+namespace {
+// FNV-1a over the bytes of each 32-bit word: order-dependent, so equal or
+// swapped fields don't cancel out
+class Checksum {
+ public:
+  void Add(std::uint32_t word) noexcept {
+    for (int shift = 0; shift < 32; shift += 8) {
+      hash_ ^= (word >> shift) & 0xFFu;
+      hash_ *= kPrime;
     }
-    void Add(Scalar value) noexcept
-    {
-        static_assert(sizeof(Scalar) == sizeof(std::uint32_t));
-        Add(std::bit_cast<std::uint32_t>(value));
-    }
-    void Add(Vec2f value) noexcept
-    {
-        Add(value.x());
-        Add(value.y());
-    }
-    void Add(bool value) noexcept { Add(static_cast<std::uint32_t>(value)); }
-    template<typename E>
+  }
+  void Add(Scalar value) noexcept {
+    static_assert(sizeof(Scalar) == sizeof(std::uint32_t));
+    Add(std::bit_cast<std::uint32_t>(value));
+  }
+  void Add(Vec2f value) noexcept {
+    Add(value.x());
+    Add(value.y());
+  }
+  void Add(bool value) noexcept { Add(static_cast<std::uint32_t>(value)); }
+  template <typename E>
     requires std::is_enum_v<E>
-    void Add(E value) noexcept { Add(static_cast<std::uint32_t>(value)); }
-    template<typename I>
+  void Add(E value) noexcept {
+    Add(static_cast<std::uint32_t>(value));
+  }
+  template <typename I>
     requires std::is_same_v<decltype(std::declval<I>().index()), Index>
-    void Add(I value) noexcept { Add(static_cast<std::uint32_t>(value.index())); }
+  void Add(I value) noexcept {
+    Add(static_cast<std::uint32_t>(value.index()));
+  }
 
-    [[nodiscard]] std::uint32_t Get() const noexcept { return hash_; }
-private:
-    static constexpr std::uint32_t kOffsetBasis = 2166136261u;
-    static constexpr std::uint32_t kPrime = 16777619u;
-    std::uint32_t hash_ = kOffsetBasis;
+  [[nodiscard]] std::uint32_t Get() const noexcept { return hash_; }
+
+ private:
+  static constexpr std::uint32_t kOffsetBasis = 2166136261u;
+  static constexpr std::uint32_t kPrime = 16777619u;
+  std::uint32_t hash_ = kOffsetBasis;
 };
 
 // Reuses the first free slot, or appends one while under capacity
 // Returns the slot index, or std::nullopt when the list is full
-template<typename T, typename IsFree>
-std::optional<Index> AcquireSlot(ArrayList<T>& list, std::size_t capacity, IsFree is_free)
-{
-    const auto it = std::find_if(list.begin(), list.end(), is_free);
-    if (it != list.end())
-    {
-        *it = T{};
-        return static_cast<Index>(it - list.begin());
-    }
-    if (list.size() >= capacity)
-    {
-        return std::nullopt;
-    }
-    list.emplace_back();
-    return static_cast<Index>(list.size() - 1);
+template <typename T, typename IsFree>
+std::optional<Index> AcquireSlot(ArrayList<T>& list, std::size_t capacity,
+                                 IsFree is_free) {
+  const auto it = std::find_if(list.begin(), list.end(), is_free);
+  if (it != list.end()) {
+    *it = T{};
+    return static_cast<Index>(it - list.begin());
+  }
+  if (list.size() >= capacity) {
+    return std::nullopt;
+  }
+  list.emplace_back();
+  return static_cast<Index>(list.size() - 1);
 }
 
-template<typename T>
-ArrayList<T> MakeList(Allocator& allocator, std::size_t capacity)
-{
-    ArrayList<T> list{ StandardAllocator<T>{allocator} };
-    list.reserve(capacity);
-    return list;
+template <typename T>
+ArrayList<T> MakeList(Allocator& allocator, std::size_t capacity) {
+  ArrayList<T> list{StandardAllocator<T>{allocator}};
+  list.reserve(capacity);
+  return list;
 }
 
-Allocator& ConfigAllocator(const PhysicsWorldConfig& config)
-{
-    return config.allocator != nullptr ? *config.allocator : DefaultAllocator();
+Allocator& ConfigAllocator(const PhysicsWorldConfig& config) {
+  return config.allocator != nullptr ? *config.allocator : DefaultAllocator();
 }
 
-constexpr bool IsFreeBody(const Body& body) { return body.type == BodyType::kNone; }
-constexpr bool IsFreeCollider(const Collider& collider) { return collider.type == ShapeType::kNone; }
-constexpr bool IsFreeCircle(const CircleCollider& circle) { return circle.radius < Scalar{0}; }
-constexpr bool IsFreeAabb(const AabbCollider& aabb) { return aabb.half_size.x() < Scalar{0}; }
+constexpr bool IsFreeBody(const Body& body) {
+  return body.type == BodyType::kNone;
+}
+constexpr bool IsFreeCollider(const Collider& collider) {
+  return collider.type == ShapeType::kNone;
+}
+constexpr bool IsFreeCircle(const CircleCollider& circle) {
+  return circle.radius < Scalar{0};
+}
+constexpr bool IsFreeAabb(const AabbCollider& aabb) {
+  return aabb.half_size.x() < Scalar{0};
+}
 }  // namespace
 
-std::uint32_t GenerateChecksum(const Body& body)
-{
-    Checksum checksum;
-    checksum.Add(body.position);
-    checksum.Add(body.velocity);
-    checksum.Add(body.force);
-    checksum.Add(body.inverse_mass);
-    checksum.Add(body.type);
-    checksum.Add(body.is_active);
-    return checksum.Get();
+std::uint32_t GenerateChecksum(const Body& body) {
+  Checksum checksum;
+  checksum.Add(body.position);
+  checksum.Add(body.velocity);
+  checksum.Add(body.force);
+  checksum.Add(body.inverse_mass);
+  checksum.Add(body.type);
+  checksum.Add(body.is_active);
+  return checksum.Get();
 }
 
-std::uint32_t GenerateChecksum(const Collider& collider)
-{
-    Checksum checksum;
-    checksum.Add(collider.offset);
-    checksum.Add(collider.restitution);
-    checksum.Add(collider.body_index);
-    checksum.Add(collider.collider_index);
-    checksum.Add(collider.shape_index);
-    checksum.Add(collider.type);
-    checksum.Add(collider.is_trigger);
-    return checksum.Get();
+std::uint32_t GenerateChecksum(const Collider& collider) {
+  Checksum checksum;
+  checksum.Add(collider.offset);
+  checksum.Add(collider.restitution);
+  checksum.Add(collider.body_index);
+  checksum.Add(collider.collider_index);
+  checksum.Add(collider.shape_index);
+  checksum.Add(collider.type);
+  checksum.Add(collider.is_trigger);
+  return checksum.Get();
 }
 
-std::uint32_t GenerateChecksum(const CircleCollider& collider)
-{
-    Checksum checksum;
-    checksum.Add(collider.radius);
-    return checksum.Get();
+std::uint32_t GenerateChecksum(const CircleCollider& collider) {
+  Checksum checksum;
+  checksum.Add(collider.radius);
+  return checksum.Get();
 }
 
-std::uint32_t GenerateChecksum(const AabbCollider& collider)
-{
-    Checksum checksum;
-    checksum.Add(collider.half_size);
-    return checksum.Get();
+std::uint32_t GenerateChecksum(const AabbCollider& collider) {
+  Checksum checksum;
+  checksum.Add(collider.half_size);
+  return checksum.Get();
 }
 
-PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config) :
-    config_(config),
-    default_broadphase_(config.max_colliders, config.max_broadphase_pairs, ConfigAllocator(config)),
-    bodies_(MakeList<Body>(ConfigAllocator(config), config.max_bodies)),
-    aabbs_(MakeList<AabbCollider>(ConfigAllocator(config), config.max_colliders)),
-    circles_(MakeList<CircleCollider>(ConfigAllocator(config), config.max_colliders)),
-    colliders_(MakeList<Collider>(ConfigAllocator(config), config.max_colliders)),
-    touching_pairs_(MakeList<TouchingPair>(ConfigAllocator(config), config.max_touching_pairs)),
-    new_touching_pairs_(MakeList<TouchingPair>(ConfigAllocator(config), config.max_touching_pairs)),
-    collider_aabb_cache_(MakeList<Aabbf>(ConfigAllocator(config), config.max_colliders)),
-    touching_pair_bucket_count_(MakeList<std::uint32_t>(ConfigAllocator(config), config.max_colliders)),
-    touching_pair_bucket_start_(MakeList<std::uint32_t>(ConfigAllocator(config), config.max_colliders + 1)),
-    sorted_touching_pairs_(MakeList<TouchingPair>(ConfigAllocator(config), config.max_touching_pairs))
-{
-    assert(config.max_bodies <= std::numeric_limits<Index>::max() && config.max_colliders <= std::numeric_limits<Index>::max());
-    // Fixed size from here on: SortNewTouchingPairs indexes these two directly instead of push_back-ing every step
-    touching_pair_bucket_count_.resize(config.max_colliders);
-    touching_pair_bucket_start_.resize(config.max_colliders + 1);
+PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config)
+    : config_(config),
+      default_broadphase_(config.max_colliders, config.max_broadphase_pairs,
+                          ConfigAllocator(config)),
+      bodies_(MakeList<Body>(ConfigAllocator(config), config.max_bodies)),
+      aabbs_(MakeList<AabbCollider>(ConfigAllocator(config),
+                                    config.max_colliders)),
+      circles_(MakeList<CircleCollider>(ConfigAllocator(config),
+                                        config.max_colliders)),
+      colliders_(
+          MakeList<Collider>(ConfigAllocator(config), config.max_colliders)),
+      touching_pairs_(MakeList<TouchingPair>(ConfigAllocator(config),
+                                             config.max_touching_pairs)),
+      new_touching_pairs_(MakeList<TouchingPair>(ConfigAllocator(config),
+                                                 config.max_touching_pairs)),
+      collider_aabb_cache_(
+          MakeList<Aabbf>(ConfigAllocator(config), config.max_colliders)),
+      touching_pair_bucket_count_(MakeList<std::uint32_t>(
+          ConfigAllocator(config), config.max_colliders)),
+      touching_pair_bucket_start_(MakeList<std::uint32_t>(
+          ConfigAllocator(config), config.max_colliders + 1)),
+      sorted_touching_pairs_(MakeList<TouchingPair>(
+          ConfigAllocator(config), config.max_touching_pairs)) {
+  assert(config.max_bodies <= std::numeric_limits<Index>::max() &&
+         config.max_colliders <= std::numeric_limits<Index>::max());
+  // Fixed size from here on: SortNewTouchingPairs indexes these two directly
+  // instead of push_back-ing every step
+  touching_pair_bucket_count_.resize(config.max_colliders);
+  touching_pair_bucket_start_.resize(config.max_colliders + 1);
 }
 
-BodyIndex PhysicsWorld::AddBody()
-{
-    const auto slot = AcquireSlot(bodies_, config_.max_bodies, IsFreeBody);
-    return slot.has_value() ? BodyIndex{ *slot } : kInvalidBodyIndex;
+BodyIndex PhysicsWorld::AddBody() {
+  const auto slot = AcquireSlot(bodies_, config_.max_bodies, IsFreeBody);
+  return slot.has_value() ? BodyIndex{*slot} : kInvalidBodyIndex;
 }
 
-void PhysicsWorld::RemoveBody(BodyIndex index)
-{
-    bodies_[index.index()].type = BodyType::kNone;
-    for (const auto& collider : colliders_)
-    {
-        if (collider.body_index == index && collider.type != ShapeType::kNone)
-        {
-            RemoveCollider(collider.collider_index);
-        }
+void PhysicsWorld::RemoveBody(BodyIndex index) {
+  bodies_[index.index()].type = BodyType::kNone;
+  for (const auto& collider : colliders_) {
+    if (collider.body_index == index && collider.type != ShapeType::kNone) {
+      RemoveCollider(collider.collider_index);
     }
+  }
 }
 
-NEKO_HOT bool PhysicsWorld::DetectContact(
-    Body& body1, 
-    Collider& collider1,
-    Body& body2, 
-    Collider& collider2,
-    Contact* contact)
-{
-    bool does_intersect = false;
-    contact->bodies[0].body = &body1;
-    contact->bodies[1].body = &body2;
-    contact->bodies[0].collider = &collider1;
-    contact->bodies[1].collider = &collider2;
+NEKO_HOT bool PhysicsWorld::DetectContact(Body& body1, Collider& collider1,
+                                          Body& body2, Collider& collider2,
+                                          Contact* contact) {
+  bool does_intersect = false;
+  contact->bodies[0].body = &body1;
+  contact->bodies[1].body = &body2;
+  contact->bodies[0].collider = &collider1;
+  contact->bodies[1].collider = &collider2;
 
-	contact->restitution = Max(collider1.restitution, collider2.restitution);
+  contact->restitution = Max(collider1.restitution, collider2.restitution);
 
-    const bool collision = !(collider1.is_trigger || collider2.is_trigger);
+  const bool collision = !(collider1.is_trigger || collider2.is_trigger);
 
-    switch (collider1.type)
-    {
+  switch (collider1.type) {
     case ShapeType::kAabb:
-        switch (collider2.type)
-        {
-        case ShapeType::kAabb:
-        {
-            const auto center1 = body1.position + collider1.offset;
-            const auto center2 = body2.position + collider2.offset;
-            const auto half1 = aabbs_[collider1.shape_index.index()].half_size;
-            const auto half2 = aabbs_[collider2.shape_index.index()].half_size;
-            does_intersect = Intersect(Aabbf::FromCenter(center1, half1), Aabbf::FromCenter(center2, half2));
-			if(collision && does_intersect)
-			{
-				const auto delta = center1 - center2;
-				contact->contact_point = center1 - delta * Scalar{0.5f};
+      switch (collider2.type) {
+        case ShapeType::kAabb: {
+          const auto center1 = body1.position + collider1.offset;
+          const auto center2 = body2.position + collider2.offset;
+          const auto half1 = aabbs_[collider1.shape_index.index()].half_size;
+          const auto half2 = aabbs_[collider2.shape_index.index()].half_size;
+          does_intersect = Intersect(Aabbf::FromCenter(center1, half1),
+                                     Aabbf::FromCenter(center2, half2));
+          if (collision && does_intersect) {
+            const auto delta = center1 - center2;
+            contact->contact_point = center1 - delta * Scalar{0.5f};
 
-				const auto penetration_x = half1.x()+half2.x()-Abs(delta.x());
-				const auto penetration_y = half1.y()+half2.y()-Abs(delta.y());
-				if(penetration_x < penetration_y)
-				{
-					contact->contact_normal = delta.x() > neko::Scalar{0} ? Vec2f::Right() : Vec2f::Left();
-					contact->penetration = penetration_x;
-				}
-				else
-				{
-					contact->contact_normal = delta.y() > neko::Scalar{0} ? Vec2f::Up() : Vec2f::Down();
-					contact->penetration = penetration_y;
-				}
-			}
+            const auto penetration_x = half1.x() + half2.x() - Abs(delta.x());
+            const auto penetration_y = half1.y() + half2.y() - Abs(delta.y());
+            if (penetration_x < penetration_y) {
+              contact->contact_normal =
+                  delta.x() > neko::Scalar{0} ? Vec2f::Right() : Vec2f::Left();
+              contact->penetration = penetration_x;
+            } else {
+              contact->contact_normal =
+                  delta.y() > neko::Scalar{0} ? Vec2f::Up() : Vec2f::Down();
+              contact->penetration = penetration_y;
+            }
+          }
+          break;
+        }
+        case ShapeType::kCircle: {
+          const auto center = body1.position + collider1.offset;
+          const auto half_size =
+              aabbs_[collider1.shape_index.index()].half_size;
+          const Aabbf aabb1 = Aabbf::FromCenter(center, half_size);
+          const Circlef circle =
+              Circlef{body2.position + collider2.offset,
+                      circles_[collider2.shape_index.index()].radius};
+          does_intersect = Intersect(circle, aabb1);
+          if (!collision || !does_intersect) {
             break;
-        }
-        case ShapeType::kCircle:
-        {
-            const auto center = body1.position + collider1.offset;
-            const auto half_size = aabbs_[collider1.shape_index.index()].half_size;
-			const Aabbf aabb1 = Aabbf::FromCenter(center, half_size);
-			const Circlef circle = Circlef{ body2.position + collider2.offset, circles_[collider2.shape_index.index()].radius };
-			does_intersect = Intersect(circle, aabb1);
-			if(!collision || !does_intersect)
-			{
-				break;
-			}
-			// The normal points from the circle (body 2) to the box (body 1)
-			const auto closest_point = ClosestPoint(aabb1, circle.position());
-			const auto box_to_circle = circle.position() - closest_point;
-			if(box_to_circle != Vec2f::Zero())
-			{
-				const auto distance = box_to_circle.Length();
-				// One reciprocal and two multiplies instead of Normalized()'s two divisions
-				const auto inv_distance = Scalar{1} / distance;
-				contact->contact_normal = -(box_to_circle * inv_distance);
-				contact->contact_point = closest_point;
-				contact->penetration = circle.radius() - distance;
-				break;
-			}
-			// The circle center is inside the box: push it out through the nearest face
-			const auto delta = circle.position() - center;
-			const auto distance_x = half_size.x() - Abs(delta.x());
-			const auto distance_y = half_size.y() - Abs(delta.y());
-			if(distance_x < distance_y)
-			{
-				const auto outward = delta.x() < Scalar{0} ? Vec2f::Left() : Vec2f::Right();
-				contact->contact_normal = -outward;
-				contact->contact_point = { center.x() + outward.x() * half_size.x(), circle.position().y() };
-				contact->penetration = circle.radius() + distance_x;
-			}
-			else
-			{
-				const auto outward = delta.y() < Scalar{0} ? Vec2f::Down() : Vec2f::Up();
-				contact->contact_normal = -outward;
-				contact->contact_point = { circle.position().x(), center.y() + outward.y() * half_size.y() };
-				contact->penetration = circle.radius() + distance_y;
-			}
+          }
+          // The normal points from the circle (body 2) to the box (body 1)
+          const auto closest_point = ClosestPoint(aabb1, circle.position());
+          const auto box_to_circle = circle.position() - closest_point;
+          if (box_to_circle != Vec2f::Zero()) {
+            const auto distance = box_to_circle.Length();
+            // One reciprocal and two multiplies instead of Normalized()'s two
+            // divisions
+            const auto inv_distance = Scalar{1} / distance;
+            contact->contact_normal = -(box_to_circle * inv_distance);
+            contact->contact_point = closest_point;
+            contact->penetration = circle.radius() - distance;
             break;
+          }
+          // The circle center is inside the box: push it out through the
+          // nearest face
+          const auto delta = circle.position() - center;
+          const auto distance_x = half_size.x() - Abs(delta.x());
+          const auto distance_y = half_size.y() - Abs(delta.y());
+          if (distance_x < distance_y) {
+            const auto outward =
+                delta.x() < Scalar{0} ? Vec2f::Left() : Vec2f::Right();
+            contact->contact_normal = -outward;
+            contact->contact_point = {center.x() + outward.x() * half_size.x(),
+                                      circle.position().y()};
+            contact->penetration = circle.radius() + distance_x;
+          } else {
+            const auto outward =
+                delta.y() < Scalar{0} ? Vec2f::Down() : Vec2f::Up();
+            contact->contact_normal = -outward;
+            contact->contact_point = {circle.position().x(),
+                                      center.y() + outward.y() * half_size.y()};
+            contact->penetration = circle.radius() + distance_y;
+          }
+          break;
         }
-        default: break;
-        }
-        break;
+        default:
+          break;
+      }
+      break;
     case ShapeType::kCircle:
-        switch (collider2.type)
-        {
-        case ShapeType::kAabb:
-        {
-			does_intersect = DetectContact(body2, collider2, body1, collider1, contact);
-            break;
+      switch (collider2.type) {
+        case ShapeType::kAabb: {
+          does_intersect =
+              DetectContact(body2, collider2, body1, collider1, contact);
+          break;
         }
-        case ShapeType::kCircle:
-        {
-            const Circlef c1 = { body1.position + collider1.offset, circles_[collider1.shape_index.index()].radius };
-            const Circlef c2 = { body2.position + collider2.offset, circles_[collider2.shape_index.index()].radius };
+        case ShapeType::kCircle: {
+          const Circlef c1 = {body1.position + collider1.offset,
+                              circles_[collider1.shape_index.index()].radius};
+          const Circlef c2 = {body2.position + collider2.offset,
+                              circles_[collider2.shape_index.index()].radius};
 
-            does_intersect = Intersect(c1, c2);
-            if(collision && does_intersect)
-            {
-                const auto midline = c1.position() - c2.position();
-                const auto distance = midline.Length();
-                // Same position: any direction separates them, pick a deterministic one. Otherwise one
-                // reciprocal and two multiplies instead of dividing both components by distance.
-                contact->contact_normal =
-                    distance == Scalar{0} ? Vec2f::Up() : midline * (Scalar{1} / distance);
-                contact->contact_point = c1.position() - midline * Scalar{0.5f};
-                contact->penetration = c1.radius() + c2.radius() - distance;
-            }
-            break;
+          does_intersect = Intersect(c1, c2);
+          if (collision && does_intersect) {
+            const auto midline = c1.position() - c2.position();
+            const auto distance = midline.Length();
+            // Same position: any direction separates them, pick a deterministic
+            // one. Otherwise one reciprocal and two multiplies instead of
+            // dividing both components by distance.
+            contact->contact_normal = distance == Scalar{0}
+                                          ? Vec2f::Up()
+                                          : midline * (Scalar{1} / distance);
+            contact->contact_point = c1.position() - midline * Scalar{0.5f};
+            contact->penetration = c1.radius() + c2.radius() - distance;
+          }
+          break;
         }
-        default: break;
-        }
-        break;
-    default: break;
-    }
-    return does_intersect;
-}
-
-NEKO_HOT void PhysicsWorld::ResolveNarrowphase()
-{
-    NEKO_PROFILE_FUNCTION();
-    new_touching_pairs_.clear();
-    for(const auto& pair : Broadphase().GetPossiblePairs())
-    {
-        auto& collider1 = colliders_[pair.c1().index()];
-        auto& collider2 = colliders_[pair.c2().index()];
-
-        auto& body1 = bodies_[collider1.body_index.index()];
-        auto& body2 = bodies_[collider2.body_index.index()];
-		if(!body1.is_active || !body2.is_active)
-		{
-			continue;
-		}
-		if(body1.type == BodyType::kStatic && body2.type == BodyType::kStatic)
-		{
-			continue;
-		}
-		if(collider1.body_index == collider2.body_index)
-		{
-			continue;
-		}
-        const bool is_trigger = collider1.is_trigger || collider2.is_trigger;
-        // Contacts only live during this step, so their pointers never outlive the containers
-        Contact contact{};
-        const auto t_detect_start = StepProfileNow();
-        const bool does_intersect = DetectContact(body1, collider1, body2, collider2, &contact);
-        StepProfileMark(StepPhase::kDetectContact, t_detect_start);
-        if(!does_intersect)
-        {
-            continue;
-        }
-        if(!is_trigger)
-        {
-            const auto t_resolve_start = StepProfileNow();
-            contact.Resolve();
-            StepProfileMark(StepPhase::kResolve, t_resolve_start);
-        }
-        if(new_touching_pairs_.size() < config_.max_touching_pairs)
-        {
-            new_touching_pairs_.push_back({ pair, is_trigger });
-        }
-        else
-        {
-            assert(false && "PhysicsWorldConfig::max_touching_pairs reached");
-        }
-    }
-    const auto t_sort_start = StepProfileNow();
-    SortNewTouchingPairs();
-    NotifyContactChanges();
-    StepProfileMark(StepPhase::kSortAndNotify, t_sort_start);
-    std::swap(touching_pairs_, new_touching_pairs_);
-}
-
-NEKO_HOT void PhysicsWorld::SortNewTouchingPairs()
-{
-    std::fill(touching_pair_bucket_count_.begin(), touching_pair_bucket_count_.end(), std::uint32_t{ 0 });
-    for (const auto& touching_pair : new_touching_pairs_)
-    {
-        ++touching_pair_bucket_count_[touching_pair.pair.c1().index()];
-    }
-
-    // Exclusive prefix sum: bucketStart[k] is where collider k's pairs begin in the sorted output
-    std::uint32_t running_total = 0;
-    for (std::size_t k = 0; k < touching_pair_bucket_count_.size(); ++k)
-    {
-        touching_pair_bucket_start_[k] = running_total;
-        running_total += touching_pair_bucket_count_[k];
-    }
-    touching_pair_bucket_start_.back() = running_total;
-
-    sorted_touching_pairs_.resize(new_touching_pairs_.size());
-    // Reuse the counts as write cursors, seeded from the bucket starts just computed
-    std::copy(touching_pair_bucket_start_.begin(), touching_pair_bucket_start_.end() - 1, touching_pair_bucket_count_.begin());
-    for (const auto& touching_pair : new_touching_pairs_)
-    {
-        sorted_touching_pairs_[touching_pair_bucket_count_[touching_pair.pair.c1().index()]++] = touching_pair;
-    }
-
-    // Each bucket only holds one collider's contacts (typically a handful): insertion sort by c2 finishes the order
-    for (std::size_t k = 0; k + 1 < touching_pair_bucket_start_.size(); ++k)
-    {
-        if (touching_pair_bucket_start_[k] == touching_pair_bucket_start_[k + 1])
-        {
-            continue;
-        }
-        const auto bucket_begin = sorted_touching_pairs_.begin() + static_cast<std::ptrdiff_t>(touching_pair_bucket_start_[k]);
-        const auto bucket_end = sorted_touching_pairs_.begin() + static_cast<std::ptrdiff_t>(touching_pair_bucket_start_[k + 1]);
-        for (auto it = bucket_begin + 1; it < bucket_end; ++it)
-        {
-            const TouchingPair value = *it;
-            auto insert_at = it;
-            while (insert_at > bucket_begin && value.pair.c2() < (insert_at - 1)->pair.c2())
-            {
-                *insert_at = *(insert_at - 1);
-                --insert_at;
-            }
-            *insert_at = value;
-        }
-    }
-    std::swap(new_touching_pairs_, sorted_touching_pairs_);
-}
-
-NEKO_HOT void PhysicsWorld::NotifyContactChanges() const
-{
-    if(contact_listener_ == nullptr)
-    {
-        return;
-    }
-    const auto enter = [this](const TouchingPair& touching_pair)
-    {
-        if(touching_pair.is_trigger)
-        {
-            contact_listener_->OnTriggerEnter(touching_pair.pair);
-        }
-        else
-        {
-            contact_listener_->OnCollisionEnter(touching_pair.pair);
-        }
-    };
-    const auto exit = [this](const TouchingPair& touching_pair)
-    {
-        if(touching_pair.is_trigger)
-        {
-            contact_listener_->OnTriggerExit(touching_pair.pair);
-        }
-        else
-        {
-            contact_listener_->OnCollisionExit(touching_pair.pair);
-        }
-    };
-    // Both lists are sorted: merging them gives the events in a deterministic order
-    auto old_it = touching_pairs_.begin();
-    auto new_it = new_touching_pairs_.begin();
-    while(old_it != touching_pairs_.end() || new_it != new_touching_pairs_.end())
-    {
-        if(new_it == new_touching_pairs_.end() || (old_it != touching_pairs_.end() && old_it->pair < new_it->pair))
-        {
-            exit(*old_it);
-            ++old_it;
-        }
-        else if(old_it == touching_pairs_.end() || new_it->pair < old_it->pair)
-        {
-            enter(*new_it);
-            ++new_it;
-        }
-        else
-        {
-            // Still touching: a trigger that became solid (or the reverse) ends one kind of contact and starts the other
-            if(old_it->is_trigger != new_it->is_trigger)
-            {
-                exit(*old_it);
-                enter(*new_it);
-            }
-            ++old_it;
-            ++new_it;
-        }
-    }
-}
-
-ColliderIndex PhysicsWorld::AddCircleCollider(BodyIndex body)
-{
-    const auto collider_slot = AcquireSlot(colliders_, config_.max_colliders, IsFreeCollider);
-    const auto shape_slot = collider_slot.has_value() ? AcquireSlot(circles_, config_.max_colliders, IsFreeCircle) : std::nullopt;
-    if(!collider_slot.has_value() || !shape_slot.has_value())
-    {
-        return kInvalidColliderIndex;
-    }
-    circles_[*shape_slot].radius = Scalar{ 0 };
-    auto& collider = colliders_[*collider_slot];
-    collider.body_index = body;
-    collider.collider_index = ColliderIndex{ *collider_slot };
-    collider.shape_index = ShapeIndex{ *shape_slot };
-    collider.type = ShapeType::kCircle;
-    return collider.collider_index;
-}
-
-ColliderIndex PhysicsWorld::AddAabbCollider(BodyIndex body)
-{
-    const auto collider_slot = AcquireSlot(colliders_, config_.max_colliders, IsFreeCollider);
-    const auto shape_slot = collider_slot.has_value() ? AcquireSlot(aabbs_, config_.max_colliders, IsFreeAabb) : std::nullopt;
-    if(!collider_slot.has_value() || !shape_slot.has_value())
-    {
-        return kInvalidColliderIndex;
-    }
-    aabbs_[*shape_slot].half_size = Vec2f::Zero();
-    auto& collider = colliders_[*collider_slot];
-    collider.body_index = body;
-    collider.collider_index = ColliderIndex{ *collider_slot };
-    collider.shape_index = ShapeIndex{ *shape_slot };
-    collider.type = ShapeType::kAabb;
-    return collider.collider_index;
-}
-
-void PhysicsWorld::RemoveCollider(ColliderIndex index)
-{
-    auto& collider = colliders_[index.index()];
-    switch (collider.type)
-    {
-    case ShapeType::kAabb:
-        aabbs_[collider.shape_index.index()] = AabbCollider{};
-        break;
-    case ShapeType::kCircle:
-        circles_[collider.shape_index.index()] = CircleCollider{};
-        break;
+        default:
+          break;
+      }
+      break;
     default:
+      break;
+  }
+  return does_intersect;
+}
+
+NEKO_HOT void PhysicsWorld::ResolveNarrowphase() {
+  NEKO_PROFILE_FUNCTION();
+  new_touching_pairs_.clear();
+  for (const auto& pair : Broadphase().GetPossiblePairs()) {
+    auto& collider1 = colliders_[pair.c1().index()];
+    auto& collider2 = colliders_[pair.c2().index()];
+
+    auto& body1 = bodies_[collider1.body_index.index()];
+    auto& body2 = bodies_[collider2.body_index.index()];
+    if (!body1.is_active || !body2.is_active) {
+      continue;
+    }
+    if (body1.type == BodyType::kStatic && body2.type == BodyType::kStatic) {
+      continue;
+    }
+    if (collider1.body_index == collider2.body_index) {
+      continue;
+    }
+    const bool is_trigger = collider1.is_trigger || collider2.is_trigger;
+    // Contacts only live during this step, so their pointers never outlive the
+    // containers
+    Contact contact{};
+    const auto t_detect_start = StepProfileNow();
+    const bool does_intersect =
+        DetectContact(body1, collider1, body2, collider2, &contact);
+    StepProfileMark(StepPhase::kDetectContact, t_detect_start);
+    if (!does_intersect) {
+      continue;
+    }
+    if (!is_trigger) {
+      const auto t_resolve_start = StepProfileNow();
+      contact.Resolve();
+      StepProfileMark(StepPhase::kResolve, t_resolve_start);
+    }
+    if (new_touching_pairs_.size() < config_.max_touching_pairs) {
+      new_touching_pairs_.push_back({pair, is_trigger});
+    } else {
+      assert(false && "PhysicsWorldConfig::max_touching_pairs reached");
+    }
+  }
+  const auto t_sort_start = StepProfileNow();
+  SortNewTouchingPairs();
+  NotifyContactChanges();
+  StepProfileMark(StepPhase::kSortAndNotify, t_sort_start);
+  std::swap(touching_pairs_, new_touching_pairs_);
+}
+
+NEKO_HOT void PhysicsWorld::SortNewTouchingPairs() {
+  std::fill(touching_pair_bucket_count_.begin(),
+            touching_pair_bucket_count_.end(), std::uint32_t{0});
+  for (const auto& touching_pair : new_touching_pairs_) {
+    ++touching_pair_bucket_count_[touching_pair.pair.c1().index()];
+  }
+
+  // Exclusive prefix sum: bucketStart[k] is where collider k's pairs begin in
+  // the sorted output
+  std::uint32_t running_total = 0;
+  for (std::size_t k = 0; k < touching_pair_bucket_count_.size(); ++k) {
+    touching_pair_bucket_start_[k] = running_total;
+    running_total += touching_pair_bucket_count_[k];
+  }
+  touching_pair_bucket_start_.back() = running_total;
+
+  sorted_touching_pairs_.resize(new_touching_pairs_.size());
+  // Reuse the counts as write cursors, seeded from the bucket starts just
+  // computed
+  std::copy(touching_pair_bucket_start_.begin(),
+            touching_pair_bucket_start_.end() - 1,
+            touching_pair_bucket_count_.begin());
+  for (const auto& touching_pair : new_touching_pairs_) {
+    sorted_touching_pairs_
+        [touching_pair_bucket_count_[touching_pair.pair.c1().index()]++] =
+            touching_pair;
+  }
+
+  // Each bucket only holds one collider's contacts (typically a handful):
+  // insertion sort by c2 finishes the order
+  for (std::size_t k = 0; k + 1 < touching_pair_bucket_start_.size(); ++k) {
+    if (touching_pair_bucket_start_[k] == touching_pair_bucket_start_[k + 1]) {
+      continue;
+    }
+    const auto bucket_begin =
+        sorted_touching_pairs_.begin() +
+        static_cast<std::ptrdiff_t>(touching_pair_bucket_start_[k]);
+    const auto bucket_end =
+        sorted_touching_pairs_.begin() +
+        static_cast<std::ptrdiff_t>(touching_pair_bucket_start_[k + 1]);
+    for (auto it = bucket_begin + 1; it < bucket_end; ++it) {
+      const TouchingPair value = *it;
+      auto insert_at = it;
+      while (insert_at > bucket_begin &&
+             value.pair.c2() < (insert_at - 1)->pair.c2()) {
+        *insert_at = *(insert_at - 1);
+        --insert_at;
+      }
+      *insert_at = value;
+    }
+  }
+  std::swap(new_touching_pairs_, sorted_touching_pairs_);
+}
+
+NEKO_HOT void PhysicsWorld::NotifyContactChanges() const {
+  if (contact_listener_ == nullptr) {
+    return;
+  }
+  const auto enter = [this](const TouchingPair& touching_pair) {
+    if (touching_pair.is_trigger) {
+      contact_listener_->OnTriggerEnter(touching_pair.pair);
+    } else {
+      contact_listener_->OnCollisionEnter(touching_pair.pair);
+    }
+  };
+  const auto exit = [this](const TouchingPair& touching_pair) {
+    if (touching_pair.is_trigger) {
+      contact_listener_->OnTriggerExit(touching_pair.pair);
+    } else {
+      contact_listener_->OnCollisionExit(touching_pair.pair);
+    }
+  };
+  // Both lists are sorted: merging them gives the events in a deterministic
+  // order
+  auto old_it = touching_pairs_.begin();
+  auto new_it = new_touching_pairs_.begin();
+  while (old_it != touching_pairs_.end() ||
+         new_it != new_touching_pairs_.end()) {
+    if (new_it == new_touching_pairs_.end() ||
+        (old_it != touching_pairs_.end() && old_it->pair < new_it->pair)) {
+      exit(*old_it);
+      ++old_it;
+    } else if (old_it == touching_pairs_.end() || new_it->pair < old_it->pair) {
+      enter(*new_it);
+      ++new_it;
+    } else {
+      // Still touching: a trigger that became solid (or the reverse) ends one
+      // kind of contact and starts the other
+      if (old_it->is_trigger != new_it->is_trigger) {
+        exit(*old_it);
+        enter(*new_it);
+      }
+      ++old_it;
+      ++new_it;
+    }
+  }
+}
+
+ColliderIndex PhysicsWorld::AddCircleCollider(BodyIndex body) {
+  const auto collider_slot =
+      AcquireSlot(colliders_, config_.max_colliders, IsFreeCollider);
+  const auto shape_slot =
+      collider_slot.has_value()
+          ? AcquireSlot(circles_, config_.max_colliders, IsFreeCircle)
+          : std::nullopt;
+  if (!collider_slot.has_value() || !shape_slot.has_value()) {
+    return kInvalidColliderIndex;
+  }
+  circles_[*shape_slot].radius = Scalar{0};
+  auto& collider = colliders_[*collider_slot];
+  collider.body_index = body;
+  collider.collider_index = ColliderIndex{*collider_slot};
+  collider.shape_index = ShapeIndex{*shape_slot};
+  collider.type = ShapeType::kCircle;
+  return collider.collider_index;
+}
+
+ColliderIndex PhysicsWorld::AddAabbCollider(BodyIndex body) {
+  const auto collider_slot =
+      AcquireSlot(colliders_, config_.max_colliders, IsFreeCollider);
+  const auto shape_slot =
+      collider_slot.has_value()
+          ? AcquireSlot(aabbs_, config_.max_colliders, IsFreeAabb)
+          : std::nullopt;
+  if (!collider_slot.has_value() || !shape_slot.has_value()) {
+    return kInvalidColliderIndex;
+  }
+  aabbs_[*shape_slot].half_size = Vec2f::Zero();
+  auto& collider = colliders_[*collider_slot];
+  collider.body_index = body;
+  collider.collider_index = ColliderIndex{*collider_slot};
+  collider.shape_index = ShapeIndex{*shape_slot};
+  collider.type = ShapeType::kAabb;
+  return collider.collider_index;
+}
+
+void PhysicsWorld::RemoveCollider(ColliderIndex index) {
+  auto& collider = colliders_[index.index()];
+  switch (collider.type) {
+    case ShapeType::kAabb:
+      aabbs_[collider.shape_index.index()] = AabbCollider{};
+      break;
+    case ShapeType::kCircle:
+      circles_[collider.shape_index.index()] = CircleCollider{};
+      break;
+    default:
+      break;
+  }
+  collider = Collider{};
+}
+
+NEKO_HOT void PhysicsWorld::Step() {
+  NEKO_PROFILE_FUNCTION();
+  const auto dt = config_.dt;
+
+  const auto t_integration_start = StepProfileNow();
+  for (auto& body : bodies_) {
+    if (!body.is_active) {
+      continue;
+    }
+    switch (body.type) {
+      case BodyType::kDynamic: {
+        // Gravity is an acceleration: no division by the inverse mass
+        body.velocity +=
+            (config_.gravity + body.force * body.inverse_mass) * dt;
+
+        body.position += body.velocity * dt;
+        body.force = Vec2f::Zero();
+        break;
+      }
+      case BodyType::kKinematic: {
+        body.position += body.velocity * dt;
+        break;
+      }
+      default:
         break;
     }
-    collider = Collider{};
+  }
+  StepProfileMark(StepPhase::kIntegration, t_integration_start);
+
+  ResolveBroadphase();
+  ResolveNarrowphase();
 }
 
-NEKO_HOT void PhysicsWorld::Step()
-{
-    NEKO_PROFILE_FUNCTION();
-    const auto dt = config_.dt;
-
-    const auto t_integration_start = StepProfileNow();
-    for (auto& body : bodies_)
-    {
-		if(!body.is_active)
-		{
-			continue;
-		}
-        switch (body.type)
-        {
-        case BodyType::kDynamic:
-        {
-            // Gravity is an acceleration: no division by the inverse mass
-            body.velocity += (config_.gravity + body.force * body.inverse_mass) * dt;
-
-            body.position += body.velocity * dt;
-            body.force = Vec2f::Zero();
-            break;
-        }
-        case BodyType::kKinematic:
-        {
-            body.position += body.velocity * dt;
-            break;
-        }
-        default: break;
-        }
-
-    }
-    StepProfileMark(StepPhase::kIntegration, t_integration_start);
-
-    ResolveBroadphase();
-    ResolveNarrowphase();
+void PhysicsWorld::Clear() {
+  bodies_.clear();
+  aabbs_.clear();
+  circles_.clear();
+  colliders_.clear();
+  touching_pairs_.clear();
+  new_touching_pairs_.clear();
 }
 
-void PhysicsWorld::Clear()
-{
-    bodies_.clear();
-    aabbs_.clear();
-    circles_.clear();
-    colliders_.clear();
-    touching_pairs_.clear();
-    new_touching_pairs_.clear();
+NEKO_HOT Aabbf PhysicsWorld::GetAabb(const Collider& collider) const {
+  const auto center =
+      bodies_[collider.body_index.index()].position + collider.offset;
+  if (collider.type == ShapeType::kAabb) {
+    return Aabbf::FromCenter(center,
+                             aabbs_[collider.shape_index.index()].half_size);
+  }
+  return Circlef{center, circles_[collider.shape_index.index()].radius}
+      .GetAabb();
 }
 
-NEKO_HOT Aabbf PhysicsWorld::GetAabb(const Collider& collider) const
-{
-    const auto center = bodies_[collider.body_index.index()].position + collider.offset;
-    if (collider.type == ShapeType::kAabb)
-    {
-        return Aabbf::FromCenter(center, aabbs_[collider.shape_index.index()].half_size);
+NEKO_HOT void PhysicsWorld::ResolveBroadphase() {
+  NEKO_PROFILE_FUNCTION();
+  const auto t_broadphase_start = StepProfileNow();
+  auto& broadphase = Broadphase();
+  broadphase.Clear();
+  collider_aabb_cache_.clear();
+
+  const auto is_inserted = [this](const Collider& collider) {
+    return collider.type != ShapeType::kNone &&
+           bodies_[collider.body_index.index()].is_active;
+  };
+  // World box from the collider extents, starting from the first one (no
+  // infinite bounds to overflow). Each Aabbf is computed once here and cached,
+  // since a BSH may need SetWorldAabb called before any Insert.
+  bool has_collider = false;
+  Aabbf world_box{};
+  for (const auto& collider : colliders_) {
+    if (!is_inserted(collider)) {
+      continue;
     }
-    return Circlef{ center, circles_[collider.shape_index.index()].radius }.GetAabb();
+    const auto aabb = GetAabb(collider);
+    collider_aabb_cache_.push_back(aabb);
+    if (!has_collider) {
+      world_box = aabb;
+      has_collider = true;
+      continue;
+    }
+    world_box.set_min_bound(
+        {Min(world_box.min_bound().x(), aabb.min_bound().x()),
+         Min(world_box.min_bound().y(), aabb.min_bound().y())});
+    world_box.set_max_bound(
+        {Max(world_box.max_bound().x(), aabb.max_bound().x()),
+         Max(world_box.max_bound().y(), aabb.max_bound().y())});
+  }
+  if (has_collider) {
+    broadphase.SetWorldAabb(world_box);
+    std::size_t cache_index = 0;
+    for (const auto& collider : colliders_) {
+      if (is_inserted(collider)) {
+        broadphase.Insert(
+            {collider_aabb_cache_[cache_index], collider.collider_index});
+        ++cache_index;
+      }
+    }
+  }
+  broadphase.CalculatePairs();
+  StepProfileMark(StepPhase::kBroadphase, t_broadphase_start);
 }
 
-NEKO_HOT void PhysicsWorld::ResolveBroadphase()
-{
-    NEKO_PROFILE_FUNCTION();
-    const auto t_broadphase_start = StepProfileNow();
-    auto& broadphase = Broadphase();
-    broadphase.Clear();
-    collider_aabb_cache_.clear();
-
-    const auto is_inserted = [this](const Collider& collider)
-    {
-        return collider.type != ShapeType::kNone && bodies_[collider.body_index.index()].is_active;
-    };
-    // World box from the collider extents, starting from the first one (no infinite bounds to overflow). Each
-    // Aabbf is computed once here and cached, since a BSH may need SetWorldAabb called before any Insert.
-    bool has_collider = false;
-    Aabbf world_box{};
-    for (const auto& collider : colliders_)
-    {
-        if (!is_inserted(collider))
-        {
-            continue;
-        }
-        const auto aabb = GetAabb(collider);
-        collider_aabb_cache_.push_back(aabb);
-        if (!has_collider)
-        {
-            world_box = aabb;
-            has_collider = true;
-            continue;
-        }
-        world_box.set_min_bound({ Min(world_box.min_bound().x(), aabb.min_bound().x()), Min(world_box.min_bound().y(), aabb.min_bound().y()) });
-        world_box.set_max_bound({ Max(world_box.max_bound().x(), aabb.max_bound().x()), Max(world_box.max_bound().y(), aabb.max_bound().y()) });
-    }
-    if (has_collider)
-    {
-        broadphase.SetWorldAabb(world_box);
-        std::size_t cache_index = 0;
-        for (const auto& collider : colliders_)
-        {
-            if (is_inserted(collider))
-            {
-                broadphase.Insert({ collider_aabb_cache_[cache_index], collider.collider_index });
-                ++cache_index;
-            }
-        }
-    }
-    broadphase.CalculatePairs();
-    StepProfileMark(StepPhase::kBroadphase, t_broadphase_start);
+void PhysicsWorld::CopyFrom(const PhysicsWorld& physics_world) {
+  // Assignment reuses the reserved capacity: no allocation when both worlds
+  // share a config
+  bodies_ = physics_world.bodies_;
+  aabbs_ = physics_world.aabbs_;
+  circles_ = physics_world.circles_;
+  colliders_ = physics_world.colliders_;
+  touching_pairs_ = physics_world.touching_pairs_;
 }
 
-void PhysicsWorld::CopyFrom(const PhysicsWorld& physics_world)
-{
-    // Assignment reuses the reserved capacity: no allocation when both worlds share a config
-	bodies_ = physics_world.bodies_;
-	aabbs_ = physics_world.aabbs_;
-	circles_ = physics_world.circles_;
-	colliders_ = physics_world.colliders_;
-	touching_pairs_ = physics_world.touching_pairs_;
-}
-
-std::uint32_t PhysicsWorld::GenerateChecksum() const
-{
-    Checksum checksum;
-    for (const auto& body : bodies_)
-    {
-        checksum.Add(neko::GenerateChecksum(body));
-    }
-    for (const auto& collider : colliders_)
-    {
-        checksum.Add(neko::GenerateChecksum(collider));
-    }
-    for (const auto& aabb : aabbs_)
-    {
-        checksum.Add(neko::GenerateChecksum(aabb));
-    }
-    for (const auto& circle : circles_)
-    {
-        checksum.Add(neko::GenerateChecksum(circle));
-    }
-    for (const auto& touching_pair : touching_pairs_)
-    {
-        checksum.Add(touching_pair.pair.c1());
-        checksum.Add(touching_pair.pair.c2());
-        checksum.Add(touching_pair.is_trigger);
-    }
-    return checksum.Get();
+std::uint32_t PhysicsWorld::GenerateChecksum() const {
+  Checksum checksum;
+  for (const auto& body : bodies_) {
+    checksum.Add(neko::GenerateChecksum(body));
+  }
+  for (const auto& collider : colliders_) {
+    checksum.Add(neko::GenerateChecksum(collider));
+  }
+  for (const auto& aabb : aabbs_) {
+    checksum.Add(neko::GenerateChecksum(aabb));
+  }
+  for (const auto& circle : circles_) {
+    checksum.Add(neko::GenerateChecksum(circle));
+  }
+  for (const auto& touching_pair : touching_pairs_) {
+    checksum.Add(touching_pair.pair.c1());
+    checksum.Add(touching_pair.pair.c2());
+    checksum.Add(touching_pair.is_trigger);
+  }
+  return checksum.Get();
 }
 }  // namespace neko

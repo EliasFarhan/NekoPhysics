@@ -1,7 +1,7 @@
 # Google C++ Style Guide (https://google.github.io/styleguide/cppguide.html)
 BasedOnStyle: Google
 Language: Cpp
-Standard: c++20
+Standard: Latest
 ColumnLimit: 80
 DerivePointerAlignment: false
 PointerAlignment: Left

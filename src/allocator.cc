@@ -7,39 +7,33 @@
 #include <tracy/Tracy.hpp>
 #endif
 
-namespace neko
-{
+namespace neko {
 
-void* HeapAllocator::Allocate(std::size_t count, std::size_t type_size)
-{
-    const auto size = count*type_size;
-    auto* ptr = std::malloc(size);
+void* HeapAllocator::Allocate(std::size_t count, std::size_t type_size) {
+  const auto size = count * type_size;
+  auto* ptr = std::malloc(size);
 #ifdef TRACY_ENABLE
-    TracyAlloc(ptr, size);
+  TracyAlloc(ptr, size);
 #endif
-    return ptr;
+  return ptr;
 }
 
-void HeapAllocator::Deallocate(void *ptr)
-{
+void HeapAllocator::Deallocate(void* ptr) {
 #ifdef TRACY_ENABLE
-    TracyFree(ptr);
+  TracyFree(ptr);
 #endif
-    std::free(ptr);
+  std::free(ptr);
 }
 
-Allocator& DefaultAllocator() noexcept
-{
-    static HeapAllocator allocator;
-    return allocator;
+Allocator& DefaultAllocator() noexcept {
+  static HeapAllocator allocator;
+  return allocator;
 }
 
-namespace internal
-{
-void OnAllocationFailure()
-{
-    assert(false && "NekoPhysics: allocation failed");
-    std::abort();
+namespace internal {
+void OnAllocationFailure() {
+  assert(false && "NekoPhysics: allocation failed");
+  std::abort();
 }
 }  // namespace internal
 }  // namespace neko

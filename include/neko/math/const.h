@@ -8,8 +8,7 @@
 #include <cmath>
 #include <numbers>
 
-namespace neko
-{
+namespace neko {
 
 #if defined(NEKO_SCALAR_SIXIT)
 using Scalar = sixit::dmath::ieee_float_inline_asm;
@@ -19,46 +18,38 @@ using Scalar = float;
 using Scalar = Fixed16;
 #endif
 
-template<typename T>
-constexpr T Pi()
-{
+template <typename T>
+constexpr T Pi() {
 #ifdef NEKO_SCALAR_SIXIT
-    if constexpr (std::is_same_v<T, sixit::dmath::ieee_float_inline_asm>)
-    {
-        return sixit::dmath::ieee_float_inline_asm(std::numbers::pi_v<float>);
-    }
-    else
+  if constexpr (std::is_same_v<T, sixit::dmath::ieee_float_inline_asm>) {
+    return sixit::dmath::ieee_float_inline_asm(std::numbers::pi_v<float>);
+  } else
 #endif
-    {
-        return std::numbers::pi_v<T>;
-    }
+  {
+    return std::numbers::pi_v<T>;
+  }
 }
 
-template<typename T>
-constexpr T Exp()
-{
+template <typename T>
+constexpr T Exp() {
 #ifdef NEKO_SCALAR_SIXIT
-    if constexpr (std::is_same_v<T, sixit::dmath::ieee_float_inline_asm>)
-    {
-        return sixit::dmath::ieee_float_inline_asm(std::numbers::e_v<float>);
-    }
-    else
+  if constexpr (std::is_same_v<T, sixit::dmath::ieee_float_inline_asm>) {
+    return sixit::dmath::ieee_float_inline_asm(std::numbers::e_v<float>);
+  } else
 #endif
-    {
-        return std::numbers::e_v<T>;
-    }
+  {
+    return std::numbers::e_v<T>;
+  }
 }
 
-template<>
-constexpr Fixed16 Pi()
-{
-    return Fixed16::FromUnderlyingValue(205887);
+template <>
+constexpr Fixed16 Pi() {
+  return Fixed16::FromUnderlyingValue(205887);
 }
 
-template<>
-constexpr Fixed16 Exp()
-{
-    return Fixed16::FromUnderlyingValue(178145);
+template <>
+constexpr Fixed16 Exp() {
+  return Fixed16::FromUnderlyingValue(178145);
 }
 
 }  // namespace neko
