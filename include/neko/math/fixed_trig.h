@@ -9,7 +9,7 @@
 
 namespace neko
 {
-namespace detail
+namespace internal
 {
 inline constexpr std::size_t kSinTableBits = 10;
 inline constexpr std::size_t kSinTableSize = std::size_t{ 1 } << kSinTableBits;
@@ -86,20 +86,20 @@ inline constexpr auto kSinTable = MakeSinTable();
     const auto interpolation = (static_cast<std::int64_t>(v2 - v1) * fraction + half) >> fraction_bits;
     return Fixed16::FromUnderlyingValue(static_cast<std::int32_t>(v1 + interpolation));
 }
-} // namespace detail
+} // namespace internal
 
 /**
  * @brief Sine of an angle in radians. Table + linear interpolation, error below 5e-5, no division.
  */
 [[nodiscard]] constexpr Fixed16 Sin(Fixed16 radians) noexcept
 {
-    return detail::SinFromPhase(detail::RadiansToPhase(radians));
+    return internal::SinFromPhase(internal::RadiansToPhase(radians));
 }
 
 [[nodiscard]] constexpr Fixed16 Cos(Fixed16 radians) noexcept
 {
     // cos(x) = sin(x + quarter turn)
-    return detail::SinFromPhase(detail::RadiansToPhase(radians) + (std::uint32_t{ 1 } << 30));
+    return internal::SinFromPhase(internal::RadiansToPhase(radians) + (std::uint32_t{ 1 } << 30));
 }
 
 [[nodiscard]] constexpr Fixed16 Tan(Fixed16 radians) noexcept

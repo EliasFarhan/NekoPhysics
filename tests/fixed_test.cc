@@ -35,11 +35,11 @@ static_assert(Fixed16{ -1 } / Fixed16{ 0 } == std::numeric_limits<Fixed16>::lowe
 static_assert(Fixed16{ 0 } / Fixed16{ 0 } == Fixed16{ 0 });
 
 // What the DS hardware hooks must reproduce (the ROM in nds/ compares them on the DS)
-static_assert(neko::detail::Div64(-7, 2) == -3);
-static_assert(neko::detail::Div64(std::int64_t{ 1 } << 40, 3) == 1431655765); // low 32 bits of 366503875925
-static_assert(neko::detail::Div64(std::int64_t{ -1 } << 47, 1) == 0);
-static_assert(neko::detail::ISqrt64(~std::uint64_t{ 0 }) == 0xFFFFFFFFu);
-static_assert(neko::detail::ISqrt64(99) == 9);
+static_assert(neko::internal::Div64(-7, 2) == -3);
+static_assert(neko::internal::Div64(std::int64_t{ 1 } << 40, 3) == 1431655765); // low 32 bits of 366503875925
+static_assert(neko::internal::Div64(std::int64_t{ -1 } << 47, 1) == 0);
+static_assert(neko::internal::ISqrt64(~std::uint64_t{ 0 }) == 0xFFFFFFFFu);
+static_assert(neko::internal::ISqrt64(99) == 9);
 
 // Conversions: from float rounds to nearest, to integer truncates toward zero (S4.2)
 static_assert(Fixed16{ 0.1f } == Raw(6554));
@@ -59,8 +59,8 @@ static_assert(neko::Sqrt(std::numeric_limits<Fixed16>::max()) == Raw(11863283));
 // Sin/Cos: compile-time table, radians turned into a phase by one multiplication (DS review D1.9)
 static_assert(neko::Sin(Fixed16{ 0 }) == Fixed16{ 0 });
 static_assert(neko::Cos(Fixed16{ 0 }) == Fixed16{ 1 });
-static_assert(neko::detail::kSinTable[neko::detail::kSinTableSize / 4] == 65536);
-static_assert(neko::detail::kSinTable[neko::detail::kSinTableSize] == 0);
+static_assert(neko::internal::kSinTable[neko::internal::kSinTableSize / 4] == 65536);
+static_assert(neko::internal::kSinTable[neko::internal::kSinTableSize] == 0);
 } // namespace
 
 TEST(Fixed16, SinCosMatchStd)

@@ -13,7 +13,7 @@
 namespace neko
 {
 
-namespace detail
+namespace internal
 {
 /**
  * @brief Floor of the square root of a 64-bit integer, computed bit by bit.
@@ -87,7 +87,7 @@ namespace detail
 #endif
     return Div64Portable(num, den);
 }
-} // namespace detail
+} // namespace internal
 
 /**
  * @brief Fixed-point number
@@ -198,7 +198,7 @@ public:
         if constexpr (std::is_same_v<T, std::int32_t> && std::is_same_v<MulT, std::int64_t>)
         {
             // Hardware divider on the DS
-            return FromUnderlyingValue(detail::Div64(numerator, other.underlying_value_));
+            return FromUnderlyingValue(internal::Div64(numerator, other.underlying_value_));
         }
         else
         {
@@ -250,7 +250,7 @@ inline constexpr bool is_fixed_v<Fixed<T, Exp, MulT>> = true;
     }
     // sqrt(raw / 2^16) * 2^16 == sqrt(raw * 2^16)
     const auto squared = static_cast<std::uint64_t>(value.underlying_value()) << 16;
-    return Fixed16::FromUnderlyingValue(static_cast<std::int32_t>(detail::ISqrt64(squared)));
+    return Fixed16::FromUnderlyingValue(static_cast<std::int32_t>(internal::ISqrt64(squared)));
 }
 
 } // namespace neko

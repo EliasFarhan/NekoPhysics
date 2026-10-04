@@ -34,13 +34,13 @@ public:
  */
 [[nodiscard]] Allocator& DefaultAllocator() noexcept;
 
-namespace detail
+namespace internal
 {
 /**
  * @brief Throws std::bad_alloc, or aborts when exceptions are disabled (usual on the DS)
  */
 [[noreturn]] void OnAllocationFailure();
-} // namespace detail
+} // namespace internal
 
 /**
  * \brief Proxy allocator respecting allocator_traits. Holds a pointer, so containers can be copied and moved freely
@@ -62,12 +62,12 @@ public:
     {
         if (n > std::numeric_limits<std::size_t>::max() / sizeof(T))
         {
-            detail::OnAllocationFailure();
+            internal::OnAllocationFailure();
         }
         auto* ptr = allocator_->Allocate(n, sizeof(T));
         if (ptr == nullptr && n != 0)
         {
-            detail::OnAllocationFailure();
+            internal::OnAllocationFailure();
         }
         return static_cast<T*>(ptr);
     }

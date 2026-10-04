@@ -34,7 +34,7 @@ Allocator& DefaultAllocator() noexcept
     return allocator;
 }
 
-namespace detail
+namespace internal
 {
 void OnAllocationFailure()
 {
@@ -44,5 +44,5 @@ void OnAllocationFailure()
     std::abort();
 #endif
 }
-} // namespace detail
+} // namespace internal
 }

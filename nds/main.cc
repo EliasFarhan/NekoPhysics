@@ -130,7 +130,7 @@ bool CheckMathHooks()
         {
             return;
         }
-        if (neko::detail::Div64(num, den) != neko::detail::Div64Portable(num, den) && failures++ < 3)
+        if (neko::internal::Div64(num, den) != neko::internal::Div64Portable(num, den) && failures++ < 3)
         {
             Log("div %" PRId64 "/%" PRId32 " FAIL\n", num, den);
         }
@@ -138,8 +138,8 @@ bool CheckMathHooks()
     int sqrt_failures_by_bits[65] = {};
     const auto check_sqrt = [&failures, &sqrt_failures_by_bits](std::uint64_t value)
     {
-        const std::uint32_t hardware = neko::detail::ISqrt64(value);
-        const std::uint32_t portable = neko::detail::ISqrt64Portable(value);
+        const std::uint32_t hardware = neko::internal::ISqrt64(value);
+        const std::uint32_t portable = neko::internal::ISqrt64Portable(value);
         if (hardware != portable)
         {
             ++sqrt_failures_by_bits[64 - __builtin_clzll(value)];

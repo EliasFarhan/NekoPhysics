@@ -13,7 +13,7 @@
 
 namespace neko
 {
-namespace detail
+namespace internal
 {
 /**
  * @brief Square that can't overflow: Q32.32 in 64 bits for Fixed16 (16.16 overflows past ~181), T otherwise
@@ -31,7 +31,7 @@ template<typename T>
         return value * value;
     }
 }
-} // namespace detail
+} // namespace internal
 
 template<typename T>
 struct Vec2
@@ -147,7 +147,7 @@ struct Vec2
         if constexpr (std::is_same_v<T, Fixed16>)
         {
             // Sum of squares in Q32.32: SquareLength() overflows past ~181 and rounds to zero below ~1/256
-            const auto root = detail::ISqrt64(detail::WideSquare(x) + detail::WideSquare(y));
+            const auto root = internal::ISqrt64(internal::WideSquare(x) + internal::WideSquare(y));
             constexpr auto max_raw = static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max());
             return T::FromUnderlyingValue(static_cast<std::int32_t>(root > max_raw ? max_raw : root));
         }
@@ -191,8 +191,8 @@ struct Vec2
 template<typename T>
 [[nodiscard]] constexpr int CompareLength(Vec2<T> v, T length) noexcept
 {
-    const auto square_length = detail::WideSquare(v.x) + detail::WideSquare(v.y);
-    const auto length_square = detail::WideSquare(length);
+    const auto square_length = internal::WideSquare(v.x) + internal::WideSquare(v.y);
+    const auto length_square = internal::WideSquare(length);
     if (square_length < length_square)
     {
         return -1;
