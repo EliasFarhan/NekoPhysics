@@ -34,7 +34,7 @@ public:
 
 namespace internal
 {
-// Throws std::bad_alloc, or aborts when exceptions are disabled (usual on the DS)
+// Aborts: NekoPhysics does not use exceptions (Google style)
 [[noreturn]] void OnAllocationFailure();
 }  // namespace internal
 
@@ -48,7 +48,9 @@ public:
     using value_type = T;
     StandardAllocator() noexcept : allocator_(&DefaultAllocator()) {}
     explicit StandardAllocator(Allocator& allocator) noexcept : allocator_(&allocator) {}
+    // Implicit on purpose: the allocator requirements need the rebinding conversion
     template <class U>
+    // NOLINTNEXTLINE(google-explicit-constructor)
     StandardAllocator(const StandardAllocator<U>& allocator) noexcept : allocator_(&allocator.GetAllocator()) {}
 
     // NOLINTNEXTLINE(readability-identifier-naming): allocator requirements

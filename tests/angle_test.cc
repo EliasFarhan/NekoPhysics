@@ -7,9 +7,9 @@
 // angle.h did not compile (Pi() without template argument), nothing included it (review S3.1)
 TEST(Angle, DegreeToRadian)
 {
-    const neko::Radian radian = neko::Degree{ neko::Scalar{90} };
+    const neko::Radian radian{ neko::Degree{ neko::Scalar{90} } };
     EXPECT_NEAR(float{ radian.value() }, std::numbers::pi_v<float> / 2.0f, 1e-4f);
-    const neko::Degree degree = neko::Radian{ neko::Pi<neko::Scalar>() };
+    const neko::Degree degree{ neko::Radian{ neko::Pi<neko::Scalar>() } };
     EXPECT_NEAR(float{ degree.value() }, 180.0f, 1e-2f);
 }
 

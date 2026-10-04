@@ -1,7 +1,7 @@
 #include "neko/core/allocator.h"
 
+#include <cassert>
 #include <cstdlib>
-#include <new>
 
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
@@ -38,11 +38,8 @@ namespace internal
 {
 void OnAllocationFailure()
 {
-#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
-    throw std::bad_alloc();
-#else
+    assert(false && "NekoPhysics: allocation failed");
     std::abort();
-#endif
 }
 }  // namespace internal
 }  // namespace neko

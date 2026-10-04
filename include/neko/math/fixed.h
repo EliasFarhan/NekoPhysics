@@ -92,6 +92,11 @@ class Fixed
 {
 public:
     constexpr Fixed() = default;
+    constexpr Fixed(const Fixed&) = default;
+    constexpr Fixed(Fixed&&) = default;
+    // Lvalue-only: assigning to a temporary (v.x() = ..., v.x() += ...) does not compile
+    constexpr Fixed& operator=(const Fixed&) & = default;
+    constexpr Fixed& operator=(Fixed&&) & = default;
 
     template<class OtherT>
     requires std::is_floating_point_v<OtherT>
@@ -140,7 +145,7 @@ public:
         return FromUnderlyingValue(static_cast<T>(underlying_value_ + other.underlying_value_));
     }
 
-    constexpr Fixed& operator+=(Fixed other) noexcept
+    constexpr Fixed& operator+=(Fixed other) & noexcept
     {
         return *this = *this + other;
     }
@@ -150,7 +155,7 @@ public:
         return FromUnderlyingValue(static_cast<T>(underlying_value_ - other.underlying_value_));
     }
 
-    constexpr Fixed& operator-=(Fixed other) noexcept
+    constexpr Fixed& operator-=(Fixed other) & noexcept
     {
         return *this = *this - other;
     }
@@ -169,7 +174,7 @@ public:
         return FromUnderlyingValue(static_cast<T>((product + half - negative) >> Exp));
     }
 
-    constexpr Fixed& operator*=(Fixed other) noexcept
+    constexpr Fixed& operator*=(Fixed other) & noexcept
     {
         return *this = *this * other;
     }
@@ -196,7 +201,7 @@ public:
         }
     }
 
-    constexpr Fixed& operator/=(Fixed other) noexcept
+    constexpr Fixed& operator/=(Fixed other) & noexcept
     {
         return *this = *this / other;
     }

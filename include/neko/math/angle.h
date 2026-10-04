@@ -17,19 +17,19 @@ class Radian
 public:
     constexpr Radian() = default;
     constexpr explicit Radian(Scalar value) : value_(value) {}
-    // Conversion constructor that implicitly converts Degree to Radian
+    // Converts Degree to Radian
     // `angle` is the degree angle to be converted to Radian.
-    constexpr Radian(const Degree& angle);
+    explicit constexpr Radian(const Degree& angle);
     [[nodiscard]] constexpr Scalar value() const { return value_; }
 
     constexpr Radian operator+(Radian angle) const { return Radian{ value_ + angle.value() }; }
-    constexpr Radian& operator+=(Radian angle)
+    constexpr Radian& operator+=(Radian angle) &
     {
         value_ += angle.value();
         return *this;
     }
     constexpr Radian operator-(Radian angle) const { return Radian{ value_ - angle.value() }; }
-    constexpr Radian& operator-=(Radian angle)
+    constexpr Radian& operator-=(Radian angle) &
     {
         value_ -= angle.value();
         return *this;
@@ -54,16 +54,16 @@ public:
     constexpr explicit Degree(Scalar value) : value_(value) {}
     // Conversion constructor that implicitly converts Radian to Degree
     // `angle` is the radian angle to be converted to Degree.
-    constexpr Degree(const Radian& angle) : value_(angle.value() / Pi<Scalar>() * Scalar{180}) {}
+    explicit constexpr Degree(const Radian& angle) : value_(angle.value() / Pi<Scalar>() * Scalar{180}) {}
     [[nodiscard]] constexpr Scalar value() const { return value_; }
     constexpr Degree operator+(Degree angle) const { return Degree{ value_ + angle.value() }; }
-    constexpr Degree& operator+=(Degree angle)
+    constexpr Degree& operator+=(Degree angle) &
     {
         value_ += angle.value();
         return *this;
     }
     constexpr Degree operator-(Degree angle) const { return Degree{ value_ - angle.value() }; }
-    constexpr Degree& operator-=(Degree angle)
+    constexpr Degree& operator-=(Degree angle) &
     {
         value_ -= angle.value();
         return *this;

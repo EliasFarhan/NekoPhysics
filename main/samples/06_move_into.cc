@@ -46,14 +46,14 @@ void MoveIntoSample::BeginContact(b2Contact* contact)
 	const auto user_data_a = contact->GetFixtureA()->GetUserData().pointer;
 	const auto user_data_b = contact->GetFixtureB()->GetUserData().pointer;
 
-	if((b2Body*)user_data_a == b2_ground_body_ || (b2Body*)user_data_b == b2_ground_body_)
+	if(reinterpret_cast<b2Body*>(user_data_a) == b2_ground_body_ || reinterpret_cast<b2Body*>(user_data_b) == b2_ground_body_)
 	{
-		if((b2Body*)user_data_a == b2_static_body_ || (b2Body*)user_data_b == b2_static_body_)
+		if(reinterpret_cast<b2Body*>(user_data_a) == b2_static_body_ || reinterpret_cast<b2Body*>(user_data_b) == b2_static_body_)
 		{
 			static_body_on_ground_ = true;
 		}
 
-		if((b2Body*)user_data_a == b2_dynamic_body_ || (b2Body*)user_data_b == b2_dynamic_body_)
+		if(reinterpret_cast<b2Body*>(user_data_a) == b2_dynamic_body_ || reinterpret_cast<b2Body*>(user_data_b) == b2_dynamic_body_)
 		{
 			dynamic_body_on_ground_ = true;
 		}
@@ -230,7 +230,7 @@ void MoveIntoSample::FixedUpdate()
 	if (dynamic_body_on_ground_)
 	{
 #ifdef NEKO_SAMPLE_BOX2D
-		const Scalar mass = (Scalar)b2_dynamic_body_->GetMass();
+		const Scalar mass = Scalar{ b2_dynamic_body_->GetMass() };
 		const Vec2f velocity {b2_dynamic_body_->GetLinearVelocity()};
 		constexpr neko::Vec2f wanted_velocity{ Scalar{ -1 }, Scalar{}};
 		auto force = (wanted_velocity - velocity) / kFixedDeltaTime * mass ;
@@ -254,7 +254,7 @@ void MoveIntoSample::FixedUpdate()
 	if (static_body_on_ground_)
 	{
 #ifdef NEKO_SAMPLE_BOX2D
-		const Scalar mass = (Scalar)b2_static_body_->GetMass();
+		const Scalar mass = Scalar{ b2_static_body_->GetMass() };
 		const Vec2f velocity {b2_static_body_->GetLinearVelocity()};
 		constexpr neko::Vec2f wanted_velocity{};
 		auto force = (wanted_velocity - velocity) / kFixedDeltaTime * mass ;

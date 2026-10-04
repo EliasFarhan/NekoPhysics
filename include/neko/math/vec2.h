@@ -38,11 +38,16 @@ public:
 
     constexpr Vec2(T x_arg, T y_arg): x_(x_arg), y_(y_arg){}
     constexpr Vec2()= default;
+    constexpr Vec2(const Vec2&) = default;
+    constexpr Vec2(Vec2&&) = default;
+    // Lvalue-only: assigning to a temporary (v.x() = ..., v.x() += ...) does not compile
+    constexpr Vec2& operator=(const Vec2&) & = default;
+    constexpr Vec2& operator=(Vec2&&) & = default;
     [[nodiscard]] constexpr T x() const noexcept { return x_; }
     [[nodiscard]] constexpr T y() const noexcept { return y_; }
     constexpr void set_x(T x_value) noexcept { x_ = x_value; }
     constexpr void set_y(T y_value) noexcept { y_ = y_value; }
-    constexpr Vec2(T scalar): x_(scalar), y_(scalar){}
+    explicit constexpr Vec2(T scalar): x_(scalar), y_(scalar){}
 	template<typename OtherT>
 	constexpr explicit Vec2(Vec2<OtherT> v): x_(static_cast<T>(v.x())), y_(static_cast<T>(v.y())){}
 
@@ -59,7 +64,7 @@ public:
     {
         return { x_ + other.x_, y_ + other.y_ };
     }
-    constexpr Vec2& operator+=(Vec2 other)
+    constexpr Vec2& operator+=(Vec2 other) &
     {
         x_ += other.x_;
         y_ += other.y_;
@@ -73,7 +78,7 @@ public:
     {
         return { x_ - other.x_, y_ - other.y_ };
     }
-    constexpr Vec2& operator-=(Vec2 other)
+    constexpr Vec2& operator-=(Vec2 other) &
     {
         x_ -= other.x_;
         y_ -= other.y_;
@@ -83,7 +88,7 @@ public:
     {
         return { x_ * other.x_, y_ * other.y_ };
     }
-    constexpr Vec2& operator*=(T other)
+    constexpr Vec2& operator*=(T other) &
     {
         x_ *= other;
         y_ *= other;
@@ -102,7 +107,7 @@ public:
         }
         return Vec2{ x_/other, y_/other };
     }
-    constexpr Vec2& operator/=(T other)
+    constexpr Vec2& operator/=(T other) &
     {
         x_ /= other;
         y_ /= other;
