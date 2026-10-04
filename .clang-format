@@ -1,0 +1,20 @@
+# Google C++ Style Guide (https://google.github.io/styleguide/cppguide.html)
+BasedOnStyle: Google
+Language: Cpp
+Standard: c++20
+ColumnLimit: 80
+DerivePointerAlignment: false
+PointerAlignment: Left
+IncludeBlocks: Regroup
+# Related header (priority 0) first, then C system, C++ standard, other libraries, NekoPhysics
+IncludeCategories:
+  - Regex: '^<[a-z_]+\.h>$'
+    Priority: 1
+  - Regex: '^<[a-z_]+>$'
+    Priority: 2
+  - Regex: '^"neko/'
+    Priority: 4
+  - Regex: '^<'
+    Priority: 3
+  - Regex: '.*'
+    Priority: 5

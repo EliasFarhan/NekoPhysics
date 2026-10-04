@@ -12,7 +12,8 @@
         "USE_SAMPLES": "ON",
         "USE_TESTING": "ON",
         "NEKO_SCALAR": "FIXED16",
-        "NEKO_WARNINGS_AS_ERRORS": "ON"
+        "NEKO_WARNINGS_AS_ERRORS": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       }
     },
     {
