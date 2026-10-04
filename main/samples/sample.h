@@ -1,4 +1,5 @@
-#pragma once
+#ifndef MAIN_SAMPLES_SAMPLE_H_
+#define MAIN_SAMPLES_SAMPLE_H_
 
 #include "main/samples/draw_list.h"
 #include "neko/math/const.h"
@@ -97,3 +98,5 @@ private:
 };
 
 } // namespace neko
+
+#endif  // MAIN_SAMPLES_SAMPLE_H_

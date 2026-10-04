@@ -1,4 +1,5 @@
-#pragma once
+#ifndef MAIN_SAMPLES_01_KINEMATIC_H_
+#define MAIN_SAMPLES_01_KINEMATIC_H_
 
 #include "main/samples/sample.h"
 #include "main/samples/sample_config.h"
@@ -28,3 +29,5 @@ private:
     Aabbf bounds_{};
 };
 }
+
+#endif  // MAIN_SAMPLES_01_KINEMATIC_H_

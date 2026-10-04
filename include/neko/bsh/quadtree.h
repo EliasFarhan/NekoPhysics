@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NEKO_BSH_QUADTREE_H_
+#define NEKO_BSH_QUADTREE_H_
 
 #include "neko/bsh/bsh.h"
 #include "neko/core/allocator.h"
@@ -78,3 +79,5 @@ private:
 };
 
 }
+
+#endif  // NEKO_BSH_QUADTREE_H_

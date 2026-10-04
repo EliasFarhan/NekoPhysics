@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NEKO_MATH_FUNC_H_
+#define NEKO_MATH_FUNC_H_
 
 #include <cmath>
 
@@ -75,3 +76,5 @@ T Tan(T value)
 	return std::tan(value);
 }
 }
+
+#endif  // NEKO_MATH_FUNC_H_

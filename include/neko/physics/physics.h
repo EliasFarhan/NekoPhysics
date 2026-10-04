@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NEKO_PHYSICS_PHYSICS_H_
+#define NEKO_PHYSICS_PHYSICS_H_
 
 
 #include "neko/math/vec2.h"
@@ -220,3 +221,5 @@ private:
 };
 
 } // namespace neko
+
+#endif  // NEKO_PHYSICS_PHYSICS_H_

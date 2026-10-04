@@ -1,4 +1,5 @@
-#pragma once
+#ifndef MAIN_SAMPLES_SAMPLE_RNG_H_
+#define MAIN_SAMPLES_SAMPLE_RNG_H_
 
 #include "main/samples/draw_list.h"
 #include "main/samples/sample_config.h"
@@ -59,3 +60,5 @@ private:
 };
 
 } // namespace neko
+
+#endif  // MAIN_SAMPLES_SAMPLE_RNG_H_

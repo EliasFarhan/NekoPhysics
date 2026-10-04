@@ -1,4 +1,5 @@
-#pragma once
+#ifndef MAIN_SAMPLES_DRAW_LIST_H_
+#define MAIN_SAMPLES_DRAW_LIST_H_
 
 #include "neko/math/shape.h"
 #include "neko/math/vec2.h"
@@ -135,3 +136,5 @@ public:
 };
 
 } // namespace neko
+
+#endif  // MAIN_SAMPLES_DRAW_LIST_H_

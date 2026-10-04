@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NEKO_MATH_SIXIT_FLOAT_H_
+#define NEKO_MATH_SIXIT_FLOAT_H_
 
 #include "neko/math/func.h"
 #if defined(__clang__)
@@ -42,3 +43,5 @@ inline sixit::dmath::ieee_float_inline_asm Cos(sixit::dmath::ieee_float_inline_a
 	return sixit::dmath::mathf::cos(value);
 }
 }
+
+#endif  // NEKO_MATH_SIXIT_FLOAT_H_

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef MAIN_SAMPLES_05_COLLISIONS_H_
+#define MAIN_SAMPLES_05_COLLISIONS_H_
 
 #include "neko/physics/physics.h"
 #include "neko/bsh/quadtree.h"
@@ -40,3 +41,5 @@ private:
     Aabbf bounds_{};
 };
 }
+
+#endif  // MAIN_SAMPLES_05_COLLISIONS_H_

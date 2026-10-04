@@ -1,5 +1,5 @@
-#ifndef NEKOPHYSICS_ANGLE_H
-#define NEKOPHYSICS_ANGLE_H
+#ifndef NEKO_MATH_ANGLE_H_
+#define NEKO_MATH_ANGLE_H_
 
 #include "neko/math/const.h"
 #include "neko/math/fixed_trig.h"
@@ -123,4 +123,4 @@ inline Scalar Tan(Radian angle)
 }
 }
 
-#endif //NEKOLIB_ANGLE_H
+#endif  // NEKO_MATH_ANGLE_H_

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NEKO_PHYSICS_CONTACT_SOLVER_H_
+#define NEKO_PHYSICS_CONTACT_SOLVER_H_
 #include <array>
 
 #include "neko/math/vec2.h"
@@ -25,3 +26,5 @@ struct Contact
     [[nodiscard]] Scalar CalculateSeparateVelocity() const;
 };
 } // namespace neko
+
+#endif  // NEKO_PHYSICS_CONTACT_SOLVER_H_

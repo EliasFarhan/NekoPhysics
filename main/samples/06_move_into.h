@@ -1,4 +1,5 @@
-#pragma once
+#ifndef MAIN_SAMPLES_06_MOVE_INTO_H_
+#define MAIN_SAMPLES_06_MOVE_INTO_H_
 
 #include "neko/physics/physics.h"
 #include "neko/bsh/quadtree.h"
@@ -76,3 +77,5 @@ private:
 	bool dynamicBodyOnGround_ = false;
 };
 }
+
+#endif  // MAIN_SAMPLES_06_MOVE_INTO_H_

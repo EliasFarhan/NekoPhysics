@@ -1,4 +1,5 @@
-#pragma once
+#ifndef MAIN_SAMPLES_SAMPLE_CONFIG_H_
+#define MAIN_SAMPLES_SAMPLE_CONFIG_H_
 
 #include "neko/math/const.h"
 #include "neko/math/shape.h"
@@ -53,3 +54,5 @@ inline constexpr std::size_t MAX_DRAW_LINES = 85 * 4;
 } // namespace sample_config
 
 } // namespace neko
+
+#endif  // MAIN_SAMPLES_SAMPLE_CONFIG_H_

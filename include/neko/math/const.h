@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NEKO_MATH_CONST_H_
+#define NEKO_MATH_CONST_H_
 
 #include "neko/math/fixed.h"
 #ifdef NEKO_SCALAR_SIXIT
@@ -61,3 +62,5 @@ constexpr Fixed16 Exp()
 }
 
 }
+
+#endif  // NEKO_MATH_CONST_H_

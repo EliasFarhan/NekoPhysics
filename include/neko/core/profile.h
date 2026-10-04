@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NEKO_CORE_PROFILE_H_
+#define NEKO_CORE_PROFILE_H_
 
 /**
  * @brief Profiling zone covering the enclosing function: Tracy on PC when ENABLE_PROFILING is ON, nothing otherwise.
@@ -10,3 +11,5 @@
 #else
 #define NEKO_PROFILE_FUNCTION() static_cast<void>(0)
 #endif
+
+#endif  // NEKO_CORE_PROFILE_H_

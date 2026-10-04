@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NEKO_MATH_VEC2_H_
+#define NEKO_MATH_VEC2_H_
 
 #include <type_traits>
 #include <cmath>
@@ -210,3 +211,5 @@ using Vec2f = Vec2<Scalar>;
 using Vec2u = Vec2<unsigned>;
 using Vec2i = Vec2<int>;
 } // namespace neko
+
+#endif  // NEKO_MATH_VEC2_H_

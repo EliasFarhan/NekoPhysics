@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NEKO_MATH_FIXED_H_
+#define NEKO_MATH_FIXED_H_
 
 #include <compare>
 #include <cstdint>
@@ -275,3 +276,5 @@ public:
     [[nodiscard]] static constexpr Fixed epsilon() noexcept { return Fixed::fromUnderlyingValue(T{ 1 }); }
     [[nodiscard]] static constexpr Fixed round_error() noexcept { return Fixed{ 0.5f }; }
 };
+
+#endif  // NEKO_MATH_FIXED_H_

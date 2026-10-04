@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NEKO_CORE_PLATFORM_H_
+#define NEKO_CORE_PLATFORM_H_
 
 /**
  * @brief Marks a hot function definition: placed in the ARM9 instruction TCM on the DS (32 KB, no wait states,
@@ -10,3 +11,5 @@
 #else
 #define NEKO_HOT
 #endif
+
+#endif  // NEKO_CORE_PLATFORM_H_

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NEKO_PHYSICS_CONTACT_LISTENER_H_
+#define NEKO_PHYSICS_CONTACT_LISTENER_H_
 #include "neko/physics/physics_type.h"
 
 namespace neko
@@ -17,3 +18,5 @@ public:
 
 
 }
+
+#endif  // NEKO_PHYSICS_CONTACT_LISTENER_H_

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef TESTS_SCENES_FALLING_PILE_H_
+#define TESTS_SCENES_FALLING_PILE_H_
 
 #include "neko/physics/physics.h"
 
@@ -88,3 +89,5 @@ inline constexpr std::pair<int, std::uint32_t> FALLING_PILE_GOLDEN_CHECKSUMS[] =
 };
 
 } // namespace neko::scenes
+
+#endif  // TESTS_SCENES_FALLING_PILE_H_

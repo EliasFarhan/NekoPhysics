@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NEKO_MATH_FIXED_TRIG_H_
+#define NEKO_MATH_FIXED_TRIG_H_
 
 #include "neko/math/fixed.h"
 
@@ -107,3 +108,5 @@ inline constexpr auto sinTable = MakeSinTable();
 }
 
 } // namespace neko
+
+#endif  // NEKO_MATH_FIXED_TRIG_H_

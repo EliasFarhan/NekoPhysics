@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NEKO_CORE_STEP_PROFILE_H_
+#define NEKO_CORE_STEP_PROFILE_H_
 
 #include <cstdint>
 
@@ -55,3 +56,5 @@ constexpr void StepProfileMark(StepPhase, std::uint32_t) noexcept {}
 #endif
 
 } // namespace neko
+
+#endif  // NEKO_CORE_STEP_PROFILE_H_

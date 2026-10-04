@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NEKO_PHYSICS_PHYSICS_TYPE_H_
+#define NEKO_PHYSICS_PHYSICS_TYPE_H_
 
 #include <compare>
 #include <cstdint>
@@ -65,3 +66,5 @@ struct ColliderPair
 };
 
 }
+
+#endif  // NEKO_PHYSICS_PHYSICS_TYPE_H_

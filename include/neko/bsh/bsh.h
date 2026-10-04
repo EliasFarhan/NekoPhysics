@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NEKO_BSH_BSH_H_
+#define NEKO_BSH_BSH_H_
 
 
 #include "neko/math/shape.h"
@@ -30,3 +31,5 @@ public:
 };
 
 } // namespace neko
+
+#endif  // NEKO_BSH_BSH_H_

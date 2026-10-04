@@ -1,4 +1,5 @@
-#pragma once
+#ifndef MAIN_SDL_SDL_SAMPLE_DRAWER_H_
+#define MAIN_SDL_SDL_SAMPLE_DRAWER_H_
 
 #include "main/samples/draw_list.h"
 
@@ -39,3 +40,5 @@ private:
 };
 
 } // namespace neko
+
+#endif  // MAIN_SDL_SDL_SAMPLE_DRAWER_H_

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NDS_SAMPLES_NDS_SAMPLE_DRAWER_H_
+#define NDS_SAMPLES_NDS_SAMPLE_DRAWER_H_
 
 #include "main/samples/draw_list.h"
 
@@ -116,3 +117,5 @@ private:
 };
 
 } // namespace neko
+
+#endif  // NDS_SAMPLES_NDS_SAMPLE_DRAWER_H_

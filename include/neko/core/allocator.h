@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NEKO_CORE_ALLOCATOR_H_
+#define NEKO_CORE_ALLOCATOR_H_
 
 #include <cstddef>
 #include <limits>
@@ -88,3 +89,5 @@ private:
 template<typename T>
 using ArrayList = std::vector<T, StandardAllocator<T>>;
 }
+
+#endif  // NEKO_CORE_ALLOCATOR_H_

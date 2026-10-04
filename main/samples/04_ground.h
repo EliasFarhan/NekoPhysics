@@ -1,4 +1,5 @@
-#pragma once
+#ifndef MAIN_SAMPLES_04_GROUND_H_
+#define MAIN_SAMPLES_04_GROUND_H_
 #include "neko/physics/physics.h"
 #include "neko/bsh/quadtree.h"
 #include "main/samples/sample.h"
@@ -33,3 +34,5 @@ private:
     int collisionCount = 0;
 };
 }
+
+#endif  // MAIN_SAMPLES_04_GROUND_H_

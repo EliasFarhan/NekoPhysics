@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NEKO_BSH_SWEEP_AND_PRUNE_H_
+#define NEKO_BSH_SWEEP_AND_PRUNE_H_
 
 #include "neko/bsh/bsh.h"
 #include "neko/core/allocator.h"
@@ -33,3 +34,5 @@ private:
 };
 
 } // namespace neko
+
+#endif  // NEKO_BSH_SWEEP_AND_PRUNE_H_

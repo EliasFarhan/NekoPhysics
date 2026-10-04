@@ -1,4 +1,5 @@
-#pragma once
+#ifndef MAIN_SAMPLES_02_PLANETS_H_
+#define MAIN_SAMPLES_02_PLANETS_H_
 #include "neko/physics/physics.h"
 #include "main/samples/sample.h"
 #include "main/samples/sample_config.h"
@@ -27,3 +28,5 @@ private:
     Vec2f center_{};
 };
 } // namespace neko
+
+#endif  // MAIN_SAMPLES_02_PLANETS_H_

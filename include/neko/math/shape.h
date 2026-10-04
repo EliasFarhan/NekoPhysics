@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NEKO_MATH_SHAPE_H_
+#define NEKO_MATH_SHAPE_H_
 
 #include "neko/physics/physics_type.h"
 #include "neko/math/vec2.h"
@@ -84,3 +85,5 @@ constexpr bool Intersect(const Aabb<T>& aabb, const Circle<T>& circle)
 using Aabbf = Aabb<Scalar>;
 using Circlef = Circle<Scalar>;
 } // namespace neko
+
+#endif  // NEKO_MATH_SHAPE_H_
