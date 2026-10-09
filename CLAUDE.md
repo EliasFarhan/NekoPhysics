@@ -30,7 +30,11 @@ ctest --preset debug
 cmake --preset debug-float    # same with NEKO_SCALAR=FLOAT
 cmake --preset nds            # DS ROMs (build/nds/nds/NekoPhysicsDsTest.nds, build/nds/nds/samples/NekoPhysicsDsSamples.nds); needs DEVKITPRO, no vcpkg
 cmake --build --preset nds
+cmake --preset debug -DNEKO_BUILD_DOCS=ON   # API reference with MrDocs (mrdocs on PATH or MRDOCS_ROOT)
+cmake --build --preset debug --target docs  # -> build/debug/docs/index.html, config in docs/mrdocs.yml
 ```
+
+The `docs` target warns on undocumented symbols, doc errors and broken references: keep it warning-free when touching public headers.
 
 As of 2026-09-18 `NEKO_SCALAR=SIXIT` fails to build with MSVC 14.51 and clang (sixit's bundled fmt, non-constexpr `Scalar`); see finding S1.8 in the vault review.
 
@@ -41,7 +45,7 @@ The code follows the [Google C++ Style Guide](https://google.github.io/styleguid
 - `.clang-format` (Google, 80 columns) formats everything outside `externals/`. Run `clang-format -i` on touched files before committing.
 - `.clang-tidy` checks `google-*` and Google naming (naming warnings are errors): `snake_case` variables and struct fields, `snake_case_` private members, `kCamelCase` constants and enumerators, `CamelCase` functions, `g_` for mutable globals. Accessors and mutators are `snake_case` (`x()`, `set_x()`, `body()`, `touching_pairs()`); clang-tidy accepts any snake_case method, so keep snake_case for accessors only. Run it with `run-clang-tidy -p build/debug`. For the DS code, export a compile DB (`cmake --preset nds -B build/nds-tidy -DCMAKE_EXPORT_COMPILE_COMMANDS=ON`) and pass `--target=arm-none-eabi` plus devkitARM's include paths as `-isystem`. Never `-fix` a TU that has compile errors: clang-tidy also applies compiler fix-its.
 - Sources are `.cc`. Headers use `#define` guards named from the path (`NEKO_MATH_VEC2_H_`, `MAIN_SAMPLES_SAMPLE_H_`). Includes name the full path: `"neko/..."` for the library (`include/neko/`), and the repo-root path for the rest (`"main/samples/sample.h"`, `"tests/scenes/falling_pile.h"`).
-- Comments are `//` (no Doxygen).
+- Comments are `//`, except the public API in `include/neko` and `main/samples` headers: every symbol MrDocs extracts (namespace `neko`, outside `neko::internal`) gets a `///` doc comment, written for game programming students (concepts, units, determinism caveats, not just the signature). First sentence is the brief; use `@param`, `@return`, `@note`, `@see`, `@ref` and `@code`/`@endcode` (Markdown fences don't render). Implementation comments stay `//`.
 - Value types with behavior are classes with private fields and accessors: `Vec2` (`x()`, `set_x()`), `Aabb`, `Circle`, the index types (`index()`, explicit constructor from `Index`) and `ColliderPair`. Passive data (`Body`, `Collider`, configs...) stays structs with public `snake_case` fields. `Fixed`, `Vec2`, `Radian` and `Degree` assignments are lvalue-only, so `v.x() += d` doesn't compile; use the setters.
 - No exceptions or RTTI in the library (`-fno-exceptions -fno-rtti`); allocation failure aborts. Single-argument constructors are `explicit`.
 - Standard-interface names are kept with `NOLINT` (`std::numeric_limits<Fixed>`, `StandardAllocator::allocate`, `is_fixed_v`).

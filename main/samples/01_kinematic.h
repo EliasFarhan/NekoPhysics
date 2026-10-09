@@ -9,14 +9,28 @@
 #include "main/samples/sample_config.h"
 
 namespace neko {
-// Circles without colliders moving at constant speed, bouncing on the world
-// bounds
+/// Sample 01: circles moving at constant speed, bouncing on the world bounds.
+///
+/// The simplest use of a `PhysicsWorld`: bodies only, with no collider, no
+/// gravity (`gravity = Vec2f::Zero()`) and no force. Each `Step()` integrates
+/// `position += velocity * dt`, so every circle moves in a straight line at
+/// the random velocity it got in @ref Begin. @ref BounceInside flips the
+/// velocity when a circle leaves the screen.
+///
+/// What to look at: the circles cross each other without reacting (there is
+/// nothing to collide with), and their speed never changes. The number of
+/// circles is @ref sample_config::kKinematicCount.
 class KinematicSample : public Sample {
  public:
+  /// Builds the scene described in the class documentation.
   void Begin(const SampleContext& context) override;
+  /// Steps the world, then bounces every circle inside the world bounds.
   void FixedUpdate() override;
+  /// Draws one circle per body, in its random color.
   void Draw(DrawList& draw_list) const override;
+  /// Clears the world and the per-body data.
   void End() override;
+  /// Returns the checksum of the sample's physics world.
   [[nodiscard]] std::uint32_t GenerateChecksum() const override {
     return world_.GenerateChecksum();
   }

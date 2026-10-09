@@ -8,79 +8,125 @@
 namespace neko {
 
 class Degree;
-// Radian is an utility class that describes radian angles (0 to 2PI).
-// It can be easily converted to Degree with conversion constructor.
-// It can be used with trigonometric functions (Sin, Cos, Tan)
+/// An angle in radians, a strong type around `neko::Scalar`.
+///
+/// One full turn is 2 pi radians. Wrapping the number in a type makes the
+/// unit explicit: a function taking a `Radian` cannot be passed degrees by
+/// mistake, and the explicit conversions between `Radian` and `Degree` do
+/// the math for you. The value is not wrapped to [0, 2 pi): 3 pi stays 3 pi.
+///
+/// `Radian` is what the trigonometric functions `neko::Sin`, `neko::Cos`
+/// and `neko::Tan` take.
+///
+/// @code
+/// const neko::Radian quarter{neko::Degree{neko::Scalar{90}}};
+/// const neko::Scalar s = neko::Sin(quarter);  // 1
+/// const neko::Radian half_turn = quarter * neko::Scalar{2};
+/// @endcode
+///
+/// @see neko::Degree
 class Radian {
  public:
+  /// Constructs a zero angle.
   constexpr Radian() = default;
+  /// Constructs an angle of @p value radians.
   constexpr explicit Radian(Scalar value) : value_(value) {}
-  // Converts Degree to Radian
-  // `angle` is the degree angle to be converted to Radian.
+  /// Converts a `Degree` angle to radians (`degrees / 180 * pi`).
+  ///
+  /// @param angle The angle in degrees.
   explicit constexpr Radian(const Degree& angle);
+  /// Returns the angle in radians.
   [[nodiscard]] constexpr Scalar value() const { return value_; }
 
+  /// Sum of two angles.
   constexpr Radian operator+(Radian angle) const {
     return Radian{value_ + angle.value()};
   }
+  /// Adds @p angle to this angle.
   constexpr Radian& operator+=(Radian angle) & {
     value_ += angle.value();
     return *this;
   }
+  /// Difference of two angles.
   constexpr Radian operator-(Radian angle) const {
     return Radian{value_ - angle.value()};
   }
+  /// Subtracts @p angle from this angle.
   constexpr Radian& operator-=(Radian angle) & {
     value_ -= angle.value();
     return *this;
   }
+  /// Scales the angle by @p value.
   constexpr Radian operator*(Scalar value) const {
     return Radian{value_ * value};
   }
+  /// Divides the angle by @p value.
   constexpr Radian operator/(Scalar value) const {
     return Radian{value_ / value};
   }
+  /// Opposite angle.
   constexpr Radian operator-() const { return Radian{-value_}; }
 
  private:
   Scalar value_{};
 };
 
+/// Scales a `Radian` angle by @p value (scalar on the left).
+///
+/// @param value The scale factor.
+/// @param angle The angle.
+/// @return `angle * value`.
 constexpr Radian operator*(Scalar value, Radian angle) {
   return Radian{angle.value() * value};
 }
 
-// Degree is an utility class that describes degree angles (0 to 360).
-// It can be easily converted to Radian with conversion constructor.
-// It can be used with trigonometric functions (Sin, Cos, Tan)
+/// An angle in degrees, a strong type around `neko::Scalar`.
+///
+/// One full turn is 360 degrees. Degrees are easier to read and write for
+/// humans (editor values, tuning), while the math uses radians: convert
+/// with `Radian{degree}` before calling `neko::Sin`, `neko::Cos` or
+/// `neko::Tan`. The value is not wrapped to [0, 360).
+///
+/// @see neko::Radian
 class Degree {
  public:
+  /// Constructs a zero angle.
   constexpr Degree() = default;
+  /// Constructs an angle of @p value degrees.
   constexpr explicit Degree(Scalar value) : value_(value) {}
-  // Conversion constructor that implicitly converts Radian to Degree
-  // `angle` is the radian angle to be converted to Degree.
+  /// Converts a `Radian` angle to degrees (`radians / pi * 180`).
+  ///
+  /// @param angle The angle in radians.
   explicit constexpr Degree(const Radian& angle)
       : value_(angle.value() / Pi<Scalar>() * Scalar{180}) {}
+  /// Returns the angle in degrees.
   [[nodiscard]] constexpr Scalar value() const { return value_; }
+  /// Sum of two angles.
   constexpr Degree operator+(Degree angle) const {
     return Degree{value_ + angle.value()};
   }
+  /// Adds @p angle to this angle.
   constexpr Degree& operator+=(Degree angle) & {
     value_ += angle.value();
     return *this;
   }
+  /// Difference of two angles.
   constexpr Degree operator-(Degree angle) const {
     return Degree{value_ - angle.value()};
   }
+  /// Subtracts @p angle from this angle.
   constexpr Degree& operator-=(Degree angle) & {
     value_ -= angle.value();
     return *this;
   }
+  /// Opposite angle.
   constexpr Degree operator-() const { return Degree{-value_}; }
 
+  /// Scales the angle by @p value.
   constexpr Degree operator*(Scalar value) const {
     return Degree{value_ * value};
   }
+  /// Divides the angle by @p value.
   constexpr Degree operator/(Scalar value) const {
     return Degree{value_ / value};
   }
@@ -89,6 +135,11 @@ class Degree {
   Scalar value_{};
 };
 
+/// Scales a `Degree` angle by @p value (scalar on the left).
+///
+/// @param value The scale factor.
+/// @param angle The angle.
+/// @return `angle * value`.
 constexpr Degree operator*(Scalar value, Degree angle) {
   return Degree{angle.value() * value};
 }
@@ -97,19 +148,25 @@ constexpr Radian::Radian(const Degree& angle) {
   value_ = angle.value() / Scalar{180} * Pi<Scalar>();
 }
 
-// Sin is a function that calculates the sinus of a given angle.
-// `angle` is the given angle.
-// Returns the result of the sinus of angle
+/// Sine of an angle.
+///
+/// Forwards to the `Scalar` overload: the deterministic table lookup for
+/// `Fixed16`, `std::sin` for `float`.
+///
+/// @param angle The angle.
+/// @return The sine of @p angle, in [-1, 1].
 inline Scalar Sin(Radian angle) { return Sin(angle.value()); }
 
-// Cos is a function that calculates the cosinus of a given angle.
-// `angle` is the given angle.
-// Returns the result of the cosinus of angle
+/// Cosine of an angle.
+///
+/// @param angle The angle.
+/// @return The cosine of @p angle, in [-1, 1].
 inline Scalar Cos(Radian angle) { return Cos(angle.value()); }
 
-// Tan is a function that calculates the tangent of a given angle.
-// `angle` is the given angle.
-// Returns the result of the tangent of angle
+/// Tangent of an angle.
+///
+/// @param angle The angle.
+/// @return The tangent of @p angle (very large near +/- 90 degrees).
 inline Scalar Tan(Radian angle) { return Tan(angle.value()); }
 }  // namespace neko
 

@@ -1,0 +1,26 @@
+# MrDocs configuration for the API reference of the library (include/neko)
+# and the samples (main/samples). Built by the `docs` CMake target
+# (NEKO_BUILD_DOCS=ON), which passes the compilation database and the output
+# directory. Relative paths are relative to this file.
+source-root: ..
+input:
+  - ../include/neko
+  - ../main/samples
+recursive: true
+file-patterns:
+  - '*.h'
+include-symbols:
+  - 'neko'
+  - 'neko::**'
+exclude-symbols:
+  - 'neko::internal'
+  - 'neko::internal::**'
+generator: html
+multipage: true
+auto-brief: true
+auto-relates: true
+show-namespaces: true
+legible-names: true
+warn-if-undocumented: true
+warn-if-doc-error: true
+warn-broken-ref: true

@@ -24,18 +24,33 @@
 #include <cmath>
 
 namespace neko {
+/// Square root for the sixit deterministic float.
+///
+/// Used when `NEKO_SCALAR=SIXIT`. Calls `sixit::dmath::mathf::sqrt`
+/// instead of the `std` version, whose result could differ between
+/// platforms.
 template <>
 inline sixit::dmath::ieee_float_inline_asm Sqrt(
     sixit::dmath::ieee_float_inline_asm value) {
   return sixit::dmath::mathf::sqrt(value);
 }
 
+/// Sine of an angle in radians for the sixit deterministic float.
+///
+/// Used when `NEKO_SCALAR=SIXIT`. Calls `sixit::dmath::mathf::sin`
+/// instead of the `std` version, whose result could differ between
+/// platforms.
 template <>
 inline sixit::dmath::ieee_float_inline_asm Sin(
     sixit::dmath::ieee_float_inline_asm value) {
   return sixit::dmath::mathf::sin(value);
 }
 
+/// Cosine of an angle in radians for the sixit deterministic float.
+///
+/// Used when `NEKO_SCALAR=SIXIT`. Calls `sixit::dmath::mathf::cos`
+/// instead of the `std` version, whose result could differ between
+/// platforms.
 template <>
 inline sixit::dmath::ieee_float_inline_asm Cos(
     sixit::dmath::ieee_float_inline_asm value) {

@@ -11,6 +11,7 @@ if(USE_TESTING)
 endif (USE_TESTING)
 
 option(ENABLE_PROFILING "Use Tracy Profiler" OFF)
+option(NEKO_BUILD_DOCS "Add the docs target (API reference with MrDocs)" OFF)
 if(ENABLE_PROFILING)
     list(APPEND VCPKG_MANIFEST_FEATURES "profiling")
 endif (ENABLE_PROFILING)
@@ -112,4 +113,8 @@ endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "NintendoDS")
     add_subdirectory(nds)
+endif()
+
+if(NEKO_BUILD_DOCS)
+    add_subdirectory(docs)
 endif()

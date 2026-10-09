@@ -16,8 +16,24 @@
 
 namespace neko {
 
-// Two boxes on a static ground, pushed with forces once they land: one is held
-// in place, the other moves left into it. Magenta once on the ground.
+/// Sample 06: two boxes on a static ground, steered with forces.
+///
+/// Shows how to control a body with forces, like a character controller:
+/// once a box has landed, @ref FixedUpdate computes the force that would
+/// reach a wanted velocity in one step, `(wanted - velocity) / dt * mass`,
+/// clamps it to a maximum and adds it to `Body::force`. The left box wants a
+/// zero velocity and is held in place; the right box wants 1 m/s to the left
+/// and walks into it, so the AABB-vs-AABB contact has to resolve a box pushing
+/// another one that resists. Landing is detected in @ref OnCollisionEnter by
+/// comparing the `ColliderPair` with (box, ground).
+///
+/// What to look at: the boxes are blue in the air and turn magenta once they
+/// have touched the ground; then the right box moves left, stops against the
+/// held box, and the two push against each other.
+///
+/// On PC, defining `USE_BOX2D` (and linking `box2d::box2d` to
+/// `NekoPhysicsSamples`) runs the same scene with Box2D instead, to compare
+/// the behaviors; its checksum is then always 0.
 class MoveIntoSample final : public Sample,
 #ifndef NEKO_SAMPLE_BOX2D
                              public ContactListener
@@ -27,12 +43,16 @@ class MoveIntoSample final : public Sample,
 {
  public:
 #ifndef NEKO_SAMPLE_BOX2D
+  /// Does nothing: the sample has no trigger.
   void OnTriggerEnter(const ColliderPair& p) override;
 
+  /// Does nothing: the sample has no trigger.
   void OnTriggerExit(const ColliderPair& p) override;
 
+  /// Marks a box as on the ground when it touches the ground.
   void OnCollisionEnter(const ColliderPair& p) override;
 
+  /// Does nothing: a box stays marked as on the ground.
   void OnCollisionExit(const ColliderPair& p) override;
 #else
   /// Called when two fixtures begin to touch.
@@ -41,14 +61,19 @@ class MoveIntoSample final : public Sample,
   /// Called when two fixtures cease to touch.
   void EndContact(b2Contact* contact) override;
 #endif
+  /// Builds the ground and the two boxes above it.
   void Begin(const SampleContext& context) override;
 
+  /// Draws the ground and the two boxes, colored by landing state.
   void Draw(DrawList& draw_list) const override;
 
+  /// Clears the world and the landing flags.
   void End() override;
 
+  /// Returns the checksum of the physics world (0 with Box2D).
   [[nodiscard]] std::uint32_t GenerateChecksum() const override;
 
+  /// Applies the steering forces to the landed boxes, then steps the world.
   void FixedUpdate() override;
 
  private:

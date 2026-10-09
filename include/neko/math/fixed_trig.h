@@ -80,18 +80,41 @@ inline constexpr auto kSinTable = MakeSinTable();
 }
 }  // namespace internal
 
-// Sine of an angle in radians. Table + linear interpolation, error below 5e-5,
-// no division.
+/// Sine of an angle in radians, deterministic and without floating point.
+///
+/// Looks the angle up in a 1024-entry sine table (built at compile time)
+/// and linearly interpolates between the two nearest entries. The absolute
+/// error is below 5e-5, there is no division, and any angle works: the
+/// angle is wrapped to one turn for free by integer overflow.
+///
+/// @param radians The angle in radians.
+/// @return The sine, in [-1, 1].
+/// @see neko::Sin(Radian)
 [[nodiscard]] constexpr Fixed16 Sin(Fixed16 radians) noexcept {
   return internal::SinFromPhase(internal::RadiansToPhase(radians));
 }
 
+/// Cosine of an angle in radians, deterministic and without floating point.
+///
+/// Uses the same table as `Sin`, shifted by a quarter turn
+/// (`cos(x) = sin(x + pi / 2)`), so it has the same accuracy.
+///
+/// @param radians The angle in radians.
+/// @return The cosine, in [-1, 1].
 [[nodiscard]] constexpr Fixed16 Cos(Fixed16 radians) noexcept {
   // cos(x) = sin(x + quarter turn)
   return internal::SinFromPhase(internal::RadiansToPhase(radians) +
                                 (std::uint32_t{1} << 30));
 }
 
+/// Tangent of an angle in radians, computed as `Sin / Cos`.
+///
+/// Near odd multiples of pi / 2 the cosine is (close to) zero: the result
+/// grows very large, and saturates instead of crashing when the cosine is
+/// exactly zero (see `Fixed::operator/`).
+///
+/// @param radians The angle in radians.
+/// @return The tangent.
 [[nodiscard]] constexpr Fixed16 Tan(Fixed16 radians) noexcept {
   return Sin(radians) / Cos(radians);
 }
