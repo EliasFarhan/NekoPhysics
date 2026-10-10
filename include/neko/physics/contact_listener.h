@@ -13,7 +13,7 @@ namespace neko {
 /// touch (read @ref PhysicsWorld::touching_pairs for the current state).
 ///
 /// - Trigger events (`OnTrigger*`) fire when at least one of the two
-///   colliders has `Collider::is_trigger` set. Triggers detect overlaps
+///   colliders has @ref Collider::is_trigger set. Triggers detect overlaps
 ///   (pickups, zones, sensors) but never push bodies apart.
 /// - Collision events (`OnCollision*`) fire for two solid colliders, which the
 ///   world also separates and bounces.
@@ -28,9 +28,9 @@ namespace neko {
 /// @note The listener is not part of the simulation state:
 /// @ref PhysicsWorld::CopyFrom does not copy it, and restoring a rollback
 /// snapshot does not replay events.
-/// @warning Events are sent from inside `Step`: record them and act on them
-/// after `Step` returns rather than adding or removing bodies and colliders
-/// in the callback.
+/// @warning Events are sent from inside @ref PhysicsWorld::Step: record them
+/// and act on them after @ref PhysicsWorld::Step returns rather than adding or
+/// removing bodies and colliders in the callback.
 class ContactListener {
  public:
   /// Destroys the listener.

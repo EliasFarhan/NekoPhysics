@@ -134,6 +134,8 @@ class Circle {
   /// Returns the smallest @ref Aabb containing the circle.
   ///
   /// This is the box the broadphase sees for a circle collider.
+  ///
+  /// @return The box, centered on the circle, with the radius as half size.
   [[nodiscard]] constexpr Aabb<T> GetAabb() const {
     return Aabb<T>::FromCenter(position_, {radius_, radius_});
   }
@@ -191,7 +193,7 @@ template <typename T>
                        c1.radius() + c2.radius()) <= 0;
 }
 
-/// Returns the point of @p aabb closest to @p point.
+/// Returns the point of @p aabb closest to `point`.
 ///
 /// Each coordinate is clamped to the box, so a point inside the box is
 /// returned unchanged. The circle-box test uses it: the circle hits the box
@@ -234,9 +236,9 @@ constexpr bool Intersect(const Aabb<T>& aabb, const Circle<T>& circle) {
   return Intersect(circle, aabb);
 }
 
-/// Box in world coordinates (@ref Scalar), the type the engine uses.
+/// @ref Aabb in world coordinates (@ref Scalar), the type the engine uses.
 using Aabbf = Aabb<Scalar>;
-/// Circle in world coordinates (@ref Scalar), the type the engine uses.
+/// @ref Circle in world coordinates (@ref Scalar), the type the engine uses.
 using Circlef = Circle<Scalar>;
 }  // namespace neko
 

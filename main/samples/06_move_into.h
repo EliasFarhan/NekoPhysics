@@ -21,11 +21,11 @@ namespace neko {
 /// Shows how to control a body with forces, like a character controller:
 /// once a box has landed, @ref FixedUpdate computes the force that would
 /// reach a wanted velocity in one step, `(wanted - velocity) / dt * mass`,
-/// clamps it to a maximum and adds it to `Body::force`. The left box wants a
+/// clamps it to a maximum and adds it to @ref Body::force. The left box wants a
 /// zero velocity and is held in place; the right box wants 1 m/s to the left
 /// and walks into it, so the AABB-vs-AABB contact has to resolve a box pushing
 /// another one that resists. Landing is detected in @ref OnCollisionEnter by
-/// comparing the `ColliderPair` with (box, ground).
+/// comparing the @ref ColliderPair with (box, ground).
 ///
 /// What to look at: the boxes are blue in the air and turn magenta once they
 /// have touched the ground; then the right box moves left, stops against the

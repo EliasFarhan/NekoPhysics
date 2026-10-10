@@ -13,7 +13,7 @@ namespace neko {
 /// these boxes, and reports pairs of @ref ColliderIndex.
 struct ColliderAabb {
   Aabbf aabb;  ///< World-space box enclosing the collider's shape.
-  /// Collider owning the box, reported back in @ref ColliderPair.
+  /// @ref Collider owning the box, reported back in @ref ColliderPair.
   ColliderIndex collider_index = kInvalidColliderIndex;
 };
 
@@ -38,7 +38,7 @@ struct ColliderAabb {
 /// @ref SetWorldAabb, @ref Insert for each active collider,
 /// @ref CalculatePairs, then reads @ref GetPossiblePairs. To use another
 /// implementation, derive from this class and pass it to
-/// `PhysicsWorld::SetBSH`.
+/// @ref PhysicsWorld::SetBSH.
 ///
 /// @code
 /// neko::PhysicsWorld world;
@@ -81,6 +81,8 @@ class BoundingSurfaceHierarchy {
   /// Each pair appears once, with @ref ColliderPair ordering its two
   /// indices. A pair only means the boxes overlap: the narrowphase still has
   /// to test the real shapes.
+  ///
+  /// @return The pairs, valid until the next @ref Clear.
   [[nodiscard]] virtual const ArrayList<ColliderPair>& GetPossiblePairs()
       const = 0;
 };

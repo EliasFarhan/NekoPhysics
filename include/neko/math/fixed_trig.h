@@ -89,14 +89,14 @@ inline constexpr auto kSinTable = MakeSinTable();
 ///
 /// @param radians The angle in radians.
 /// @return The sine, in [-1, 1].
-/// @see neko::Sin(Radian)
+/// @see @ref Sin(Radian)
 [[nodiscard]] constexpr Fixed16 Sin(Fixed16 radians) noexcept {
   return internal::SinFromPhase(internal::RadiansToPhase(radians));
 }
 
 /// Cosine of an angle in radians, deterministic and without floating point.
 ///
-/// Uses the same table as `Sin`, shifted by a quarter turn
+/// Uses the same table as @ref Sin, shifted by a quarter turn
 /// (`cos(x) = sin(x + pi / 2)`), so it has the same accuracy.
 ///
 /// @param radians The angle in radians.
@@ -107,11 +107,11 @@ inline constexpr auto kSinTable = MakeSinTable();
                                 (std::uint32_t{1} << 30));
 }
 
-/// Tangent of an angle in radians, computed as `Sin / Cos`.
+/// Tangent of an angle in radians, computed as @ref Sin / @ref Cos.
 ///
 /// Near odd multiples of pi / 2 the cosine is (close to) zero: the result
 /// grows very large, and saturates instead of crashing when the cosine is
-/// exactly zero (see `Fixed::operator/`).
+/// exactly zero (see the division of @ref Fixed).
 ///
 /// @param radians The angle in radians.
 /// @return The tangent.

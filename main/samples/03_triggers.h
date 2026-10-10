@@ -12,17 +12,17 @@ namespace neko {
 /// Sample 03: trigger circles in a quadtree broadphase.
 ///
 /// Every body gets a circle collider, left as a trigger (the default
-/// `Collider::is_trigger = true`): triggers report overlaps through the
-/// `ContactListener` but don't push each other. The sample registers itself
-/// with `PhysicsWorld::SetContactListener` and counts, per body, the triggers
-/// it overlaps in @ref OnTriggerEnter and @ref OnTriggerExit. The world uses a
-/// `QuadTree` as broadphase (`PhysicsWorld::SetBSH`), so only nearby circles
-/// are tested against each other.
+/// @ref Collider::is_trigger `= true`): triggers report overlaps through the
+/// @ref ContactListener but don't push each other. The sample registers itself
+/// with @ref PhysicsWorld::SetContactListener and counts, per body, the
+/// triggers it overlaps in @ref OnTriggerEnter and @ref OnTriggerExit. The
+/// world uses a @ref QuadTree as broadphase (@ref PhysicsWorld::SetBSH), so
+/// only nearby circles are tested against each other.
 ///
 /// What to look at: circles are red alone and green while they overlap
 /// another one, and they pass through each other. The grey lines are the
 /// quadtree nodes: the tree splits where circles crowd together. The world
-/// keeps the default `PhysicsWorldConfig::gravity` (0, -9.81), which pulls
+/// keeps the default @ref PhysicsWorldConfig::gravity (0, -9.81), which pulls
 /// toward the top of the screen since the samples draw with y down;
 /// @ref BounceInside keeps the circles on screen. The number of circles is
 /// @ref sample_config::kTriggerCount.

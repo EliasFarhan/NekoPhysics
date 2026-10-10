@@ -9,12 +9,12 @@
 
 namespace neko {
 
-/// Phases of `PhysicsWorld::Step` tracked by the DS test ROM's per-phase
+/// Phases of @ref PhysicsWorld::Step tracked by the DS test ROM's per-phase
 /// breakdown.
 ///
 /// On the DS there is no Tracy: to find out where the time of a step goes,
-/// `Step` measures each phase with the hardware timers and adds the result
-/// to the matching slot of @ref StepPhaseTicks.
+/// @ref PhysicsWorld::Step measures each phase with the hardware timers and
+/// adds the result to the matching slot of @ref StepPhaseTicks.
 enum class StepPhase : std::uint8_t {
   kIntegration,    ///< Applying forces and moving the bodies.
   kBroadphase,     ///< Building the broadphase and finding possible pairs.
@@ -34,7 +34,7 @@ struct StepPhaseTicks {
 };
 
 #if defined(NEKO_PLATFORM_NDS)
-/// Where `PhysicsWorld::Step` accumulates its phase timings (DS only).
+/// Where @ref PhysicsWorld::Step accumulates its phase timings (DS only).
 ///
 /// Set by the DS test ROM before a profiling run; nullptr (the default) means
 /// "don't collect", so Step() pays only a null check on every platform that
@@ -48,7 +48,7 @@ inline StepPhaseTicks* g_step_phase_ticks = nullptr;
   return g_step_phase_ticks != nullptr ? cpuGetTiming() : 0;
 }
 
-/// Adds the ticks elapsed since @p since to @p phase, when collecting.
+/// Adds the ticks elapsed since @p since to `phase`, when collecting.
 ///
 /// @param phase Phase that just ended.
 /// @param since Value returned by @ref StepProfileNow at its start.
@@ -62,7 +62,7 @@ inline void StepProfileMark(StepPhase phase, std::uint32_t since) noexcept {
 /// Returns the start time of a phase; always 0 outside the DS.
 ///
 /// Together with @ref StepProfileMark it brackets each phase of
-/// `PhysicsWorld::Step`. Off the DS both are empty `constexpr` functions,
+/// @ref PhysicsWorld::Step. Off the DS both are empty `constexpr` functions,
 /// so the compiler removes them.
 ///
 /// @code

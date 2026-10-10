@@ -13,8 +13,8 @@ struct Body;
 /// The pointers refer to the world's own tables and are only valid during the
 /// step that created the contact.
 struct CollidingBody {
-  Body* body = nullptr;          ///< Body that owns the collider.
-  Collider* collider = nullptr;  ///< Collider that touches the other one.
+  Body* body = nullptr;          ///< @ref Body that owns the collider.
+  Collider* collider = nullptr;  ///< @ref Collider that touches the other one.
 };
 
 /// Contact between two solid colliders, found by the narrowphase and resolved
@@ -29,7 +29,7 @@ struct CollidingBody {
 /// towards `bodies[0]`, and `penetration` is how deep the shapes overlap along
 /// it (positive when they overlap).
 struct Contact {
-  /// The two touching bodies, with their colliders.
+  /// The two touching bodies, with their colliders (see @ref CollidingBody).
   std::array<CollidingBody, 2> bodies{};
   /// Unit vector from `bodies[1]` towards `bodies[0]`: the direction in which
   /// `bodies[0]` is pushed out.
@@ -37,8 +37,8 @@ struct Contact {
   /// Approximate world-space point where the shapes touch (informative, the
   /// solver doesn't use it).
   Vec2f contact_point{};
-  /// Bounciness of the contact, the larger `Collider::restitution` of the two
-  /// colliders.
+  /// Bounciness of the contact, the larger @ref Collider::restitution of the
+  /// two colliders.
   ///
   /// 0 stops the bodies along the normal (no bounce), 1 is a perfectly elastic
   /// bounce that keeps the speed along the normal.

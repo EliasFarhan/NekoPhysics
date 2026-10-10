@@ -126,11 +126,11 @@ struct Body {
   bool is_active = true;
 };
 
-/// Returns a hash of every field of @p body.
+/// Returns a hash of every field of `body`.
 ///
 /// Building block of @ref PhysicsWorld::GenerateChecksum.
 ///
-/// @param body Body to hash.
+/// @param body @ref Body to hash.
 /// @return FNV-1a hash of the body's fields.
 [[nodiscard]] std::uint32_t GenerateChecksum(const Body& body);
 
@@ -163,7 +163,7 @@ struct Collider {
   ///
   /// A contact uses the larger restitution of its two colliders.
   Scalar restitution{1};
-  /// Body the collider is attached to.
+  /// @ref Body the collider is attached to.
   BodyIndex body_index{};
   /// Index of this collider (its own slot in the world).
   ColliderIndex collider_index{};
@@ -175,11 +175,11 @@ struct Collider {
   /// collider. Colliders are triggers by default.
   bool is_trigger = true;
 };
-/// Returns a hash of the simulation fields of @p collider.
+/// Returns a hash of the simulation fields of `collider`.
 ///
 /// `user_data` is left out: it is game data, not simulation state.
 ///
-/// @param collider Collider to hash.
+/// @param collider @ref Collider to hash.
 /// @return FNV-1a hash of the collider's fields.
 [[nodiscard]] std::uint32_t GenerateChecksum(const Collider& collider);
 
@@ -193,9 +193,9 @@ struct CircleCollider {
   Scalar radius{-1};
 };
 
-/// Returns a hash of @p collider's radius.
+/// Returns a hash of `collider`'s radius.
 ///
-/// @param collider Circle to hash.
+/// @param collider @ref CircleCollider to hash.
 /// @return FNV-1a hash of the radius.
 [[nodiscard]] std::uint32_t GenerateChecksum(const CircleCollider& collider);
 
@@ -209,13 +209,14 @@ struct AabbCollider {
   /// Half the width and half the height of the box, in world units.
   ///
   /// @ref PhysicsWorld::AddAabbCollider sets it to zero: set the real size
-  /// afterwards.
+  /// afterwards. Each component is a @ref Scalar; the default of -1 marks a
+  /// free slot.
   Vec2f half_size{Scalar{-1}, Scalar{-1}};
 };
 
-/// Returns a hash of @p collider's half size.
+/// Returns a hash of `collider`'s half size.
 ///
-/// @param collider Box to hash.
+/// @param collider @ref AabbCollider to hash.
 /// @return FNV-1a hash of the half size.
 [[nodiscard]] std::uint32_t GenerateChecksum(const AabbCollider& collider);
 
@@ -247,12 +248,15 @@ struct TouchingPair {
 struct PhysicsWorldConfig {
   /// Acceleration applied to every dynamic body, in world units per second
   /// squared.
+  ///
+  /// Each component is a @ref Scalar. The default is (0, -9.81).
   Vec2f gravity{Scalar{0.0f}, Scalar{-9.81f}};
   /// Duration of one @ref PhysicsWorld::Step, in seconds.
   ///
   /// Fixed, so that every peer and every rollback resimulation uses the same
   /// value: a variable time step would make results depend on the frame rate.
-  /// Call `Step` from a fixed-step loop (an accumulator) in your game.
+  /// Call @ref PhysicsWorld::Step from a fixed-step loop (an accumulator) in
+  /// your game.
   Scalar dt{1.0f / 60.0f};
   /// Maximum number of bodies alive at once.
   std::size_t max_bodies = 256;
@@ -266,7 +270,7 @@ struct PhysicsWorldConfig {
   /// Maximum number of pairs whose bounding boxes overlap, for the default
   /// broadphase (@ref SweepAndPrune).
   std::size_t max_broadphase_pairs = 2048;
-  /// Allocator for all tables; `nullptr` means @ref DefaultAllocator.
+  /// @ref Allocator for all tables; `nullptr` means @ref DefaultAllocator.
   ///
   /// @warning Must outlive the world.
   Allocator* allocator = nullptr;
@@ -331,22 +335,22 @@ class PhysicsWorld {
   BodyIndex AddBody();
   /// Removes the body and all its colliders, freeing their slots.
   ///
-  /// @param index Body to remove.
+  /// @param index @ref Body to remove.
   void RemoveBody(BodyIndex index);
   /// Narrowphase test of two colliders: checks whether their exact shapes
-  /// overlap and fills in @p contact.
+  /// overlap and fills in `contact`.
   ///
   /// Handles circle-circle, box-box and circle-box. The contact normal,
   /// point and penetration are only computed when both colliders are solid;
   /// for a trigger pair only the overlap result matters. Called by
   /// @ref ResolveNarrowphase; it doesn't change the bodies.
   ///
-  /// @param body1 Body of @p collider1.
+  /// @param body1 @ref Body of `collider1`.
   /// @param collider1 First collider.
-  /// @param body2 Body of @p collider2.
+  /// @param body2 @ref Body of `collider2`.
   /// @param collider2 Second collider.
   /// @param contact Output; its normal points from @p body2 towards
-  /// @p body1.
+  /// `body1`.
   /// @return `true` if the shapes overlap.
   bool DetectContact(Body& body1, Collider& collider1, Body& body2,
                      Collider& collider2, Contact* contact);
@@ -383,59 +387,64 @@ class PhysicsWorld {
   /// @ref ResolveNarrowphase; public for tests.
   void SortNewTouchingPairs();
 
-  /// Returns the body at @p index.
+  /// Returns the body at `index`.
   ///
   /// @param index A valid body index.
+  /// @return The body, which can be edited in place.
   [[nodiscard]] Body& body(BodyIndex index) { return bodies_[index.index()]; }
   /// Returns the body at @p index (read-only).
   ///
   /// @param index A valid body index.
+  /// @return The body.
   [[nodiscard]] const Body& body(BodyIndex index) const {
     return bodies_[index.index()];
   }
 
-  /// Adds a circle collider of radius 0 to @p body.
+  /// Adds a circle collider of radius 0 to `body`.
   ///
   /// The collider is a trigger with restitution 1 and no offset: set
   /// `is_trigger`, `restitution` and the radius
   /// (`circle(collider(index).shape_index).radius`) afterwards.
   ///
-  /// @param body Body to attach the collider to.
+  /// @param body @ref Body to attach the collider to.
   /// @return The new collider's index, or @ref kInvalidColliderIndex when
   /// `max_colliders` colliders are in use.
   ColliderIndex AddCircleCollider(BodyIndex body);
-  /// Adds a box collider of half size zero to @p body.
+  /// Adds a box collider of half size zero to `body`.
   ///
   /// The collider is a trigger with restitution 1 and no offset: set
   /// `is_trigger`, `restitution` and the half size
   /// (`aabb(collider(index).shape_index).half_size`) afterwards.
   ///
-  /// @param body Body to attach the collider to.
+  /// @param body @ref Body to attach the collider to.
   /// @return The new collider's index, or @ref kInvalidColliderIndex when
   /// `max_colliders` colliders are in use.
   ColliderIndex AddAabbCollider(BodyIndex body);
   /// Removes a collider and its shape, freeing their slots.
   ///
-  /// @param index Collider to remove.
+  /// @param index @ref Collider to remove.
   void RemoveCollider(ColliderIndex index);
 
-  /// Returns the collider at @p collider_index.
+  /// Returns the collider at `collider_index`.
   ///
   /// @param collider_index A valid collider index.
+  /// @return The collider, which can be edited in place.
   [[nodiscard]] Collider& collider(ColliderIndex collider_index) {
     return colliders_[collider_index.index()];
   }
   /// Returns the collider at @p collider_index (read-only).
   ///
   /// @param collider_index A valid collider index.
+  /// @return The collider.
   [[nodiscard]] const Collider& collider(ColliderIndex collider_index) const {
     return colliders_[collider_index.index()];
   }
 
-  /// Returns the box shape at @p shape_index.
+  /// Returns the box shape at `shape_index`.
   ///
   /// @param shape_index `shape_index` of a collider of type
   /// @ref ShapeType::kAabb.
+  /// @return The box shape, which can be edited in place.
   [[nodiscard]] AabbCollider& aabb(ShapeIndex shape_index) {
     return aabbs_[shape_index.index()];
   }
@@ -443,13 +452,15 @@ class PhysicsWorld {
   ///
   /// @param shape_index `shape_index` of a collider of type
   /// @ref ShapeType::kAabb.
+  /// @return The box shape.
   [[nodiscard]] const AabbCollider& aabb(ShapeIndex shape_index) const {
     return aabbs_[shape_index.index()];
   }
-  /// Returns the circle shape at @p shape_index.
+  /// Returns the circle shape at `shape_index`.
   ///
   /// @param shape_index `shape_index` of a collider of type
   /// @ref ShapeType::kCircle.
+  /// @return The circle shape, which can be edited in place.
   [[nodiscard]] CircleCollider& circle(ShapeIndex shape_index) {
     return circles_[shape_index.index()];
   }
@@ -457,6 +468,7 @@ class PhysicsWorld {
   ///
   /// @param shape_index `shape_index` of a collider of type
   /// @ref ShapeType::kCircle.
+  /// @return The circle shape.
   [[nodiscard]] const CircleCollider& circle(ShapeIndex shape_index) const {
     return circles_[shape_index.index()];
   }
@@ -520,7 +532,7 @@ class PhysicsWorld {
   ///
   /// Peers of a networked game exchange checksums of the same frame: a
   /// mismatch means their simulations diverged (a desync). Covers bodies,
-  /// colliders, shapes and touching pairs, but not `Collider::user_data`.
+  /// colliders, shapes and touching pairs, but not @ref Collider::user_data.
   ///
   /// @return FNV-1a hash of the world state.
   [[nodiscard]] std::uint32_t GenerateChecksum() const;

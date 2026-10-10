@@ -12,9 +12,9 @@ namespace neko {
 /// Sample 02: circles orbiting a black hole at the center of the world.
 ///
 /// Shows how to drive bodies with forces. The world has no gravity; instead,
-/// @ref FixedUpdate adds to each `Body::force` an attraction toward the
+/// @ref FixedUpdate adds to each @ref Body::force an attraction toward the
 /// center that falls off with the square of the distance, then calls
-/// `Step()`, which turns the force into acceleration (times
+/// @ref PhysicsWorld::Step, which turns the force into acceleration (times
 /// `inverse_mass`) and clears it. @ref Begin gives each planet the speed of a
 /// circular orbit, perpendicular to its radius, plus a random disturbance, so
 /// the orbits are slightly elliptical.

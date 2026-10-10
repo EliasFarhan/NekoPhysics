@@ -13,17 +13,18 @@ namespace neko {
 /// Sample 05: colliding circles in a quadtree broadphase.
 ///
 /// The same scene as @ref TriggersSample with bigger circles whose colliders
-/// are solid (`Collider::is_trigger = false`): the contact solver pushes
+/// are solid (@ref Collider::is_trigger `= false`): the contact solver pushes
 /// overlapping circles apart and makes them bounce (default restitution 1),
 /// and the listener receives @ref OnCollisionEnter and @ref OnCollisionExit
 /// instead of the trigger callbacks.
 ///
 /// What to look at: circles are red alone and green while they touch another
 /// one; unlike the triggers sample they bounce off each other instead of
-/// passing through. The world keeps the default `PhysicsWorldConfig::gravity`
-/// (0, -9.81), which pulls toward the top of the screen since the samples
-/// draw with y down; @ref BounceInside keeps the circles on screen. The
-/// number of circles is @ref sample_config::kCollisionCount.
+/// passing through. The world keeps the default
+/// @ref PhysicsWorldConfig::gravity (0, -9.81), which pulls toward the top of
+/// the screen since the samples draw with y down; @ref BounceInside keeps the
+/// circles on screen. The number of circles is
+/// @ref sample_config::kCollisionCount.
 class CollisionsSample : public Sample, public ContactListener {
  public:
   /// Builds the scene described in the class documentation.

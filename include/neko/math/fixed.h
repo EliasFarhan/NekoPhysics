@@ -80,7 +80,7 @@ namespace internal {
 /// A fixed-point number: a real number stored as a scaled integer.
 ///
 /// A fixed-point value is an integer `underlying_value()` that implicitly
-/// means `underlying_value() / 2^Exp`. With the default `Fixed16` (16.16),
+/// means `underlying_value() / 2^Exp`. With the default @ref Fixed16 (16.16),
 /// the top 16 bits hold the integer part and the low 16 bits the fraction,
 /// so `1.0` is stored as `65536` and the smallest step is `1 / 65536`.
 ///
@@ -101,7 +101,7 @@ namespace internal {
 ///   integer truncates toward zero.
 ///
 /// Overflow is not checked (it behaves like the underlying integer), so keep
-/// values well inside the range: for `Fixed16` about -32768 to 32767.99998.
+/// values well inside the range: for @ref Fixed16 about -32768 to 32767.99998.
 ///
 /// @code
 /// using neko::Fixed16;
@@ -117,10 +117,10 @@ namespace internal {
 /// @tparam Exp Number of fractional bits.
 /// @tparam MulT Wider integer type used for the intermediate results of
 /// multiplication and division, so they do not overflow.
-/// @note Prefer the alias `neko::Scalar` in game code: it is `Fixed16` by
+/// @note Prefer the alias @ref Scalar in game code: it is @ref Fixed16 by
 /// default and `float` when built with `NEKO_SCALAR=FLOAT`.
-/// @see neko::Fixed16
-/// @see neko::Scalar
+/// @see @ref Fixed16
+/// @see @ref Scalar
 template <typename T = std::int32_t, T Exp = 16, typename MulT = std::int64_t>
 class Fixed {
  public:
@@ -247,14 +247,14 @@ class Fixed {
         static_cast<T>((product + half - negative) >> Exp));
   }
 
-  /// Multiplies this value by @p other.
+  /// Multiplies this value by `other`.
   constexpr Fixed& operator*=(Fixed other) & noexcept {
     return *this = *this * other;
   }
 
   /// Divides two values, truncating toward zero.
   ///
-  /// For `Fixed16` this uses the DS hardware divider on the DS and the same
+  /// For @ref Fixed16 this uses the DS hardware divider on the DS and the same
   /// integer division elsewhere, with bit-identical results. Dividing by zero
   /// does not crash: it saturates to the largest (or lowest) value with the
   /// sign of the numerator, and `0 / 0` is 0.
@@ -285,7 +285,7 @@ class Fixed {
     }
   }
 
-  /// Divides this value by @p other.
+  /// Divides this value by `other`.
   constexpr Fixed& operator/=(Fixed other) & noexcept {
     return *this = *this / other;
   }
@@ -322,7 +322,7 @@ class Fixed {
 
 /// 16.16 fixed point: 32-bit storage, 16 fractional bits.
 ///
-/// The default `neko::Scalar` and the number type used on the Nintendo DS.
+/// The default @ref Scalar and the number type used on the Nintendo DS.
 /// Range about -32768 to 32767.99998, precision `1 / 65536` (about 1.5e-5).
 using Fixed16 = Fixed<std::int32_t, 16, std::int64_t>;
 /// Tiny 8-bit fixed point (2.6 format): range about -2 to 1.98, step 1/64.
@@ -330,7 +330,7 @@ using Fixed8 = Fixed<std::int8_t, 6, std::int16_t>;
 
 // Named like a standard type trait (std::is_floating_point_v)
 // NOLINTBEGIN(readability-identifier-naming)
-/// True when `T` is a `neko::Fixed` type, false otherwise.
+/// True when `T` is a @ref Fixed type, false otherwise.
 ///
 /// Lets generic code pick a fixed-point specific path with
 /// `if constexpr (neko::is_fixed_v<T>)`, like `std::is_floating_point_v`.
@@ -339,12 +339,12 @@ using Fixed8 = Fixed<std::int8_t, 6, std::int16_t>;
 template <typename T>
 inline constexpr bool is_fixed_v = false;
 
-/// Specialization of `is_fixed_v` that is true for every `neko::Fixed`.
+/// Specialization of `is_fixed_v` that is true for every @ref Fixed.
 template <typename T, T Exp, typename MulT>
 inline constexpr bool is_fixed_v<Fixed<T, Exp, MulT>> = true;
 // NOLINTEND(readability-identifier-naming)
 
-/// Square root of a `Fixed16`, exact and deterministic.
+/// Square root of a @ref Fixed16, exact and deterministic.
 ///
 /// Computes the floor of the true square root at 16.16 precision using only
 /// integer math: the DS hardware square root unit on the DS, and an

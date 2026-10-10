@@ -9,12 +9,12 @@
 namespace neko {
 /// Sample 04: a ball and a box falling on a static ground.
 ///
-/// The first sample with solid colliders (`Collider::is_trigger = false`) and
-/// gravity: `PhysicsWorldConfig::gravity` is (0, 9.81), pointing down on
-/// screen. The ground is a `BodyType::kStatic` body with zero
+/// The first sample with solid colliders (@ref Collider::is_trigger `= false`)
+/// and gravity: @ref PhysicsWorldConfig::gravity is (0, 9.81), pointing down on
+/// screen. The ground is a @ref BodyType::kStatic body with zero
 /// `inverse_mass` and an AABB collider; the ball (circle collider) and the
 /// box (AABB collider) are dynamic. It shows circle-vs-AABB and AABB-vs-AABB
-/// contacts and `Collider::restitution`: the ball has 0.5 and bounces a few
+/// contacts and @ref Collider::restitution: the ball has 0.5 and bounces a few
 /// times, the box has 0 and stops dead.
 ///
 /// What to look at: the ball is blue and turns magenta while at least one

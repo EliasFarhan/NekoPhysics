@@ -18,7 +18,7 @@ struct Body;
 
 /// Reverses the velocity components that take a body further out of bounds.
 ///
-/// Call it on every body after `PhysicsWorld::Step()` to keep a scene inside
+/// Call it on every body after @ref PhysicsWorld::Step to keep a scene inside
 /// the screen without walls or colliders (the kinematic, triggers and
 /// collisions samples do). A component is flipped only when the body is
 /// outside on that axis and still moving away, so a body that already turned
@@ -51,7 +51,7 @@ struct SampleContext {
 ///
 /// Lifecycle, driven by @ref SampleRegistry, step by step:
 ///
-/// - `Begin()` builds the scene when the sample is selected or restarted.
+/// - @ref Begin builds the scene when the sample is selected or restarted.
 /// - @ref FixedUpdate advances it by exactly @ref kFixedDeltaTime. The PC host
 ///   calls it zero or more times per frame from an accumulator; the DS calls it
 ///   once per VBlank (60 Hz).
@@ -64,7 +64,7 @@ struct SampleContext {
 /// Rules that keep a sample deterministic (same checksum on every run, on PC
 /// with `FIXED16` and on the DS, as rollback netcode requires):
 ///
-/// - Build the scene from a `SampleRng` with a fixed seed, and write
+/// - Build the scene from a @ref SampleRng with a fixed seed, and write
 ///   constants with `Ratio` instead of float literals.
 /// - Read sizes and body counts from @ref sample_config, never hard-code a
 ///   screen size.
@@ -75,12 +75,13 @@ struct SampleContext {
 ///
 /// - Add `main/samples/07_my_sample.h` and `.cc` (they are picked up by the
 ///   `NekoPhysicsSamples` glob, so the PC host and the DS ROM both get them).
-///   Derive from @ref Sample, and also from `ContactListener` if you want
+///   Derive from @ref Sample, and also from @ref ContactListener if you want
 ///   trigger or collision callbacks.
-/// - Give the class a `PhysicsWorld` member sized for the scene (`max_bodies`,
-///   `max_colliders`...) with `dt = kFixedDeltaTime`. Per-platform counts go
-///   in @ref sample_config; check that the DrawList capacities
-///   (@ref sample_config::kMaxDrawCircles...) still fit.
+/// - Give the class a @ref PhysicsWorld member sized for the scene
+///   (`max_bodies`, `max_colliders`...) with `dt = kFixedDeltaTime`.
+///   Per-platform counts go in @ref sample_config; check that the
+///   @ref DrawList capacities (@ref sample_config::kMaxDrawCircles...) still
+///   fit.
 /// - Register it in the @ref SampleRegistry constructor in
 ///   `main/samples/sample.cc` (`samples_.push_back`, and bump the
 ///   `reserve`), with the name shown in the menus. Both hosts
@@ -130,8 +131,8 @@ struct SampleContext {
 /// };
 /// @endcode
 ///
-/// @see SampleRegistry
-/// @see DrawList
+/// @see @ref SampleRegistry
+/// @see @ref DrawList
 class Sample {
  public:
   /// Destroys the sample.
@@ -147,7 +148,7 @@ class Sample {
   /// Advances the simulation by one @ref kFixedDeltaTime step.
   ///
   /// All simulation and game logic goes here: apply forces, call
-  /// `PhysicsWorld::Step()`, react to the step. Never use wall-clock time.
+  /// @ref PhysicsWorld::Step, react to the step. Never use wall-clock time.
   virtual void FixedUpdate() = 0;
   /// Describes the current state of the scene for the host to render.
   ///
@@ -164,10 +165,11 @@ class Sample {
   /// number of steps; `tests/samples_test.cc` checks it, and a rollback
   /// netcode would compare it between players.
   ///
-  /// @return Usually `PhysicsWorld::GenerateChecksum()` of the sample's world.
+  /// @return Usually @ref PhysicsWorld::GenerateChecksum of the sample's world.
   [[nodiscard]] virtual std::uint32_t GenerateChecksum() const = 0;
 
-  /// Duration of one @ref FixedUpdate step: 1/60 s, one DS frame.
+  /// Duration of one @ref FixedUpdate step, as a @ref Scalar: 1/60 s, one DS
+  /// frame.
   static constexpr auto kFixedDeltaTime = Scalar{1.0f / 60.0f};
 };
 

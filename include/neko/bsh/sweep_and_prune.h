@@ -24,17 +24,18 @@ namespace neko {
 /// construction and stateless between steps, so it needs no snapshot for
 /// rollback. Pairs are exactly the colliders whose AABBs intersect.
 ///
-/// @see BoundingSurfaceHierarchy for the order of the calls.
+/// @see @ref BoundingSurfaceHierarchy for the order of the calls.
 class SweepAndPrune final : public BoundingSurfaceHierarchy {
  public:
   /// Builds the broadphase and allocates all its memory.
   ///
-  /// @ref PhysicsWorld builds its own from `PhysicsWorldConfig::max_colliders`
-  /// and `PhysicsWorldConfig::max_broadphase_pairs`.
+  /// @ref PhysicsWorld builds its own from
+  /// @ref PhysicsWorldConfig::max_colliders and
+  /// @ref PhysicsWorldConfig::max_broadphase_pairs.
   ///
   /// @param max_colliders Maximum number of colliders inserted per step.
   /// @param max_pairs Maximum number of possible pairs per step.
-  /// @param allocator Allocator for the arrays; must outlive the object.
+  /// @param allocator @ref Allocator for the arrays; must outlive the object.
   SweepAndPrune(std::size_t max_colliders, std::size_t max_pairs,
                 Allocator& allocator = DefaultAllocator());
 
@@ -53,6 +54,8 @@ class SweepAndPrune final : public BoundingSurfaceHierarchy {
   /// Does nothing: sweep and prune needs no world bounds.
   void SetWorldAabb([[maybe_unused]] const Aabbf& world_aabb) override {}
   /// Returns the pairs found by the last @ref CalculatePairs.
+  ///
+  /// @return The pairs, valid until the next @ref Clear.
   [[nodiscard]] const ArrayList<ColliderPair>& GetPossiblePairs()
       const override {
     return possible_pairs_;

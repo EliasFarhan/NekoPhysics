@@ -57,7 +57,7 @@ template <typename T>
 template <typename T>
 class Vec2 {
  public:
-  /// Builds the vector (@p x_arg, @p y_arg).
+  /// Builds the vector (`x_arg`, `y_arg`).
   ///
   /// @param x_arg The x component.
   /// @param y_arg The y component.
@@ -87,14 +87,14 @@ class Vec2 {
   ///
   /// @param y_value New y component.
   constexpr void set_y(T y_value) noexcept { y_ = y_value; }
-  /// Builds the vector (@p scalar, @p scalar).
+  /// Builds the vector (`scalar`, `scalar`).
   explicit constexpr Vec2(T scalar) : x_(scalar), y_(scalar) {}
   /// Converts a vector of another component type, casting each component.
   ///
-  /// For example `Vec2i{position}` truncates a @ref Vec2f to integers for
-  /// drawing.
+  /// For example `Vec2i{position}` truncates a @ref Vec2f to a @ref Vec2i
+  /// (integers) for drawing.
   ///
-  /// @tparam OtherT Component type of @p v.
+  /// @tparam OtherT Component type of `v`.
   template <typename OtherT>
   constexpr explicit Vec2(Vec2<OtherT> v)
       : x_(static_cast<T>(v.x())), y_(static_cast<T>(v.y())) {}
@@ -103,7 +103,7 @@ class Vec2 {
   ///
   /// Useful to bridge with another math library's vector type.
   ///
-  /// @tparam OtherT Source type, with `x()` and `y()` convertible to @p T.
+  /// @tparam OtherT Source type, with `x()` and `y()` convertible to `T`.
   template <typename OtherT>
   constexpr explicit Vec2(const OtherT& v) {
     x_ = static_cast<T>(v.x());
@@ -112,7 +112,7 @@ class Vec2 {
 
   /// Builds the vector from two values of another type, casting each one.
   ///
-  /// @tparam OtherT Type of the arguments, convertible to @p T.
+  /// @tparam OtherT Type of the arguments, convertible to `T`.
   /// @param x_arg The x component.
   /// @param y_arg The y component.
   template <typename OtherT>
@@ -152,10 +152,10 @@ class Vec2 {
     y_ *= other;
     return *this;
   }
-  /// Returns the vector scaled by @p other.
+  /// Returns the vector scaled by `other`.
   constexpr Vec2 operator*(T other) const { return {x_ * other, y_ * other}; }
 
-  /// Returns the vector divided by @p other.
+  /// Returns the vector divided by `other`.
   ///
   /// Dividing by zero does not crash: it returns a vector whose components
   /// are both `std::numeric_limits<T>::max()` (whatever the signs). Check
@@ -200,7 +200,7 @@ class Vec2 {
 
   /// Returns the vector rotated counter-clockwise by @p angle radians.
   ///
-  /// With @ref Fixed16, `Sin` and `Cos` come from a lookup table built at
+  /// With @ref Fixed16, @ref Sin and @ref Cos come from a lookup table built at
   /// compile time, so the result is deterministic and needs no FPU.
   ///
   /// @param angle Rotation in radians (positive is counter-clockwise in the
@@ -214,7 +214,7 @@ class Vec2 {
 
   /// Returns `(y, -x)`, the vector rotated by 90 degrees clockwise.
   ///
-  /// @see Perpendicular2 for the counter-clockwise one.
+  /// @see @ref Vec2::Perpendicular2 for the counter-clockwise one.
   [[nodiscard]] constexpr Vec2 Perpendicular() const { return {y_, -x_}; }
 
   /// Returns `(-y, x)`, the vector rotated by 90 degrees counter-clockwise.
@@ -259,12 +259,13 @@ class Vec2 {
     }
     return {x_ / length, y_ / length};
   }
-  /// Clamps each component of @p v between those of @p min_v and @p max_v.
+  /// Clamps each component of @p v between those of @p min_v and `max_v`.
   ///
   /// Clamping a point to a box gives the point of the box closest to it
   /// (see @ref neko::ClosestPoint).
   ///
   /// @pre `min_v.x() <= max_v.x()` and `min_v.y() <= max_v.y()`.
+  /// @return The clamped vector.
   [[nodiscard]] constexpr static Vec2 Clamp(Vec2 v, Vec2 min_v, Vec2 max_v) {
     return {neko::Clamp(v.x_, min_v.x_, max_v.x_),
             neko::Clamp(v.y_, min_v.y_, max_v.y_)};
@@ -324,10 +325,11 @@ template <typename T>
   return length_square < square_length ? 1 : 0;
 }
 
-/// Returns @p other scaled by @p f, so that `scalar * v` works like
+/// Returns @p other scaled by `f`, so that `scalar * v` works like
 /// `v * scalar`.
 ///
 /// @tparam T Component type of the vector.
+/// @return The scaled vector.
 template <typename T>
 constexpr Vec2<T> operator*(Scalar f, Vec2<T> other) {
   return {f * other.x(), f * other.y()};

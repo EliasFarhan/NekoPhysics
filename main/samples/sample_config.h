@@ -9,17 +9,17 @@
 
 namespace neko {
 
-/// Returns @p num / @p den computed in `Scalar`.
+/// Returns @p num / @p den computed in @ref Scalar.
 ///
 /// Write sample constants with it instead of float literals: `Ratio(981, 100)`
-/// rather than `9.81f`. The division happens in `Scalar` (16.16 fixed point on
-/// the DS), so scenes are built without any float arithmetic: the DS has no
+/// rather than `9.81f`. The division happens in @ref Scalar (16.16 fixed point
+/// on the DS), so scenes are built without any float arithmetic: the DS has no
 /// FPU and the samples ROM must not link soft-float, and the result is the
 /// same on every platform.
 ///
 /// @param num Numerator.
 /// @param den Denominator, not zero.
-/// @return The ratio, rounded as `Scalar` division rounds.
+/// @return The ratio, rounded as @ref Scalar division rounds.
 constexpr Scalar Ratio(int num, int den) {
   return static_cast<Scalar>(num) / static_cast<Scalar>(den);
 }
@@ -32,7 +32,7 @@ constexpr Scalar Ratio(int num, int den) {
 /// rather than hard-coding them, so the same code runs on both platforms.
 namespace sample_config {
 #if defined(NEKO_PLATFORM_NDS)
-/// World rectangle shown by the hosts, in meters.
+/// World rectangle shown by the hosts, in meters (@ref Scalar).
 ///
 /// 12.8 x 9.6 m on the DS: exactly 20 px/m on the 256x192 top screen.
 inline constexpr Aabbf kWorldBounds{{Scalar{0}, Scalar{0}},
@@ -46,7 +46,7 @@ inline constexpr Index kTriggerCount = 120;
 /// Number of colliding circles in @ref CollisionsSample.
 inline constexpr Index kCollisionCount = 50;
 #else
-/// World rectangle shown by the hosts, in meters.
+/// World rectangle shown by the hosts, in meters (@ref Scalar).
 ///
 /// 12.8 x 7.2 m on PC: 100 px/m in a 1280x720 window. 12.8 x 9.6 m on the DS:
 /// exactly 20 px/m on the 256x192 top screen.

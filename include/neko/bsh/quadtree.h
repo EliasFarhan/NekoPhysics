@@ -14,7 +14,7 @@ namespace neko {
 ///
 /// Nodes refer to each other with indices into the tree's node array rather
 /// than pointers, so a tree can be copied safely. Read them with
-/// `QuadTree::GetNode`, for example to draw the subdivision for debugging.
+/// @ref QuadTree::GetNode, for example to draw the subdivision for debugging.
 struct QuadNode {
   /// Index value meaning "no node" or "no entry".
   static constexpr Index kNone = std::numeric_limits<Index>::max();
@@ -60,7 +60,7 @@ struct QuadNode {
 /// physics_world.SetBSH(&quad_tree);
 /// @endcode
 ///
-/// @see BoundingSurfaceHierarchy for the order of the calls.
+/// @see @ref BoundingSurfaceHierarchy for the order of the calls.
 class QuadTree final : public BoundingSurfaceHierarchy {
  public:
   /// Default maximum depth of the tree.
@@ -77,7 +77,7 @@ class QuadTree final : public BoundingSurfaceHierarchy {
   /// @param max_depth Depth of the deepest nodes (the root is at depth 0).
   /// The node array grows as 4^max_depth, so keep it small.
   /// @param max_size Number of colliders a leaf holds before it splits.
-  /// @param allocator Allocator for the arrays; must outlive the tree.
+  /// @param allocator @ref Allocator for the arrays; must outlive the tree.
   /// @pre The node count and @p max_colliders fit in @ref Index (below
   /// 65535).
   explicit QuadTree(std::size_t max_colliders = 256,
@@ -105,6 +105,8 @@ class QuadTree final : public BoundingSurfaceHierarchy {
   /// @param world_aabb Box containing every collider of the step.
   void SetWorldAabb(const Aabbf& world_aabb) override;
   /// Returns the pairs found by the last @ref CalculatePairs.
+  ///
+  /// @return The pairs, valid until the next @ref Clear.
   [[nodiscard]] const ArrayList<ColliderPair>& GetPossiblePairs()
       const override {
     return possible_pairs_;
@@ -112,8 +114,8 @@ class QuadTree final : public BoundingSurfaceHierarchy {
 
   /// Returns a node of the tree, to inspect or draw the subdivision.
   ///
-  /// Start from @ref kRoot and follow `QuadNode::first_child` until
-  /// `QuadNode::IsLeaf`.
+  /// Start from @ref kRoot and follow @ref QuadNode::first_child until
+  /// @ref QuadNode::IsLeaf.
   ///
   /// @param index Node index.
   /// @pre @p index is @ref kRoot or comes from a node's `first_child` (+0 to

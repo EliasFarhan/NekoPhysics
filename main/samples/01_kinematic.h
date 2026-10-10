@@ -11,11 +11,12 @@
 namespace neko {
 /// Sample 01: circles moving at constant speed, bouncing on the world bounds.
 ///
-/// The simplest use of a `PhysicsWorld`: bodies only, with no collider, no
-/// gravity (`gravity = Vec2f::Zero()`) and no force. Each `Step()` integrates
-/// `position += velocity * dt`, so every circle moves in a straight line at
-/// the random velocity it got in @ref Begin. @ref BounceInside flips the
-/// velocity when a circle leaves the screen.
+/// The simplest use of a @ref PhysicsWorld: bodies only, with no collider, no
+/// gravity (`gravity =` @ref Vec2f::Zero) and no force. Each
+/// @ref PhysicsWorld::Step integrates `position += velocity * dt`, so every
+/// circle moves in a straight line at the random velocity it got in
+/// @ref Begin. @ref BounceInside flips the velocity when a circle leaves the
+/// screen.
 ///
 /// What to look at: the circles cross each other without reacting (there is
 /// nothing to collide with), and their speed never changes. The number of

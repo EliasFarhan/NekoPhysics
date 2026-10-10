@@ -13,7 +13,7 @@ namespace neko {
 /// where the physics memory lives: a fixed arena carved out of the DS's
 /// 4 MB of RAM, a tracking allocator to measure usage, or simply the heap
 /// (@ref HeapAllocator, the default). The library allocates only at
-/// construction; `PhysicsWorld::Step` and `PhysicsWorld::CopyFrom` never
+/// construction; @ref PhysicsWorld::Step and @ref PhysicsWorld::CopyFrom never
 /// do, which keeps frame times stable and rollback resimulations cheap.
 ///
 /// To write your own, derive from this class and implement the two virtual
@@ -45,7 +45,7 @@ class Allocator {
  public:
   /// Virtual destructor, so allocators can be deleted through the base.
   virtual ~Allocator() = default;
-  /// Allocates uninitialized memory for @p count objects of type @p T.
+  /// Allocates uninitialized memory for @p count objects of type `T`.
   ///
   /// It does not construct the objects.
   ///
@@ -70,7 +70,7 @@ class Allocator {
   virtual void Deallocate(void* ptr) = 0;
 };
 
-/// Allocator backed by `std::malloc` and `std::free`.
+/// @ref Allocator backed by `std::malloc` and `std::free`.
 ///
 /// When Tracy profiling is enabled (`ENABLE_PROFILING`), it also reports
 /// every allocation to Tracy's memory view.
@@ -93,6 +93,8 @@ class HeapAllocator final : public Allocator {
 ///
 /// It is a function-local static, created on first use and never destroyed
 /// before the end of the program.
+///
+/// @return The default allocator, the same object on every call.
 [[nodiscard]] Allocator& DefaultAllocator() noexcept;
 
 namespace internal {
@@ -126,10 +128,10 @@ class StandardAllocator {
   using value_type = T;
   /// Builds an adapter for @ref DefaultAllocator.
   StandardAllocator() noexcept : allocator_(&DefaultAllocator()) {}
-  /// Builds an adapter for @p allocator.
+  /// Builds an adapter for `allocator`.
   ///
-  /// @param allocator Allocator to forward to; must outlive the adapter and
-  /// every container using it.
+  /// @param allocator @ref Allocator to forward to; must outlive the adapter
+  /// and every container using it.
   explicit StandardAllocator(Allocator& allocator) noexcept
       : allocator_(&allocator) {}
   /// Builds an adapter for another type sharing the same @ref Allocator.
@@ -144,7 +146,7 @@ class StandardAllocator {
   StandardAllocator(const StandardAllocator<U>& allocator) noexcept
       : allocator_(&allocator.GetAllocator()) {}
 
-  /// Allocates uninitialized memory for @p n objects of type @p T.
+  /// Allocates uninitialized memory for @p n objects of type `T`.
   ///
   /// @param n Number of objects.
   /// @return The memory; never nullptr when @p n is not zero.
@@ -172,6 +174,8 @@ class StandardAllocator {
   }
 
   /// Returns the @ref Allocator this adapter forwards to.
+  ///
+  /// @return The allocator given to the constructor.
   [[nodiscard]] Allocator& GetAllocator() const noexcept { return *allocator_; }
 
   /// Returns true when both adapters forward to the same @ref Allocator.
@@ -192,9 +196,9 @@ class StandardAllocator {
 
 /// `std::vector` allocating through an @ref Allocator.
 ///
-/// The library uses it for every array. Pass a `StandardAllocator<T>` to the
-/// constructor to choose the @ref Allocator (the default one otherwise), and
-/// `reserve` the capacity up front so that adding elements later never
+/// The library uses it for every array. Pass a @ref StandardAllocator for `T`
+/// to the constructor to choose the @ref Allocator (the default one otherwise),
+/// and `reserve` the capacity up front so that adding elements later never
 /// allocates.
 ///
 /// @tparam T Element type.

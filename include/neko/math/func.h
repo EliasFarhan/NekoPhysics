@@ -7,7 +7,7 @@ namespace neko {
 
 /// Absolute value.
 ///
-/// Generic over `float`, `neko::Fixed` and any type with comparison and
+/// Generic over `float`, @ref Fixed and any type with comparison and
 /// unary minus, unlike `std::abs`.
 ///
 /// @tparam T The number type.
@@ -21,7 +21,7 @@ constexpr T Abs(T value) {
   return -value;
 }
 
-/// Restricts a value to the range [@p min_value, @p max_value].
+/// Restricts a value to the range [ @p min_value , @p max_value ].
 ///
 /// @tparam T The number type.
 /// @param value The value to clamp.
@@ -93,12 +93,12 @@ constexpr T Lerp(T begin, T end, T t) {
 
 /// Square root, generic version based on `std::sqrt`.
 ///
-/// Used for `float`. `Fixed16` has its own exact integer overload,
-/// `neko::Sqrt(Fixed16)`, and the sixit float type a specialization.
+/// Used for `float`. @ref Fixed16 has its own exact integer overload,
+/// @ref Sqrt(Fixed16), and the sixit float type a specialization.
 ///
 /// @tparam T The number type.
 /// @param value The value, not negative.
-/// @return The square root of @p value.
+/// @return The square root of `value`.
 template <typename T>
 T Sqrt(T value) {
   return std::sqrt(value);
@@ -106,12 +106,12 @@ T Sqrt(T value) {
 
 /// Sine of an angle in radians, generic version based on `std::sin`.
 ///
-/// `Fixed16` uses the table based overload from `neko/math/fixed_trig.h`.
-/// Prefer `neko::Sin(Radian)` in game code so the unit is explicit.
+/// @ref Fixed16 uses the table based overload from `neko/math/fixed_trig.h`.
+/// Prefer @ref Sin(Radian) in game code so the unit is explicit.
 ///
 /// @tparam T The number type.
 /// @param value The angle in radians.
-/// @return The sine of @p value.
+/// @return The sine of `value`.
 template <typename T>
 T Sin(T value) {
   return std::sin(value);
@@ -121,7 +121,7 @@ T Sin(T value) {
 ///
 /// @tparam T The number type.
 /// @param value The angle in radians.
-/// @return The cosine of @p value.
+/// @return The cosine of `value`.
 template <typename T>
 T Cos(T value) {
   return std::cos(value);
@@ -131,7 +131,7 @@ T Cos(T value) {
 ///
 /// @tparam T The number type.
 /// @param value The angle in radians.
-/// @return The tangent of @p value.
+/// @return The tangent of `value`.
 template <typename T>
 T Tan(T value) {
   return std::tan(value);

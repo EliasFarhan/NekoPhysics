@@ -25,12 +25,13 @@ struct PaletteColor {
   std::uint8_t b = 0;  ///< Blue, 0 to 255.
 };
 
-/// The 16 colors shared by every backend, indexed by @ref ColorId.
+/// The 16 colors (@ref PaletteColor) shared by every backend, indexed by
+/// @ref ColorId.
 ///
 /// Samples only pick colors from this fixed palette, so no backend has to
-/// quantize anything: on the DS, ColorId `i` is sprite palette bank `i` (fill
-/// = entry 1) and bitmap BG palette entry `i`; the SDL drawer reads the RGB
-/// values directly.
+/// quantize anything: on the DS, @ref ColorId `i` is sprite palette bank `i`
+/// (fill = entry 1) and bitmap BG palette entry `i`; the SDL drawer reads the
+/// RGB values directly.
 inline constexpr std::array<PaletteColor, 16> kSamplePalette = {{
     {0, 0, 0},        // transparent
     {255, 255, 255},  // white
@@ -122,9 +123,9 @@ struct DrawList {
   /// World rectangle to show, set by @ref SampleRegistry::Draw to the
   /// @ref SampleContext::world_bounds.
   Aabbf camera{};
-  std::vector<DrawCircle> circles;  ///< Circles, drawn first.
-  std::vector<DrawBox> boxes;       ///< Boxes, drawn over the circles.
-  std::vector<DrawLine> lines;      ///< Lines, drawn last.
+  std::vector<DrawCircle> circles;  ///< @ref DrawCircle list, drawn first.
+  std::vector<DrawBox> boxes;       ///< @ref DrawBox list, over the circles.
+  std::vector<DrawLine> lines;      ///< @ref DrawLine list, drawn last.
 
   /// Reserves room for every shape list.
   ///

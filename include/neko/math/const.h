@@ -20,7 +20,7 @@ using Scalar = float;
 /// The number type used by the whole physics engine.
 ///
 /// Chosen at configure time with the CMake cache variable `NEKO_SCALAR`:
-/// - `FIXED16` (default): `neko::Fixed16`, 16.16 fixed point. Deterministic
+/// - `FIXED16` (default): @ref Fixed16, 16.16 fixed point. Deterministic
 ///   on every platform and fast on the Nintendo DS, which has no FPU.
 /// - `FLOAT`: plain `float`, convenient for debugging on PC, but not
 ///   guaranteed to give the same bits on different machines or compilers,
@@ -70,16 +70,22 @@ constexpr T Exp() {
   }
 }
 
-/// Pi in 16.16 fixed point, as the exact raw value `205887`.
+/// Pi in 16.16 fixed point (@ref Fixed16, the default @ref Fixed), as the
+/// exact raw value `205887`.
 ///
 /// Written as a raw integer instead of a conversion from a floating point
 /// constant, so it is identical on every platform.
+///
+/// @return Pi, about 3.14159.
 template <>
 constexpr Fixed16 Pi() {
   return Fixed16::FromUnderlyingValue(205887);
 }
 
-/// e in 16.16 fixed point, as the exact raw value `178145`.
+/// e in 16.16 fixed point (@ref Fixed16, the default @ref Fixed), as the
+/// exact raw value `178145`.
+///
+/// @return e, about 2.71828.
 template <>
 constexpr Fixed16 Exp() {
   return Fixed16::FromUnderlyingValue(178145);
