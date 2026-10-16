@@ -21,7 +21,7 @@ void GroundSample::Begin(const SampleContext& context) {
   {
     ground_body_index_ = world_.AddBody();
     Body& body = world_.body(ground_body_index_);
-    body.position = world_center + Vec2f{Scalar{0}, Scalar{3}};
+    body.position = world_center - Vec2f{Scalar{0}, Scalar{3}};
     body.type = BodyType::kStatic;
     body.inverse_mass = Scalar{0};
 
@@ -36,7 +36,7 @@ void GroundSample::Begin(const SampleContext& context) {
   {
     circle_body_index_ = world_.AddBody();
     Body& body = world_.body(circle_body_index_);
-    body.position = world_center - Vec2f{Scalar{2}, Scalar{3}};
+    body.position = world_center + Vec2f{Scalar{-2}, Scalar{3}};
     body.type = BodyType::kDynamic;
     body.inverse_mass = Scalar{1};
 
@@ -51,7 +51,7 @@ void GroundSample::Begin(const SampleContext& context) {
   {
     rect_body_index_ = world_.AddBody();
     Body& body = world_.body(rect_body_index_);
-    body.position = world_center - Vec2f{Scalar{-2}, Scalar{3}};
+    body.position = world_center + Vec2f{Scalar{2}, Scalar{3}};
     body.type = BodyType::kDynamic;
     body.inverse_mass = Scalar{1};
 

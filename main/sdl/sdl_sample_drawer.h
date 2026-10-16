@@ -22,6 +22,11 @@ class SdlSampleDrawer final : public SampleDrawer {
     float scale = 1.0f;
     float offset_x = 0.0f;
     float offset_y = 0.0f;
+    // World (y-up) to screen (y-down) pixels
+    [[nodiscard]] SDL_FPoint ToScreen(Vec2f point) const {
+      return {float{point.x()} * scale + offset_x,
+              offset_y - float{point.y()} * scale};
+    }
   };
   [[nodiscard]] Viewport FitCamera(const Aabbf& camera) const;
   void RenderCircles(const DrawList& draw_list, const Viewport& viewport);

@@ -23,8 +23,8 @@ namespace neko {
 /// another one, and they pass through each other. The grey lines are the
 /// quadtree nodes: the tree splits where circles crowd together. The world
 /// keeps the default @ref PhysicsWorldConfig::gravity (0, -9.81), which pulls
-/// toward the top of the screen since the samples draw with y down;
-/// @ref BounceInside keeps the circles on screen. The number of circles is
+/// toward the bottom of the screen; @ref BounceInside keeps the circles on
+/// screen. The number of circles is
 /// @ref sample_config::kTriggerCount.
 class TriggersSample : public Sample, public ContactListener {
  public:

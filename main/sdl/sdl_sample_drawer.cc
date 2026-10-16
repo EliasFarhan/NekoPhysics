@@ -38,28 +38,28 @@ SdlSampleDrawer::Viewport SdlSampleDrawer::FitCamera(
   }
   const float scale = std::min(static_cast<float>(width) / camera_width,
                                static_cast<float>(height) / camera_height);
+  // The world is y-up: offset_y puts the camera's max y at the top of the
+  // letterboxed area (see Viewport::ToScreen)
   return {scale,
           (static_cast<float>(width) - camera_width * scale) / 2.0f -
               float{camera.min_bound().x()} * scale,
-          (static_cast<float>(height) - camera_height * scale) / 2.0f -
-              float{camera.min_bound().y()} * scale};
+          (static_cast<float>(height) - camera_height * scale) / 2.0f +
+              float{camera.max_bound().y()} * scale};
 }
 
 void SdlSampleDrawer::Render(const DrawList& draw_list) {
   NEKO_PROFILE_FUNCTION();
   const auto viewport = FitCamera(draw_list.camera);
 
-  const SDL_FRect background{
-      float{draw_list.camera.min_bound().x()} * viewport.scale +
-          viewport.offset_x,
-      float{draw_list.camera.min_bound().y()} * viewport.scale +
-          viewport.offset_y,
-      float{draw_list.camera.max_bound().x() -
-            draw_list.camera.min_bound().x()} *
-          viewport.scale,
-      float{draw_list.camera.max_bound().y() -
-            draw_list.camera.min_bound().y()} *
-          viewport.scale};
+  const SDL_FPoint background_top_left = viewport.ToScreen(
+      {draw_list.camera.min_bound().x(), draw_list.camera.max_bound().y()});
+  const SDL_FRect background{background_top_left.x, background_top_left.y,
+                             float{draw_list.camera.max_bound().x() -
+                                   draw_list.camera.min_bound().x()} *
+                                 viewport.scale,
+                             float{draw_list.camera.max_bound().y() -
+                                   draw_list.camera.min_bound().y()} *
+                                 viewport.scale};
   SDL_SetRenderDrawColorFloat(renderer_, kBackgroundColor.r, kBackgroundColor.g,
                               kBackgroundColor.b, kBackgroundColor.a);
   SDL_RenderFillRect(renderer_, &background);
@@ -74,9 +74,7 @@ void SdlSampleDrawer::RenderCircles(const DrawList& draw_list,
   vertices_.clear();
   indices_.clear();
   for (const auto& circle : draw_list.circles) {
-    const SDL_FPoint center{
-        float{circle.center.x()} * viewport.scale + viewport.offset_x,
-        float{circle.center.y()} * viewport.scale + viewport.offset_y};
+    const SDL_FPoint center = viewport.ToScreen(circle.center);
     const float radius = float{circle.radius} * viewport.scale;
     const int segments = std::clamp(static_cast<int>(radius),
                                     kMinCircleSegments, kMaxCircleSegments);
@@ -114,12 +112,12 @@ void SdlSampleDrawer::RenderBoxes(const DrawList& draw_list,
     for (; end < draw_list.boxes.size() && draw_list.boxes[end].color == color;
          ++end) {
       const auto& box = draw_list.boxes[end];
-      const auto top_left = box.center - box.half_size;
-      rects_.push_back(
-          {float{top_left.x()} * viewport.scale + viewport.offset_x,
-           float{top_left.y()} * viewport.scale + viewport.offset_y,
-           float{box.half_size.x()} * 2.0f * viewport.scale,
-           float{box.half_size.y()} * 2.0f * viewport.scale});
+      const SDL_FPoint top_left =
+          viewport.ToScreen({box.center.x() - box.half_size.x(),
+                             box.center.y() + box.half_size.y()});
+      rects_.push_back({top_left.x, top_left.y,
+                        float{box.half_size.x()} * 2.0f * viewport.scale,
+                        float{box.half_size.y()} * 2.0f * viewport.scale});
     }
     SetDrawColor(color);
     SDL_RenderFillRects(renderer_, rects_.data(),
@@ -138,11 +136,9 @@ void SdlSampleDrawer::RenderLines(const DrawList& draw_list,
       SetDrawColor(line.color);
       current_color = line.color;
     }
-    SDL_RenderLine(renderer_,
-                   float{line.a.x()} * viewport.scale + viewport.offset_x,
-                   float{line.a.y()} * viewport.scale + viewport.offset_y,
-                   float{line.b.x()} * viewport.scale + viewport.offset_x,
-                   float{line.b.y()} * viewport.scale + viewport.offset_y);
+    const SDL_FPoint a = viewport.ToScreen(line.a);
+    const SDL_FPoint b = viewport.ToScreen(line.b);
+    SDL_RenderLine(renderer_, a.x, a.y, b.x, b.y);
   }
 }
 

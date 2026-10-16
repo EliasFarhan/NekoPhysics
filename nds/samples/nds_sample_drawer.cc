@@ -217,15 +217,17 @@ const NdsSampleDrawer::BoxGfx* NdsSampleDrawer::GetBoxGfx(int width,
 }
 
 void NdsSampleDrawer::Render(const DrawList& draw_list) {
-  const Vec2f origin = draw_list.camera.min_bound();
-  const Scalar camera_width =
-      draw_list.camera.max_bound().x() - draw_list.camera.min_bound().x();
+  // The world is y-up and the screen y-down: the camera's top-left corner,
+  // (min x, max y), is pixel (0, 0)
+  const Scalar left = draw_list.camera.min_bound().x();
+  const Scalar top = draw_list.camera.max_bound().y();
+  const Scalar camera_width = draw_list.camera.max_bound().x() - left;
   const Scalar scale = Scalar{SCREEN_WIDTH} / camera_width;
-  const auto to_screen_x = [origin, scale](Scalar x) {
-    return ToPixels(x - origin.x(), scale);
+  const auto to_screen_x = [left, scale](Scalar x) {
+    return ToPixels(x - left, scale);
   };
-  const auto to_screen_y = [origin, scale](Scalar y) {
-    return ToPixels(y - origin.y(), scale);
+  const auto to_screen_y = [top, scale](Scalar y) {
+    return ToPixels(top - y, scale);
   };
 
   stats_.sprites_used = 0;
@@ -246,11 +248,11 @@ void NdsSampleDrawer::Render(const DrawList& draw_list) {
   }
   for (const auto& box : draw_list.boxes) {
     const int x0 = to_screen_x(box.center.x() - box.half_size.x());
-    const int y0 = to_screen_y(box.center.y() - box.half_size.y());
+    const int y0 = to_screen_y(box.center.y() + box.half_size.y());
     const int width =
         std::max(1, to_screen_x(box.center.x() + box.half_size.x()) - x0);
     const int height =
-        std::max(1, to_screen_y(box.center.y() + box.half_size.y()) - y0);
+        std::max(1, to_screen_y(box.center.y() - box.half_size.y()) - y0);
     const BoxGfx* gfx = width <= kMaxSpriteBox && height <= kMaxSpriteBox
                             ? GetBoxGfx(width, height)
                             : nullptr;

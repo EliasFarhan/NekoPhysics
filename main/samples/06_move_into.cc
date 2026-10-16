@@ -54,10 +54,9 @@ void MoveIntoSample::EndContact(b2Contact* contact) {}
 #endif
 void MoveIntoSample::Begin(const SampleContext& context) {
   const auto world_center = context.world_bounds.GetCenter();
-  const auto ground_position = world_center + Vec2f{Scalar{0}, Scalar{3}};
-  const auto dynamic_rect_position =
-      world_center - Vec2f{Scalar{-2}, Scalar{3}};
-  const auto static_rect_position = world_center - Vec2f{Scalar{2}, Scalar{3}};
+  const auto ground_position = world_center - Vec2f{Scalar{0}, Scalar{3}};
+  const auto dynamic_rect_position = world_center + Vec2f{Scalar{2}, Scalar{3}};
+  const auto static_rect_position = world_center + Vec2f{Scalar{-2}, Scalar{3}};
 #ifndef NEKO_SAMPLE_BOX2D
   world_.SetContactListener(this);
   world_.SetBSH(&quad_tree_);

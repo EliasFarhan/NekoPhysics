@@ -34,7 +34,7 @@ void BounceInside(Body& body, const Aabbf& bounds);
 /// The host passes it to @ref SampleRegistry::Select, which forwards it to
 /// @ref Sample::Begin. Both hosts use @ref sample_config::kWorldBounds.
 struct SampleContext {
-  /// World rectangle shown on screen, in meters with y pointing down.
+  /// World rectangle shown on screen, in meters with y pointing up.
   ///
   /// Samples place and bounce their bodies inside it, so the same scene fits
   /// the PC window and the DS top screen.

@@ -80,7 +80,7 @@ class MoveIntoSample final : public Sample,
 #ifndef NEKO_SAMPLE_BOX2D
   static constexpr std::size_t kBodyCount = 3;
   static constexpr std::size_t kMaxPairs = 8;
-  PhysicsWorld world_{{.gravity = Vec2f{Scalar{0}, Ratio(981, 100)},
+  PhysicsWorld world_{{.gravity = Vec2f{Scalar{0}, -Ratio(981, 100)},
                        .dt = kFixedDeltaTime,
                        .max_bodies = kBodyCount,
                        .max_colliders = kBodyCount,
@@ -96,7 +96,7 @@ class MoveIntoSample final : public Sample,
   ColliderIndex dynamic_collider_index_ = kInvalidColliderIndex;
 #else
   // Box 2d version
-  b2World b2_world_{b2Vec2{0.0f, 9.81f}};
+  b2World b2_world_{b2Vec2{0.0f, -9.81f}};
   b2Body* b2_ground_body_;
   b2Body* b2_static_body_;
   b2Body* b2_dynamic_body_;

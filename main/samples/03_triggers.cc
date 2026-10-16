@@ -54,12 +54,12 @@ void TriggersSample::Draw(DrawList& draw_list) const {
   // cross through every split node draws each edge once (the children's
   // outlines would redraw their parent's edges)
   const auto& root = quad_tree_.GetNode(QuadTree::kRoot).aabb;
-  const Vec2f top_right{root.max_bound().x(), root.min_bound().y()};
-  const Vec2f bottom_left{root.min_bound().x(), root.max_bound().y()};
-  draw_list.lines.push_back({root.min_bound(), top_right, kQuadTreeColor});
-  draw_list.lines.push_back({top_right, root.max_bound(), kQuadTreeColor});
-  draw_list.lines.push_back({root.max_bound(), bottom_left, kQuadTreeColor});
-  draw_list.lines.push_back({bottom_left, root.min_bound(), kQuadTreeColor});
+  const Vec2f bottom_right{root.max_bound().x(), root.min_bound().y()};
+  const Vec2f top_left{root.min_bound().x(), root.max_bound().y()};
+  draw_list.lines.push_back({root.min_bound(), bottom_right, kQuadTreeColor});
+  draw_list.lines.push_back({bottom_right, root.max_bound(), kQuadTreeColor});
+  draw_list.lines.push_back({root.max_bound(), top_left, kQuadTreeColor});
+  draw_list.lines.push_back({top_left, root.min_bound(), kQuadTreeColor});
   // Depth-first walk with an explicit stack: each pop pushes at most 4
   // children, one level deeper
   std::array<Index, 3 * QuadTree::kMaxDepth + 1> stack{};

@@ -102,9 +102,10 @@ struct DrawLine {
 /// What a sample shows for one frame, in world space.
 ///
 /// This is the only thing a sample tells the host about its looks: shapes in
-/// meters with y pointing down, and palette colors. A @ref SampleDrawer maps
-/// them to the screen through @ref camera and draws circles, then boxes, then
-/// lines (later shapes on top). Keeping drawing platform-neutral lets the same
+/// meters with y pointing up (like the physics world), and palette colors. A
+/// @ref SampleDrawer maps them to the screen through @ref camera (flipping y,
+/// since screens are y-down) and draws circles, then boxes, then lines (later
+/// shapes on top). Keeping drawing platform-neutral lets the same
 /// sample run on PC (SDL renderer) and on the DS (hardware sprites and a
 /// bitmap background).
 ///

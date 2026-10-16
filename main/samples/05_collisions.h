@@ -21,9 +21,9 @@ namespace neko {
 /// What to look at: circles are red alone and green while they touch another
 /// one; unlike the triggers sample they bounce off each other instead of
 /// passing through. The world keeps the default
-/// @ref PhysicsWorldConfig::gravity (0, -9.81), which pulls toward the top of
-/// the screen since the samples draw with y down; @ref BounceInside keeps the
-/// circles on screen. The number of circles is
+/// @ref PhysicsWorldConfig::gravity (0, -9.81), which pulls toward the bottom
+/// of the screen; @ref BounceInside keeps the circles on screen. The number of
+/// circles is
 /// @ref sample_config::kCollisionCount.
 class CollisionsSample : public Sample, public ContactListener {
  public:
