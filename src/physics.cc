@@ -939,7 +939,7 @@ ColliderIndex PhysicsWorld::AddOrientedBoxCollider(BodyIndex body) {
   return collider.collider_index;
 }
 
-void PhysicsWorld::WarmStartContacts() {
+NEKO_HOT void PhysicsWorld::WarmStartContacts() {
   // The cache is sorted by pair: one binary search per contact, then the
   // points matched by feature id
   for (std::size_t c = 0; c < contacts_.size(); ++c) {
@@ -964,23 +964,60 @@ void PhysicsWorld::WarmStartContacts() {
   }
 }
 
-void PhysicsWorld::CacheContactImpulses() {
-  new_contact_cache_.clear();
+NEKO_HOT void PhysicsWorld::CacheContactImpulses() {
+  // Sorted by pair like SortNewTouchingPairs, in O(n + max_colliders): a
+  // counting sort on c1 writes each entry straight into its bucket, then an
+  // insertion sort orders each (short) bucket by c2. Pairs are unique, so this
+  // is the same order as a comparison sort, without its ~1000 cycles per
+  // entry on the DS. The bucket arrays are SortNewTouchingPairs' scratch,
+  // free until it runs after this.
+  std::fill(touching_pair_bucket_count_.begin(),
+            touching_pair_bucket_count_.end(), std::uint32_t{0});
+  for (const auto& pair : contact_pairs_) {
+    ++touching_pair_bucket_count_[pair.c1().index()];
+  }
+  std::uint32_t running_total = 0;
+  for (std::size_t k = 0; k < touching_pair_bucket_count_.size(); ++k) {
+    touching_pair_bucket_start_[k] = running_total;
+    running_total += touching_pair_bucket_count_[k];
+  }
+  touching_pair_bucket_start_.back() = running_total;
+  // Write cursors, seeded from the bucket starts
+  std::copy(touching_pair_bucket_start_.begin(),
+            touching_pair_bucket_start_.end() - 1,
+            touching_pair_bucket_count_.begin());
+  new_contact_cache_.resize(contacts_.size());
   for (std::size_t c = 0; c < contacts_.size(); ++c) {
     const Contact& contact = contacts_[c];
-    CachedContact entry{.pair = contact_pairs_[c],
-                        .point_count = contact.point_count};
+    CachedContact& entry = new_contact_cache_
+        [touching_pair_bucket_count_[contact_pairs_[c].c1().index()]++];
+    entry.pair = contact_pairs_[c];
+    entry.point_count = contact.point_count;
     for (std::uint8_t i = 0; i < contact.point_count; ++i) {
       entry.points[i] = {contact.points[i].id, contact.points[i].normal_impulse,
                          contact.points[i].tangent_impulse};
     }
-    new_contact_cache_.push_back(entry);
   }
-  // Pairs are unique, so the order is total and deterministic
-  std::sort(new_contact_cache_.begin(), new_contact_cache_.end(),
-            [](const CachedContact& lhs, const CachedContact& rhs) {
-              return lhs.pair < rhs.pair;
-            });
+  for (std::size_t k = 0; k + 1 < touching_pair_bucket_start_.size(); ++k) {
+    if (touching_pair_bucket_start_[k] == touching_pair_bucket_start_[k + 1]) {
+      continue;
+    }
+    const auto bucket_begin =
+        new_contact_cache_.begin() +
+        static_cast<std::ptrdiff_t>(touching_pair_bucket_start_[k]);
+    const auto bucket_end =
+        new_contact_cache_.begin() +
+        static_cast<std::ptrdiff_t>(touching_pair_bucket_start_[k + 1]);
+    for (auto it = bucket_begin + 1; it < bucket_end; ++it) {
+      const CachedContact value = *it;
+      auto insert_at = it;
+      while (insert_at > bucket_begin && value.pair < (insert_at - 1)->pair) {
+        *insert_at = *(insert_at - 1);
+        --insert_at;
+      }
+      *insert_at = value;
+    }
+  }
   std::swap(contact_cache_, new_contact_cache_);
 }
 

@@ -56,14 +56,15 @@ Scalar EffectiveMass(Scalar inverse_mass_sum, Scalar inverse_inertia1,
 
 // Applies an impulse at the point: +impulse to body 1, -impulse to body 2
 void ApplyImpulse(Contact& contact, const internal::ContactPointScratch& point,
-                  Vec2f impulse, Scalar inverse_mass1, Scalar inverse_mass2,
-                  Scalar inverse_inertia1, Scalar inverse_inertia2) {
+                  Vec2f impulse) {
   Body& body1 = *contact.bodies[0].body;
   Body& body2 = *contact.bodies[1].body;
-  body1.velocity += impulse * inverse_mass1;
-  body1.angular_velocity += Vec2f::Cross(point.r1, impulse) * inverse_inertia1;
-  body2.velocity -= impulse * inverse_mass2;
-  body2.angular_velocity -= Vec2f::Cross(point.r2, impulse) * inverse_inertia2;
+  body1.velocity += impulse * point.inverse_mass1;
+  body1.angular_velocity +=
+      Vec2f::Cross(point.r1, impulse) * point.inverse_inertia1;
+  body2.velocity -= impulse * point.inverse_mass2;
+  body2.angular_velocity -=
+      Vec2f::Cross(point.r2, impulse) * point.inverse_inertia2;
 }
 }  // namespace
 
@@ -91,6 +92,10 @@ NEKO_HOT void SolveContacts(std::span<Contact> contacts,
     for (std::uint8_t i = 0; i < contact.point_count; ++i) {
       ContactPoint& point = contact.points[i];
       internal::ContactPointScratch& data = scratch[2 * c + i];
+      data.inverse_mass1 = inverse_mass1;
+      data.inverse_mass2 = inverse_mass2;
+      data.inverse_inertia1 = inverse_inertia1;
+      data.inverse_inertia2 = inverse_inertia2;
       data.r1 = point.position - contact.bodies[0].body->position;
       data.r2 = point.position - contact.bodies[1].body->position;
       data.normal_mass =
@@ -120,10 +125,6 @@ NEKO_HOT void SolveContacts(std::span<Contact> contacts,
   if (settings.warm_starting) {
     for (std::size_t c = 0; c < contacts.size(); ++c) {
       Contact& contact = contacts[c];
-      const Scalar inverse_mass1 = InverseMass(*contact.bodies[0].body);
-      const Scalar inverse_mass2 = InverseMass(*contact.bodies[1].body);
-      const Scalar inverse_inertia1 = InverseInertia(contact.bodies[0]);
-      const Scalar inverse_inertia2 = InverseInertia(contact.bodies[1]);
       const Vec2f tangent = contact.contact_normal.Perpendicular();
       for (std::uint8_t i = 0; i < contact.point_count; ++i) {
         const ContactPoint& point = contact.points[i];
@@ -133,9 +134,7 @@ NEKO_HOT void SolveContacts(std::span<Contact> contacts,
         }
         ApplyImpulse(contact, scratch[2 * c + i],
                      contact.contact_normal * point.normal_impulse +
-                         tangent * point.tangent_impulse,
-                     inverse_mass1, inverse_mass2, inverse_inertia1,
-                     inverse_inertia2);
+                         tangent * point.tangent_impulse);
       }
     }
   }
@@ -143,10 +142,6 @@ NEKO_HOT void SolveContacts(std::span<Contact> contacts,
   for (int pass = 0; pass < settings.velocity_iterations; ++pass) {
     for (std::size_t c = 0; c < contacts.size(); ++c) {
       Contact& contact = contacts[c];
-      const Scalar inverse_mass1 = InverseMass(*contact.bodies[0].body);
-      const Scalar inverse_mass2 = InverseMass(*contact.bodies[1].body);
-      const Scalar inverse_inertia1 = InverseInertia(contact.bodies[0]);
-      const Scalar inverse_inertia2 = InverseInertia(contact.bodies[1]);
       const Vec2f tangent = contact.contact_normal.Perpendicular();
       for (std::uint8_t i = 0; i < contact.point_count; ++i) {
         ContactPoint& point = contact.points[i];
@@ -164,8 +159,7 @@ NEKO_HOT void SolveContacts(std::span<Contact> contacts,
         const Scalar friction_impulse = tangent_total - point.tangent_impulse;
         point.tangent_impulse = tangent_total;
         if (friction_impulse != Scalar{0}) {
-          ApplyImpulse(contact, data, tangent * friction_impulse, inverse_mass1,
-                       inverse_mass2, inverse_inertia1, inverse_inertia2);
+          ApplyImpulse(contact, data, tangent * friction_impulse);
         }
 
         const Scalar change =
@@ -177,9 +171,7 @@ NEKO_HOT void SolveContacts(std::span<Contact> contacts,
         const Scalar impulse = total - point.normal_impulse;
         point.normal_impulse = total;
         if (impulse != Scalar{0}) {
-          ApplyImpulse(contact, data, contact.contact_normal * impulse,
-                       inverse_mass1, inverse_mass2, inverse_inertia1,
-                       inverse_inertia2);
+          ApplyImpulse(contact, data, contact.contact_normal * impulse);
         }
       }
     }

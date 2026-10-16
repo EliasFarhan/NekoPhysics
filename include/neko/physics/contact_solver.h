@@ -160,6 +160,13 @@ namespace internal {
 // Per-point data computed once per step by SolveContacts and reused by every
 // pass
 struct ContactPointScratch {
+  // The contact's inverse masses and inertias (0 for bodies that don't
+  // move or turn), the same for both points, read once instead of through the
+  // body and collider pointers in every pass
+  Scalar inverse_mass1{};
+  Scalar inverse_mass2{};
+  Scalar inverse_inertia1{};
+  Scalar inverse_inertia2{};
   Vec2f r1{};
   Vec2f r2{};
   Scalar normal_mass{};
