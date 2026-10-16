@@ -13,10 +13,12 @@
 #include "tutorials/00_bounce/bounce_sample.h"
 #include "tutorials/01_rotation/rotation_sample.h"
 #include "tutorials/02_rotated_box/rotated_box_sample.h"
+#include "tutorials/03_contact_manifold/contact_manifold_sample.h"
 
 namespace {
 
 using neko::tutorial::BounceSample;
+using neko::tutorial::ContactManifoldSample;
 using neko::tutorial::RotatedBoxSample;
 using neko::tutorial::RotationSample;
 
@@ -381,6 +383,113 @@ TEST(RotatedBoxTutorial, SameParametersSameRun) {
   registry.SetParameter(RotatedBoxSample::kRampAngle, -20);
   const std::uint32_t changed = run();
   registry.SetParameter(RotatedBoxSample::kRampAngle, 20);
+  const std::uint32_t restored = run();
+  EXPECT_NE(first, changed);
+  EXPECT_EQ(first, restored);
+}
+
+namespace {
+
+struct ManifoldParameters {
+  int angle = 5;
+  int sink_depth = 20;
+  int width = 200;
+  int spin = 0;
+};
+
+// Checks the manifold against the predicted corners of the incident face
+void ExpectManifoldMatchesCorners(const ContactManifoldSample& sample) {
+  EXPECT_EQ(sample.measured_point_count(), sample.predicted_point_count());
+  for (std::size_t corner = 0; corner < 2; ++corner) {
+    const auto predicted = sample.predicted_depth(corner);
+    const auto measured = sample.measured_depth(corner);
+    ASSERT_EQ(measured.has_value(), predicted.has_value()) << corner;
+    if (predicted.has_value()) {
+      EXPECT_NEAR(ToFloat(*measured), ToFloat(*predicted), 0.002f) << corner;
+    }
+  }
+}
+
+void BeginManifold(ContactManifoldSample& sample,
+                   const ManifoldParameters& parameters) {
+  auto values = sample.parameters();
+  values[ContactManifoldSample::kAngle].value = parameters.angle;
+  values[ContactManifoldSample::kSinkDepth].value = parameters.sink_depth;
+  values[ContactManifoldSample::kWidth].value = parameters.width;
+  values[ContactManifoldSample::kSpin].value = parameters.spin;
+  sample.Begin(neko::SampleContext{neko::sample_config::kWorldBounds});
+}
+
+class ContactManifoldTest
+    : public ::testing::TestWithParam<ManifoldParameters> {};
+
+}  // namespace
+
+// The experiment of chapter 03: the manifold is the incident face's corners
+// that are below the reference face, each with its depth below it
+TEST_P(ContactManifoldTest, PointsAreTheSunkCornersOfTheIncidentFace) {
+  ContactManifoldSample sample;
+  BeginManifold(sample, GetParam());
+  ExpectManifoldMatchesCorners(sample);
+  sample.End();
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AnglesAndDepths, ContactManifoldTest,
+    ::testing::Values(ManifoldParameters{.angle = 0}, ManifoldParameters{},
+                      ManifoldParameters{.angle = -10, .sink_depth = 30},
+                      ManifoldParameters{.angle = 20, .sink_depth = 10},
+                      ManifoldParameters{.angle = 40, .width = 400},
+                      ManifoldParameters{.angle = 0, .sink_depth = 0}));
+
+// The controlled change: flat, two points at the same depth; slightly tilted,
+// two points at different depths; tilted further, one corner
+TEST(ContactManifoldTutorial, TiltTurnsTwoPointsIntoOne) {
+  const auto count = [](int angle) {
+    ContactManifoldSample sample;
+    BeginManifold(sample, {.angle = angle, .sink_depth = 20});
+    const int points = sample.measured_point_count();
+    sample.End();
+    return points;
+  };
+  EXPECT_EQ(count(0), 2);
+  EXPECT_EQ(count(5), 2);
+  EXPECT_EQ(count(20), 1);
+  EXPECT_EQ(count(-20), 1);
+}
+
+// Spinning through every face: the manifold keeps following the corners
+TEST(ContactManifoldTutorial, SpinningBoxKeepsMatchingTheCorners) {
+  ContactManifoldSample sample;
+  BeginManifold(sample, {.angle = 0, .sink_depth = 30, .spin = 60});
+  for (int step = 0; step < 6 * 60; ++step) {
+    sample.FixedUpdate();
+    ExpectManifoldMatchesCorners(sample);
+    if (::testing::Test::HasFailure()) {
+      FAIL() << "step " << step;
+    }
+  }
+  sample.End();
+}
+
+TEST(ContactManifoldTutorial, SameParametersSameRun) {
+  std::vector<neko::SampleRegistry::Entry> samples;
+  samples.push_back(
+      {"03 Contact manifold", std::make_unique<ContactManifoldSample>()});
+  neko::SampleRegistry registry{std::move(samples)};
+  const neko::SampleContext context{neko::sample_config::kWorldBounds};
+  const auto run = [&registry] {
+    for (int step = 0; step < 120; ++step) {
+      registry.FixedUpdate();
+    }
+    return registry.current()->GenerateChecksum();
+  };
+  registry.Select(0, context);
+  registry.SetParameter(ContactManifoldSample::kSpin, 30);
+  const std::uint32_t first = run();
+  registry.SetParameter(ContactManifoldSample::kSpin, 45);
+  const std::uint32_t changed = run();
+  registry.SetParameter(ContactManifoldSample::kSpin, 30);
   const std::uint32_t restored = run();
   EXPECT_NE(first, changed);
   EXPECT_EQ(first, restored);
