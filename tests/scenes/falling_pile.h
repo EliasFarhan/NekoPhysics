@@ -71,14 +71,14 @@ inline void BuildFallingPile(PhysicsWorld& world) {
 
 // Golden checksums of BuildFallingPile with Scalar = Fixed16, shared by
 // tests/scene_test.cc and the DS test ROM (nds/main.cc) so there is one source
-// to re-pin when the simulation changes on purpose. Re-pinned on 2026-09-27,
-// most recently for the kDetectContact reciprocal change (one division instead
-// of two for the circle-circle and circle-AABB contact normal): verified with
-// GCC 15.2 (-O2, -fno-exceptions -fno-rtti) and the DS test ROM on melonDS; not
-// re-checked against MSVC. The DS test ROM must print the same values.
+// to re-pin when the simulation changes on purpose. Re-pinned on 2026-10-16
+// with MSVC 14.51 for rotation (M5 stage 1): the body checksum now covers the
+// rotation, angular velocity, torque, inverse inertia and inertia mode. The
+// bodies move exactly as before (kFallingPileTrajectoryChecksums unchanged).
+// The DS test ROM must print the same values.
 inline constexpr std::pair<int, std::uint32_t> kFallingPileGoldenChecksums[] = {
-    {0, 0x61c2e799u},   {1, 0xfa00ce4cu},   {60, 0x1846fbd1u},
-    {120, 0x2e3c79a0u}, {300, 0x4ab151e4u}, {600, 0x3e890176u},
+    {0, 0x87505a93u},   {1, 0x28d365c7u},   {60, 0x320691a4u},
+    {120, 0x63a61481u}, {300, 0x8261d08eu}, {600, 0x3dd70c02u},
 };
 
 // FNV-1a over the raw bits of every body's position and velocity, and nothing

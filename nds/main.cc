@@ -308,8 +308,9 @@ void RunHeavyPileProfile() {
   Log("255 phase breakdown, resting pile, %d steps (avg %" PRIu32
       "us/step with profiling on):\n",
       g_report.heavy_phase_steps, timerTicks2usec(average));
-  constexpr const char* names[] = {"integration", "broadphase", "detectContact",
-                                   "resolve", "sortAndNotify"};
+  constexpr const char* names[] = {"inertia",    "integration",
+                                   "broadphase", "detectContact",
+                                   "resolve",    "sortAndNotify"};
   for (std::size_t i = 0; i < static_cast<std::size_t>(neko::StepPhase::kCount);
        ++i) {
     const auto ticks_per_step =

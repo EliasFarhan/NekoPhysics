@@ -7,6 +7,7 @@
 #include "neko/physics/physics.h"
 
 namespace {
+using neko::Index;
 using neko::Scalar;
 using neko::Vec2f;
 
@@ -117,6 +118,97 @@ TEST(Rollback, ResimulationIsIdentical) {
   for (int i = 0; i < 90; ++i) {
     world.Step();
     EXPECT_EQ(world.GenerateChecksum(), checksums[static_cast<std::size_t>(i)])
+        << "step " << i;
+  }
+  EXPECT_EQ(listener.events, events);
+}
+
+// The same scene spinning: off-center colliders, angular velocities, inertia
+// overrides and a force at a point every step (like a player input)
+void BuildSpinningScene(neko::PhysicsWorld& world) {
+  BuildScene(world);
+  for (Index i = 1; i <= 16; ++i) {
+    neko::Body& body = world.body(neko::BodyIndex{i});
+    body.angular_velocity = static_cast<Scalar>(i % 5) - Scalar{2};
+    body.rotation.set_angle(neko::Radian{static_cast<Scalar>(i)});
+    if (i % 4 == 0) {
+      body.inertia_mode = neko::InertiaMode::kOverride;
+      body.inverse_inertia = Scalar{3};
+    }
+    world.collider(neko::ColliderIndex{i}).offset = {Scalar{0.1f}, Scalar{0}};
+  }
+}
+
+void PushSpinningScene(neko::PhysicsWorld& world, int step) {
+  const neko::BodyIndex pushed{static_cast<Index>(1 + step % 16)};
+  world.ApplyForceAtPoint(
+      pushed, {Scalar{0}, Scalar{5}},
+      world.body(pushed).position + Vec2f{Scalar{0.25f}, Scalar{0}});
+}
+
+TEST(Checksum, WorldChecksumFollowsRotationState) {
+  neko::PhysicsWorld a{kConfig};
+  neko::PhysicsWorld b{kConfig};
+  BuildSpinningScene(a);
+  BuildSpinningScene(b);
+  a.Step();
+  b.Step();
+  ASSERT_EQ(a.GenerateChecksum(), b.GenerateChecksum());
+  const neko::BodyIndex index{3};
+  const auto changed = [&a, &b] {
+    return a.GenerateChecksum() != b.GenerateChecksum();
+  };
+  b.body(index).angular_velocity += Scalar{0.001f};
+  EXPECT_TRUE(changed());
+  b.CopyFrom(a);
+  b.body(index).rotation.set_angle(a.body(index).rotation.angle() +
+                                   neko::Radian{Scalar{0.001f}});
+  EXPECT_TRUE(changed());
+  b.CopyFrom(a);
+  b.body(index).torque = Scalar{1};
+  EXPECT_TRUE(changed());
+  b.CopyFrom(a);
+  b.body(index).inverse_inertia += Scalar{0.001f};
+  EXPECT_TRUE(changed());
+  b.CopyFrom(a);
+  b.body(index).inertia_mode = neko::InertiaMode::kFixedRotation;
+  EXPECT_TRUE(changed());
+  b.CopyFrom(a);
+  EXPECT_FALSE(changed());
+}
+
+TEST(Rollback, SpinningResimulationIsIdentical) {
+  CountingListener listener;
+  neko::PhysicsWorld world{kConfig};
+  world.SetContactListener(&listener);
+  BuildSpinningScene(world);
+  for (int i = 0; i < 30; ++i) {
+    PushSpinningScene(world, i);
+    world.Step();
+  }
+  neko::PhysicsWorld snapshot{kConfig};
+  snapshot.CopyFrom(world);
+
+  std::vector<std::uint32_t> checksums;
+  listener.events = 0;
+  for (int i = 30; i < 120; ++i) {
+    PushSpinningScene(world, i);
+    world.Step();
+    checksums.push_back(world.GenerateChecksum());
+  }
+  const int events = listener.events;
+  EXPECT_GT(events, 0);
+  // The scene really spins
+  EXPECT_NE(world.body(neko::BodyIndex{1}).rotation.angle().value(),
+            snapshot.body(neko::BodyIndex{1}).rotation.angle().value());
+
+  world.CopyFrom(snapshot);
+  listener.events = 0;
+  for (int i = 30; i < 120; ++i) {
+    PushSpinningScene(world, i);
+    world.Step();
+    EXPECT_EQ(world.GenerateChecksum(),
+              checksums[static_cast<std::size_t>(i - 30)])
         << "step " << i;
   }
   EXPECT_EQ(listener.events, events);

@@ -1,6 +1,8 @@
 // The conventions documented in the namespace comment of
 // include/neko/physics/physics.h ("Conventions"), checked so the
 // documentation can't drift from the code.
+#include <cmath>
+
 #include <gtest/gtest.h>
 
 #include "neko/math/const.h"
@@ -115,6 +117,106 @@ TEST(Conventions, Fixed16SlowestMovingSpeed) {
       world.Step();
     }
     EXPECT_EQ(world.body(body).position, neko::Vec2f::Zero());
+  }
+#endif
+}
+
+TEST(Conventions, PositiveAngularVelocityAndTorqueTurnCounterClockwise) {
+  neko::PhysicsWorld world{{.gravity = neko::Vec2f::Zero()}};
+  const auto spinning = world.AddBody();
+  world.body(spinning).angular_velocity = neko::Scalar{1};
+  // Pushed up at its right edge: a positive torque
+  const auto pushed = world.AddBody();
+  const auto collider = world.AddCircleCollider(pushed);
+  world.collider(collider).is_trigger = false;
+  world.circle(world.collider(collider).shape_index).radius = neko::Scalar{1};
+  world.ApplyForceAtPoint(pushed, {neko::Scalar{0}, neko::Scalar{1}},
+                          {neko::Scalar{1}, neko::Scalar{0}});
+  EXPECT_GT(world.body(pushed).torque, neko::Scalar{0});
+  world.Step();
+  for (const auto body : {spinning, pushed}) {
+    // The local x axis turned from +x toward +y
+    EXPECT_GT(world.body(body).rotation.angle().value(), neko::Scalar{0});
+    EXPECT_GT(world.body(body).rotation.x_axis().y(), neko::Scalar{0});
+  }
+}
+
+TEST(Conventions, AngleIsWrappedFromMinusPiIncludedToPiExcluded) {
+  neko::Rotation rotation;
+  rotation.set_angle(neko::Radian{neko::Pi<neko::Scalar>()});
+  EXPECT_EQ(rotation.angle().value(), -neko::Pi<neko::Scalar>());
+  rotation.set_angle(neko::Radian{-neko::Pi<neko::Scalar>()});
+  EXPECT_EQ(rotation.angle().value(), -neko::Pi<neko::Scalar>());
+}
+
+TEST(Conventions, Fixed16RotationRanges) {
+#ifndef NEKO_SCALAR_FIXED16
+  GTEST_SKIP() << "Fixed16 resolution";
+#else
+  {
+    // Like positions: the angle moves by angular_velocity * dt rounded to
+    // 1 / 65536 rad, so below 31 / 65536 rad/s a body doesn't turn
+    const neko::PhysicsWorldConfig config;
+    const auto still = neko::Fixed16::FromUnderlyingValue(30);
+    const auto turning = neko::Fixed16::FromUnderlyingValue(31);
+    EXPECT_EQ(still * config.dt, neko::Scalar{0});
+    EXPECT_NE(turning * config.dt, neko::Scalar{0});
+
+    // 2 pi is 411774 / 65536, 0.83 of a step below 2 pi * 65536 = 411774.83:
+    // each wrap turns the angle by 1.3e-5 rad
+    const auto pi = neko::Pi<neko::Scalar>();
+    EXPECT_EQ((pi + pi).underlying_value(), 411774);
+  }
+#endif
+}
+
+// Inverse inertia of a 1 kg body with one collider, compared with the exact
+// value: within 0.8 % from 0.001 to 1000 kg m^2, worse outside
+TEST(Conventions, Fixed16InertiaPrecision) {
+#ifndef NEKO_SCALAR_FIXED16
+  GTEST_SKIP() << "Fixed16 resolution";
+#else
+  {
+    const auto relative_error = [](neko::Vec2f half_size, neko::Scalar radius) {
+      neko::PhysicsWorld world{{.gravity = neko::Vec2f::Zero()}};
+      const auto body = world.AddBody();
+      const bool is_box = radius == neko::Scalar{0};
+      const auto collider =
+          is_box ? world.AddAabbCollider(body) : world.AddCircleCollider(body);
+      world.collider(collider).is_trigger = false;
+      double inertia = 0.0;
+      if (is_box) {
+        world.aabb(world.collider(collider).shape_index).half_size = half_size;
+        const double w =
+            2.0 * static_cast<double>(static_cast<float>(half_size.x()));
+        const double h =
+            2.0 * static_cast<double>(static_cast<float>(half_size.y()));
+        inertia = (w * w + h * h) / 12.0;
+      } else {
+        world.circle(world.collider(collider).shape_index).radius = radius;
+        const double r = static_cast<double>(static_cast<float>(radius));
+        inertia = r * r / 2.0;
+      }
+      const double inverse = static_cast<double>(
+          static_cast<float>(world.ComputeInverseInertia(body)));
+      return inverse * inertia - 1.0;
+    };
+    const auto box = [&](int half_num, int half_den) {
+      const auto half = Ratio(half_num, half_den);
+      return relative_error({half, half}, neko::Scalar{0});
+    };
+    const auto circle = [&](int num, int den) {
+      return relative_error({}, Ratio(num, den));
+    };
+    // Usual sizes: within 0.25 %
+    EXPECT_LT(std::abs(circle(1, 20)), 0.002);   // r = 5 cm, 0.15 %
+    EXPECT_LT(std::abs(circle(1, 10)), 0.0025);  // r = 10 cm, +0.21 %
+    EXPECT_EQ(circle(1, 2), 0.0);                // r = 50 cm, exact
+    EXPECT_LT(std::abs(box(1, 2)), 0.0001);      // 1 m box, +0.006 %
+    EXPECT_LT(std::abs(box(1, 20)), 0.0025);     // 10 cm box, +0.21 %
+    // Range ends: 0.8 % at 1667 kg m^2 (100 m box), 9 % for a 1 cm circle
+    EXPECT_LT(std::abs(box(50, 1)), 0.009);
+    EXPECT_GT(std::abs(circle(1, 100)), 0.09);
   }
 #endif
 }

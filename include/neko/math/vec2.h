@@ -185,6 +185,34 @@ class Vec2 {
   static constexpr T Dot(Vec2 v1, Vec2 v2) {
     return v1.x_ * v2.x_ + v1.y_ * v2.y_;
   }
+  /// Returns the 2D cross product `v1.x * v2.y - v1.y * v2.x`, a scalar.
+  ///
+  /// In 3D, the cross product of two vectors of the xy plane points along z;
+  /// in 2D only that z component is left. It is `|v1| * |v2| * sin(angle)`
+  /// where `angle` turns from @p v1 to @p v2: positive when @p v2 is
+  /// counter-clockwise from @p v1, negative when clockwise, zero when they
+  /// are parallel.
+  ///
+  /// Physics uses it for torque: a force `f` applied at `r` from the center
+  /// of mass gives the torque `Cross(r, f)`. Only the part of the force
+  /// perpendicular to the lever arm turns the body, and a positive torque
+  /// turns it counter-clockwise.
+  ///
+  /// @code
+  /// // Pushing up on the right end of a 2 m lever: counter-clockwise torque
+  /// const neko::Vec2f lever{neko::Scalar{2}, neko::Scalar{0}};
+  /// const neko::Vec2f push{neko::Scalar{0}, neko::Scalar{3}};
+  /// const neko::Scalar torque = neko::Vec2f::Cross(lever, push);  // 6
+  /// @endcode
+  ///
+  /// @warning With @ref Fixed16 the products overflow when they pass 32767,
+  /// for example a lever of 10 m times a force of 3300 N.
+  /// @param v1 First vector (the lever arm, for a torque).
+  /// @param v2 Second vector (the force).
+  /// @return The signed area of the parallelogram built on the two vectors.
+  static constexpr T Cross(Vec2 v1, Vec2 v2) {
+    return v1.x_ * v2.y_ - v1.y_ * v2.x_;
+  }
   /// Returns `(0, 0)`.
   static constexpr Vec2 Zero() { return {}; }
   /// Returns `(0, 1)`: the world is y-up.

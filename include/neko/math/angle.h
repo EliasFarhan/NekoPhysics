@@ -149,6 +149,36 @@ constexpr Radian::Radian(const Degree& angle) {
   value_ = angle.value() / Scalar{180} * Pi<Scalar>();
 }
 
+/// Returns the same direction as @p angle, wrapped to one turn: at least
+/// -pi and less than pi radians.
+///
+/// Adds or subtracts whole turns (2 pi) until the angle is in range, so an
+/// angle already in range comes back unchanged and wrapping costs one
+/// comparison per call in the usual case. @ref Rotation keeps its angle
+/// wrapped this way, so a body that spins for minutes never overflows.
+///
+/// @note With @ref Fixed16, 2 pi is stored as 411774 / 65536, 0.83 of a step
+/// below the true value: each wrap turns the angle by about 1.3e-5 rad
+/// (0.013 rad after 1000 turns). The error is the same on every platform, so
+/// it doesn't break determinism.
+///
+/// @param angle The angle to wrap.
+/// @return The wrapped angle, in radians.
+[[nodiscard]] constexpr Radian WrapAngle(Radian angle) {
+  const Scalar pi = Pi<Scalar>();
+  // 2 * pi exactly (no rounding: doubling is exact in fixed and floating
+  // point), so a value just past pi lands at or above -pi
+  const Scalar two_pi = pi + pi;
+  Scalar value = angle.value();
+  while (value >= pi) {
+    value -= two_pi;
+  }
+  while (value < -pi) {
+    value += two_pi;
+  }
+  return Radian{value};
+}
+
 /// Sine of an angle.
 ///
 /// Forwards to the @ref Scalar overload: the deterministic table lookup for

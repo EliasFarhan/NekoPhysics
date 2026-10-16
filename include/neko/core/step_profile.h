@@ -16,7 +16,8 @@ namespace neko {
 /// @ref PhysicsWorld::Step measures each phase with the hardware timers and
 /// adds the result to the matching slot of @ref StepPhaseTicks.
 enum class StepPhase : std::uint8_t {
-  kIntegration,    ///< Applying forces and moving the bodies.
+  kInertia,        ///< Computing inertia from the colliders.
+  kIntegration,    ///< Applying forces and torques, moving and turning.
   kBroadphase,     ///< Building the broadphase and finding possible pairs.
   kDetectContact,  ///< Exact shape tests of the narrowphase.
   kResolve,        ///< Separating and bouncing the touching bodies.

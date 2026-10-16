@@ -7,6 +7,7 @@
 #include "neko/bsh/bsh.h"
 #include "neko/bsh/sweep_and_prune.h"
 #include "neko/core/allocator.h"
+#include "neko/math/rotation.h"
 #include "neko/math/shape.h"
 #include "neko/math/vec2.h"
 #include "neko/physics/contact_listener.h"
@@ -39,12 +40,16 @@
 /// - @ref PhysicsWorld owns everything and advances the simulation with
 ///   @ref PhysicsWorld::Step, using the fixed time step set in its
 ///   configuration.
-/// - @ref Body is a point mass: position, velocity, force, inverse mass and a
-///   @ref BodyType (dynamic, kinematic or static).
+/// - @ref Body is a rigid body: position, velocity, force and inverse mass
+///   for its motion, a @ref Rotation, angular velocity, torque and inverse
+///   inertia for its spin, and a @ref BodyType (dynamic, kinematic or
+///   static).
 /// - @ref Collider attaches a shape to a body, with an offset, a restitution
 ///   (bounciness) and a trigger flag. A body can have several colliders.
 /// - Shapes are @ref CircleCollider (a radius) and @ref AabbCollider (an
-///   axis-aligned box, by half size). Bodies don't rotate.
+///   axis-aligned box, by half size). Collider offsets turn with the body,
+///   but contacts don't use the rotation yet: a box stays axis-aligned (see
+///   @ref AabbCollider).
 /// - @ref ContactListener is the interface your game implements to receive
 ///   trigger and collision enter/exit events.
 /// - Collision detection runs in two phases. The broadphase, a
@@ -63,8 +68,14 @@
 ///   @ref Body::inverse_mass, in 1/kg.
 /// - **Axes and angles.** The world is y-up (@ref Vec2f::Up is (0, 1) and the
 ///   default gravity points down) and a positive angle turns
-///   counter-clockwise (@ref Vec2f::Rotate). Screens are y-down: the sample
-///   hosts flip y when drawing.
+///   counter-clockwise (@ref Vec2f::Rotate), so a positive angular velocity
+///   or torque does too. Screens are y-down: the sample hosts flip y when
+///   drawing.
+/// - **Rotation units.** Angles in radians, wrapped to at least -pi and less
+///   than pi (@ref WrapAngle); angular velocity in rad/s; torque in N m
+///   (@ref Vec2f::Cross of the lever arm and the force); inertia in kg m^2,
+///   given by its inverse, @ref Body::inverse_inertia. A body turns around
+///   its `position`, which is its center of mass.
 /// - **Contact normal.** @ref Contact::contact_normal points from the second
 ///   body toward the first, and @ref Contact::penetration is the overlap depth
 ///   along it, positive when the shapes overlap. The normal has unit length
@@ -81,6 +92,20 @@
 ///   @ref CompareLength). The time step 1/60 s is stored as 1092/65536 s, so
 ///   60 steps last 0.99976 s, and a position moves by `velocity * dt` rounded
 ///   to 1/65536 m: a body slower than about 0.47 mm/s doesn't move.
+/// - **Fixed-point ranges of rotation.** The angle moves by
+///   `angular_velocity * dt` rounded to 1/65536 rad: below 31/65536 rad/s
+///   (about 0.00047 rad/s, one turn in 3.7 hours) a body doesn't turn. 2 pi
+///   is stored 0.83 step low, so each wrap of the angle turns it by 1.3e-5
+///   rad. Inertia is computed per kilogram first (`r^2 / 2` for a circle,
+///   `(w^2 + h^2) / 12` for a box, plus the squared offset), then
+///   `inverse_inertia = inverse_mass / that`. Keep the inertia between about
+///   0.001 and 1000 kg m^2 (a 0.1 m to 100 m box of 1 kg): the inverse
+///   inertia is then within 0.8 % of the exact value. Below 3e-5 kg m^2 (a
+///   circle of radius 0.05 m and 10 g) the inverse inertia overflows, shapes
+///   under 0.02 m are 9 % off, and inertias above 6000 kg m^2 have an
+///   inverse of only a few steps. `torque * inverse_inertia` (the angular
+///   acceleration) must stay below 32767 rad/s^2, and a torque below 32767
+///   N m.
 ///
 /// A ball falling under the default gravity for one second:
 ///
@@ -119,15 +144,45 @@ enum class BodyType : std::uint8_t {
   kNone
 };
 
-/// A rigid body: a point with a position, a velocity and a mass.
+/// How the world sets the @ref Body::inverse_inertia of a dynamic body.
+enum class InertiaMode : std::uint8_t {
+  /// Computed by every @ref PhysicsWorld::Step from the body's mass and its
+  /// solid colliders (the default); see
+  /// @ref PhysicsWorld::ComputeInverseInertia.
+  kFromColliders,
+  /// Left as you set it: use it for a body whose mass isn't spread like its
+  /// shapes (a wheel with a heavy rim, a hollow box).
+  kOverride,
+  /// Torques and impulses never turn the body: the world keeps its inverse
+  /// inertia at 0 (infinite inertia). Use it for characters that must stay
+  /// upright. The body still turns at its `angular_velocity` if you set one.
+  kFixedRotation
+};
+
+/// A rigid body: a position, a velocity and a mass, plus an orientation, an
+/// angular velocity and an inertia.
 ///
 /// Get one with @ref PhysicsWorld::AddBody and edit it in place through
 /// @ref PhysicsWorld::body. A body has no shape on its own: attach one or more
-/// @ref Collider to it. Bodies don't rotate.
+/// @ref Collider to it. The body's `position` is its center of mass, the
+/// point it turns around; colliders are placed around it with their offset.
 ///
 /// Each @ref PhysicsWorld::Step integrates dynamic bodies with semi-implicit
-/// Euler: `velocity += (gravity + force * inverse_mass) * dt`, then
-/// `position += velocity * dt`, then `force` is reset to zero.
+/// Euler, the same way for motion and for spin:
+///
+/// @code
+/// velocity += (gravity + force * inverse_mass) * dt;
+/// position += velocity * dt;
+/// angular_velocity += torque * inverse_inertia * dt;
+/// angle += angular_velocity * dt;  // then wrapped to one turn
+/// force = 0;
+/// torque = 0;
+/// @endcode
+///
+/// Torque is to spin what force is to motion, and inertia is to spin what
+/// mass is to motion: the angular acceleration is `torque / inertia`.
+/// Kinematic bodies move at their `velocity` and turn at their
+/// `angular_velocity`; static bodies do neither.
 struct Body {
   /// World-space position, in world units (meters with the default gravity).
   Vec2f position{};
@@ -145,6 +200,34 @@ struct Body {
   /// contacts. Use 0 for static bodies. Kinematic and static bodies are
   /// treated as infinite mass in contacts whatever this value is.
   Scalar inverse_mass{1};
+  /// Orientation: the angle in radians (counter-clockwise, wrapped to one
+  /// turn) with its cached sine and cosine.
+  ///
+  /// Set it with `body.rotation.set_angle(angle)`. Collider offsets turn with
+  /// it.
+  Rotation rotation{};
+  /// Angular velocity in radians per second, positive counter-clockwise.
+  ///
+  /// 2 pi rad/s is one turn per second.
+  Scalar angular_velocity{};
+  /// Torque accumulated for the next step only, in N m; cleared after each
+  /// step like `force`.
+  ///
+  /// Positive turns counter-clockwise. Add to it directly for a pure torque
+  /// (a motor), or use @ref PhysicsWorld::ApplyForceAtPoint, which adds both
+  /// a force and the torque of that force about `position`.
+  Scalar torque{};
+  /// One over the moment of inertia, in 1/(kg m^2).
+  ///
+  /// The moment of inertia measures how hard the body is to spin: mass far
+  /// from the center counts more (it grows with the distance squared). With
+  /// the default @ref InertiaMode::kFromColliders, every
+  /// @ref PhysicsWorld::Step computes it from `inverse_mass` and the solid
+  /// colliders; it is 0 until then. 0 means infinite inertia: the body
+  /// doesn't spin from torques or impulses.
+  Scalar inverse_inertia{};
+  /// How the world sets `inverse_inertia`, see @ref InertiaMode.
+  InertiaMode inertia_mode = InertiaMode::kFromColliders;
   /// How the body moves, see @ref BodyType.
   BodyType type = BodyType::kDynamic;
   /// When `false` the body is frozen: not integrated and its colliders are
@@ -183,7 +266,12 @@ struct Collider {
   /// The physics never reads it and it is not part of the checksum. Prefer an
   /// index-like value over a real pointer if the world is copied for rollback.
   const void* user_data = nullptr;
-  /// Position of the shape's center relative to the body's position.
+  /// Position of the shape's center relative to the body's position, in the
+  /// body's frame.
+  ///
+  /// It turns with the body: the shape's center in the world is
+  /// `position + rotation.Rotate(offset)` (see
+  /// @ref PhysicsWorld::ColliderCenter).
   Vec2f offset{};
   /// Bounciness, from 0 (no bounce) to 1 (perfectly elastic bounce).
   ///
@@ -231,6 +319,13 @@ struct CircleCollider {
 /// AABB stands for axis-aligned bounding box: its sides stay parallel to the
 /// x and y axes, which makes overlap tests very cheap. A negative half size
 /// marks a free slot.
+///
+/// On a rotating body the box doesn't turn: its center follows the rotated
+/// offset, but its sides stay parallel to the world axes, for collisions and
+/// for the broadphase. For the inertia it counts as a box of the same size
+/// (a box's inertia about its center doesn't depend on its angle). Give
+/// rotating bodies circles, or set @ref InertiaMode::kFixedRotation on
+/// bodies whose boxes must line up with their contacts.
 struct AabbCollider {
   /// Half the width and half the height of the box, in world units.
   ///
@@ -312,8 +407,9 @@ struct PhysicsWorldConfig {
 ///
 /// Each @ref Step runs three phases:
 ///
-/// - **Integration**: dynamic bodies get gravity and forces, kinematic
-///   bodies move at their velocity.
+/// - **Integration**: the inertia of dynamic bodies is computed from their
+///   colliders, then dynamic bodies get gravity, forces and torques, and
+///   kinematic bodies move and turn at their velocities.
 /// - **Broadphase**: a fast, approximate pass that finds the pairs of
 ///   colliders whose bounding boxes overlap, to avoid testing every collider
 ///   against every other one.
@@ -425,6 +521,73 @@ class PhysicsWorld {
   [[nodiscard]] const Body& body(BodyIndex index) const {
     return bodies_[index.index()];
   }
+
+  /// Applies a force at a point of the world to a body, for the next step.
+  ///
+  /// A force through the center of mass only pushes the body; the same
+  /// force applied off-center also turns it. The force is added to
+  /// @ref Body::force (the whole force moves the center of mass, wherever it
+  /// is applied) and the torque `Vec2f::Cross(point - position, force)` to
+  /// @ref Body::torque. `point - position` is the lever arm: only the part
+  /// of the force perpendicular to it turns the body, and the farther the
+  /// point, the larger the torque.
+  ///
+  /// @code
+  /// // Push a crate up at its right edge, 0.5 m from its center: it rises
+  /// // and turns counter-clockwise (torque 0.5 * 10 = 5 N m)
+  /// const neko::Scalar half = neko::Scalar{1} / neko::Scalar{2};
+  /// const neko::Vec2f edge =
+  ///     world.body(crate).position + neko::Vec2f{half, neko::Scalar{0}};
+  /// world.ApplyForceAtPoint(crate, {neko::Scalar{0}, neko::Scalar{10}}, edge);
+  /// @endcode
+  ///
+  /// Two opposite forces at opposite points (a couple) cancel out on the
+  /// center of mass but add up their torques: the body spins in place.
+  ///
+  /// @param index @ref Body to push. Only dynamic bodies use forces.
+  /// @param force Force in newtons.
+  /// @param point World-space point where the force is applied, in meters.
+  void ApplyForceAtPoint(BodyIndex index, Vec2f force, Vec2f point);
+  /// Applies an impulse at a point of the world to a body, right now.
+  ///
+  /// An impulse is a force times a (short) duration, in N s: it changes the
+  /// velocities at once instead of over the next step, which is how contacts
+  /// push bodies. `velocity += impulse * inverse_mass` and
+  /// `angular_velocity += Vec2f::Cross(point - position, impulse) *
+  /// inverse_inertia`. With @ref InertiaMode::kFromColliders the body's
+  /// inverse inertia is computed first, so this works before the first
+  /// @ref Step too.
+  ///
+  /// @param index @ref Body to push. Kinematic and static bodies are left
+  /// unchanged.
+  /// @param impulse Impulse in N s (kg m/s).
+  /// @param point World-space point where the impulse is applied, in meters.
+  void ApplyImpulseAtPoint(BodyIndex index, Vec2f impulse, Vec2f point);
+  /// Computes the inverse inertia of a body from its mass and solid
+  /// colliders, as @ref InertiaMode::kFromColliders does every step.
+  ///
+  /// The mass is spread over the solid colliders in proportion to their area
+  /// (a uniform density); triggers have no mass. Each collider adds its own
+  /// inertia about its center, `m r^2 / 2` for a circle of radius `r` and
+  /// `m (w^2 + h^2) / 12` for a box of width `w` and height `h`, plus
+  /// `m d^2` for its offset `d` from the body's position (the parallel axis
+  /// theorem: the same mass turning farther from the center is harder to
+  /// spin). The sum is computed per kilogram, then
+  /// `inverse_inertia = inverse_mass / sum`.
+  ///
+  /// @note With @ref Fixed16 each term is rounded to 1/65536 m^2 per
+  /// kilogram, so small shapes lose relative precision (measured in
+  /// `tests/conventions_test.cc`).
+  /// @param index A valid body index.
+  /// @return The inverse inertia in 1/(kg m^2), or 0 when the body has no
+  /// solid collider of non-zero size (or an infinite mass).
+  [[nodiscard]] Scalar ComputeInverseInertia(BodyIndex index) const;
+  /// Returns the world-space center of a collider's shape:
+  /// `position + rotation.Rotate(offset)` of its body.
+  ///
+  /// @param index A valid collider index.
+  /// @return The center of the circle or box, in meters.
+  [[nodiscard]] Vec2f ColliderCenter(ColliderIndex index) const;
 
   /// Adds a circle collider of radius 0 to `body`.
   ///
@@ -573,6 +736,15 @@ class PhysicsWorld {
                            : default_broadphase_;
   }
   [[nodiscard]] Aabbf GetAabb(const Collider& collider) const;
+  // Area and inertia per kilogram about the body's position of a solid
+  // collider, both 0 for a trigger or a free slot
+  struct ColliderMass {
+    Scalar area{};
+    Scalar unit_inertia{};
+  };
+  [[nodiscard]] ColliderMass GetColliderMass(const Collider& collider) const;
+  // Sets inverse_inertia from inertia_mode for every active dynamic body
+  void UpdateInertia();
 
   PhysicsWorldConfig config_;
   SweepAndPrune default_broadphase_;
@@ -586,6 +758,10 @@ class PhysicsWorld {
   // computed once per Step and reused for both the world box pass and the
   // insert pass (GetAabb isn't free: a body lookup plus a shape switch)
   ArrayList<Aabbf> collider_aabb_cache_;
+  // Scratch for UpdateInertia, one entry per body: the total area of its solid
+  // colliders, then its inertia per kilogram
+  ArrayList<Scalar> body_area_;
+  ArrayList<Scalar> body_unit_inertia_;
   // Scratch for SortNewTouchingPairs: bucketCount_[k] then bucketStart_[k]
   // hold, then temporarily the write cursor for, colliders whose
   // ColliderPair::c1.index == k; sorted_ is the counting sort's output buffer.
