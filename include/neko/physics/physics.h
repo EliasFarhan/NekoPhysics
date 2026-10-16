@@ -761,6 +761,9 @@ class PhysicsWorld {
   // Scratch for UpdateInertia, one entry per body: the total area of its solid
   // colliders, then its inertia per kilogram
   ArrayList<Scalar> body_area_;
+  // Scratch for UpdateInertia, one entry per collider: its mass, or zero when
+  // it doesn't count (trigger, free slot, body not computed)
+  ArrayList<ColliderMass> collider_mass_cache_;
   ArrayList<Scalar> body_unit_inertia_;
   // Scratch for SortNewTouchingPairs: bucketCount_[k] then bucketStart_[k]
   // hold, then temporarily the write cursor for, colliders whose

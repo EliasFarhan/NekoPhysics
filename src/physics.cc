@@ -100,9 +100,27 @@ constexpr bool IsFreeAabb(const AabbCollider& aabb) {
 }
 
 // Center of the collider's shape in the world: the offset turns with the body.
-// At angle 0 (sin 0, cos 1) the rotated offset is the offset bit for bit.
+// At angle 0 (sin 0, cos 1) the rotated offset is the offset bit for bit, and
+// a zero offset (most colliders) skips the rotation: the same result without
+// the four multiplications, which the narrowphase pays for every pair.
 Vec2f WorldCenter(const Body& body, const Collider& collider) {
+  if (collider.offset == Vec2f::Zero()) {
+    return body.position;
+  }
   return body.position + body.rotation.Rotate(collider.offset);
+}
+
+// value / N for a small positive integer N, with the same bits as
+// value / Scalar{N}: for Fixed16 both truncate raw * 2^16 / (N * 2^16), which
+// is the raw value divided by N, a shift or a multiplication by a constant
+// instead of the 64-bit divider
+template <int N>
+Scalar DivideBy(Scalar value) {
+#ifdef NEKO_SCALAR_FIXED16
+  return Scalar::FromUnderlyingValue(value.underlying_value() / N);
+#else
+  return value / Scalar{N};
+#endif
 }
 
 // Share of a collider's inertia per kilogram when the body's mass is spread
@@ -126,6 +144,9 @@ Scalar InverseInertia(Scalar inverse_mass, Scalar unit_inertia) {
 // Turns the body by angular_velocity * dt. A body that doesn't turn keeps its
 // rotation without recomputing the sine and cosine.
 void Turn(Body& body, Scalar dt) {
+  if (body.angular_velocity == Scalar{0}) {
+    return;
+  }
   const Scalar turn = body.angular_velocity * dt;
   if (turn != Scalar{0}) {
     body.rotation.set_angle(body.rotation.angle() + Radian{turn});
@@ -191,6 +212,8 @@ PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config)
       collider_aabb_cache_(
           MakeList<Aabbf>(ConfigAllocator(config), config.max_colliders)),
       body_area_(MakeList<Scalar>(ConfigAllocator(config), config.max_bodies)),
+      collider_mass_cache_(MakeList<ColliderMass>(ConfigAllocator(config),
+                                                  config.max_colliders)),
       body_unit_inertia_(
           MakeList<Scalar>(ConfigAllocator(config), config.max_bodies)),
       touching_pair_bucket_count_(MakeList<std::uint32_t>(
@@ -595,14 +618,14 @@ NEKO_HOT PhysicsWorld::ColliderMass PhysicsWorld::GetColliderMass(
       const Scalar radius_square = radius * radius;
       // Disk: m r^2 / 2
       return {Pi<Scalar>() * radius_square,
-              radius_square / Scalar{2} + offset_square};
+              DivideBy<2>(radius_square) + offset_square};
     }
     case ShapeType::kAabb: {
       const Vec2f half_size = aabbs_[collider.shape_index.index()].half_size;
       // Box: m (w^2 + h^2) / 12 = m (half_w^2 + half_h^2) / 3
       return {Scalar{4} * half_size.x() * half_size.y(),
-              (half_size.x() * half_size.x() + half_size.y() * half_size.y()) /
-                      Scalar{3} +
+              DivideBy<3>(half_size.x() * half_size.x() +
+                          half_size.y() * half_size.y()) +
                   offset_square};
     }
     default:
@@ -642,18 +665,24 @@ NEKO_HOT void PhysicsWorld::UpdateInertia() {
   std::fill_n(body_area_.begin(), body_count, Scalar{0});
   std::fill_n(body_unit_inertia_.begin(), body_count, Scalar{0});
   // Two passes over the colliders instead of one scan per body: the total
-  // area of each body first, then each collider's share of the inertia
-  for (const auto& collider : colliders_) {
-    if (collider.type != ShapeType::kNone &&
-        is_computed(bodies_[collider.body_index.index()])) {
-      body_area_[collider.body_index.index()] += GetColliderMass(collider).area;
+  // area of each body first, then each collider's share of the inertia. Each
+  // collider's mass is computed once, in the first pass, and kept for the
+  // second (zero for colliders that don't count).
+  collider_mass_cache_.resize(colliders_.size());
+  for (std::size_t i = 0; i < colliders_.size(); ++i) {
+    const Collider& collider = colliders_[i];
+    const bool counts = collider.type != ShapeType::kNone &&
+                        is_computed(bodies_[collider.body_index.index()]);
+    collider_mass_cache_[i] =
+        counts ? GetColliderMass(collider) : ColliderMass{};
+    if (counts) {
+      body_area_[collider.body_index.index()] += collider_mass_cache_[i].area;
     }
   }
-  for (const auto& collider : colliders_) {
-    if (collider.type != ShapeType::kNone &&
-        is_computed(bodies_[collider.body_index.index()])) {
-      const auto body_index = collider.body_index.index();
-      const auto mass = GetColliderMass(collider);
+  for (std::size_t i = 0; i < colliders_.size(); ++i) {
+    const ColliderMass& mass = collider_mass_cache_[i];
+    if (mass.area != Scalar{0}) {
+      const auto body_index = colliders_[i].body_index.index();
       body_unit_inertia_[body_index] +=
           AreaWeighted(mass.unit_inertia, mass.area, body_area_[body_index]);
     }
@@ -692,7 +721,9 @@ NEKO_HOT void PhysicsWorld::Step() {
 
         // The same semi-implicit Euler for the spin: torque / inertia is the
         // angular acceleration
-        body.angular_velocity += body.torque * body.inverse_inertia * dt;
+        if (body.torque != Scalar{0}) {
+          body.angular_velocity += body.torque * body.inverse_inertia * dt;
+        }
         Turn(body, dt);
 
         body.force = Vec2f::Zero();
