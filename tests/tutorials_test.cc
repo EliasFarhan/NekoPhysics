@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <memory>
@@ -15,14 +16,18 @@
 #include "tutorials/02_rotated_box/rotated_box_sample.h"
 #include "tutorials/03_contact_manifold/contact_manifold_sample.h"
 #include "tutorials/04_off_center_impact/off_center_impact_sample.h"
+#include "tutorials/05_friction/friction_sample.h"
+#include "tutorials/06_stacking/stacking_sample.h"
 
 namespace {
 
 using neko::tutorial::BounceSample;
 using neko::tutorial::ContactManifoldSample;
+using neko::tutorial::FrictionSample;
 using neko::tutorial::OffCenterImpactSample;
 using neko::tutorial::RotatedBoxSample;
 using neko::tutorial::RotationSample;
+using neko::tutorial::StackingSample;
 
 // static_cast<float> would be a useless cast when Scalar is float. A template
 // so that if constexpr discards the branch that doesn't compile for the type.
@@ -640,6 +645,151 @@ TEST(OffCenterImpactTutorial, SameParametersSameRun) {
   registry.SetParameter(OffCenterImpactSample::kTilt, 30);
   const std::uint32_t changed = run();
   registry.SetParameter(OffCenterImpactSample::kTilt, 20);
+  const std::uint32_t restored = run();
+  EXPECT_NE(first, changed);
+  EXPECT_EQ(first, restored);
+}
+
+namespace {
+
+struct FrictionRun {
+  bool predicted_holds = false;
+  float predicted_acceleration = 0.0f;
+  float measured_acceleration = 0.0f;
+  float distance = 0.0f;
+};
+
+// Runs the ramp for one second (the measurement); angle in degrees,
+// friction in percents
+FrictionRun RunFriction(int angle, int friction_percent) {
+  FrictionSample sample;
+  auto values = sample.parameters();
+  values[FrictionSample::kRampAngle].value = angle;
+  values[FrictionSample::kFriction].value = friction_percent;
+  sample.Begin(neko::SampleContext{neko::sample_config::kWorldBounds});
+  for (int step = 0; step < FrictionSample::kMeasureSteps; ++step) {
+    sample.FixedUpdate();
+  }
+  FrictionRun run;
+  run.predicted_holds = sample.predicted_holds();
+  run.predicted_acceleration = ToFloat(sample.predicted_acceleration());
+  run.measured_acceleration = ToFloat(*sample.measured_acceleration());
+  run.distance = ToFloat(sample.distance());
+  sample.End();
+  return run;
+}
+
+class FrictionTest : public ::testing::TestWithParam<std::pair<int, int>> {};
+
+}  // namespace
+
+// The experiment of chapter 05: the crate holds when tan a <= mu, and
+// otherwise slides at g (sin a - mu cos a). Measured with FIXED16 within
+// 0.001 m/s^2 away from the boundary tan a = mu
+TEST_P(FrictionTest, CrateHoldsOrSlidesAtGTimesSinMinusMuCos) {
+  const auto [angle, friction_percent] = GetParam();
+  const auto run = RunFriction(angle, friction_percent);
+  const float radians = static_cast<float>(angle) * 3.14159265f / 180.0f;
+  const float mu = static_cast<float>(friction_percent) / 100.0f;
+  EXPECT_EQ(run.predicted_holds, std::tan(radians) <= mu);
+  if (run.predicted_holds) {
+    EXPECT_LT(std::abs(run.distance), 0.005f) << "held";
+    EXPECT_LT(std::abs(run.measured_acceleration), 0.005f);
+  } else {
+    EXPECT_NEAR(run.predicted_acceleration,
+                9.81f * (std::sin(radians) - mu * std::cos(radians)), 0.005f);
+    // Within 0.001 with FIXED16; 3 % allows FLOAT's rounding of the start
+    EXPECT_NEAR(run.measured_acceleration, run.predicted_acceleration,
+                std::max(0.005f, 0.03f * run.predicted_acceleration));
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(AnglesAndFrictions, FrictionTest,
+                         ::testing::Values(std::pair{30, 40}, std::pair{20, 50},
+                                           std::pair{45, 20}, std::pair{35, 50},
+                                           std::pair{10, 0},
+                                           std::pair{30, 60}));
+
+TEST(FrictionTutorial, MoreFrictionSlowerSlide) {
+  float previous = 100.0f;
+  for (int friction = 0; friction <= 50; friction += 10) {
+    const auto run = RunFriction(35, friction);
+    EXPECT_LT(run.measured_acceleration, previous) << friction;
+    previous = run.measured_acceleration;
+  }
+}
+
+namespace {
+
+struct StackRun {
+  float sink = 0.0f;
+  float drift = 0.0f;
+};
+
+// Runs the stack for 5 s
+StackRun RunStacking(int boxes, int passes, bool warm_start, bool oriented) {
+  StackingSample sample;
+  auto values = sample.parameters();
+  values[StackingSample::kBoxes].value = boxes;
+  values[StackingSample::kPasses].value = passes;
+  values[StackingSample::kWarmStart].value = warm_start ? 1 : 0;
+  values[StackingSample::kOriented].value = oriented ? 1 : 0;
+  sample.Begin(neko::SampleContext{neko::sample_config::kWorldBounds});
+  for (int step = 0; step < 300; ++step) {
+    sample.FixedUpdate();
+  }
+  StackRun run{ToFloat(sample.top_sink()), ToFloat(sample.drift())};
+  sample.End();
+  return run;
+}
+
+}  // namespace
+
+// The experiment of chapter 06. With warm starting, the stack keeps within
+// its slops (boxes * 5 mm); without, the same passes don't build up the
+// bottom impulses: it sinks into itself, and turning boxes fall
+TEST(StackingTutorial, WarmStartingHoldsTheStackWithFewPasses) {
+  const auto warm = RunStacking(6, 4, true, true);
+  const auto cold = RunStacking(6, 4, false, true);
+  EXPECT_LT(warm.sink, 6 * 0.005f);
+  EXPECT_LT(warm.drift, 0.05f);
+  EXPECT_GT(cold.sink, 1.0f) << "the stack fell";
+}
+
+TEST(StackingTutorial, ColdStacksNeedMorePasses) {
+  // AABBs can't fall, but they sink: 2 passes sink more than 8
+  const auto two = RunStacking(6, 2, false, false);
+  const auto eight = RunStacking(6, 8, false, false);
+  EXPECT_GT(two.sink, eight.sink);
+  EXPECT_GT(eight.sink, 6 * 0.005f) << "still more than the slops";
+  EXPECT_LT(RunStacking(6, 8, true, false).sink, 6 * 0.005f);
+}
+
+// Ten AABBs with warm starting stay within their slops. Ten turning boxes
+// with 8 passes are at the edge: they hold with FIXED16 but lean and drift
+// with FLOAT, so only the AABB stack is pinned
+TEST(StackingTutorial, TallStackWithWarmStarting) {
+  const auto run = RunStacking(10, 8, true, false);
+  EXPECT_LT(run.sink, 10 * 0.005f);
+  EXPECT_EQ(run.drift, 0.0f) << "AABBs don't turn";
+}
+
+TEST(StackingTutorial, SameParametersSameRun) {
+  std::vector<neko::SampleRegistry::Entry> samples;
+  samples.push_back({"06 Stacking", std::make_unique<StackingSample>()});
+  neko::SampleRegistry registry{std::move(samples)};
+  const neko::SampleContext context{neko::sample_config::kWorldBounds};
+  const auto run = [&registry] {
+    for (int step = 0; step < 120; ++step) {
+      registry.FixedUpdate();
+    }
+    return registry.current()->GenerateChecksum();
+  };
+  registry.Select(0, context);
+  const std::uint32_t first = run();
+  registry.SetParameter(StackingSample::kPasses, 3);
+  const std::uint32_t changed = run();
+  registry.SetParameter(StackingSample::kPasses, 8);
   const std::uint32_t restored = run();
   EXPECT_NE(first, changed);
   EXPECT_EQ(first, restored);
