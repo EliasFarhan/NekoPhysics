@@ -77,11 +77,13 @@ inline void BuildFallingPile(PhysicsWorld& world) {
 // and slop instead of an instant position correction, and Step integrates
 // positions after the contacts. Re-pinned again the same day for friction
 // (M3 stage 2): Collider::friction (0.5 by default) is hashed, and the
-// contacts grip.
+// contacts grip. And again for warm starting (M3 stage 3): the solver starts
+// from last step's impulses, and the contact cache is hashed, so step 1
+// changes too (the pile has contacts from its first step).
 // The DS test ROM must print the same values.
 inline constexpr std::pair<int, std::uint32_t> kFallingPileGoldenChecksums[] = {
-    {0, 0x84d0a2d9u},   {1, 0x1ce45825u},   {60, 0xfc41b8e7u},
-    {120, 0x48471e66u}, {300, 0x332ccc02u}, {600, 0x14b833c5u},
+    {0, 0x84d0a2d9u},   {1, 0xf1757b85u},   {60, 0x26a9ff73u},
+    {120, 0x70f4dddfu}, {300, 0xc498aeaeu}, {600, 0x23abe78du},
 };
 
 // FNV-1a over the raw bits of every body's position and velocity, and nothing
@@ -114,11 +116,11 @@ inline std::uint32_t TrajectoryChecksum(const PhysicsWorld& world,
 // (unchanged by M5, whose stages didn't move non-rotating scenes), re-pinned
 // on 2026-10-17 with MSVC 14.51 for the iterative contact solver (M3 stage 1),
 // which changes how every contact moves the bodies, and again for friction
-// (M3 stage 2).
+// (M3 stage 2) and warm starting (M3 stage 3).
 inline constexpr std::pair<int, std::uint32_t>
     kFallingPileTrajectoryChecksums[] = {
-        {0, 0x239c5dc0u},   {1, 0xbc032ed3u},   {60, 0xcb80c80bu},
-        {120, 0x2c14ec5fu}, {300, 0xf232ec59u}, {600, 0xbd1514b0u},
+        {0, 0x239c5dc0u},   {1, 0xbc032ed3u},   {60, 0xb803c72du},
+        {120, 0xac5dd0a0u}, {300, 0x8e5dd1c9u}, {600, 0x94e1db39u},
 };
 
 }  // namespace neko::scenes

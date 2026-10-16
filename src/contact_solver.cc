@@ -108,8 +108,35 @@ NEKO_HOT void SolveContacts(std::span<Contact> contacts,
               ? bias_factor * (point.penetration - settings.penetration_slop)
               : Scalar{0};
       data.target_velocity = Max(bounce, push_out);
-      point.normal_impulse = Scalar{0};
-      point.tangent_impulse = Scalar{0};
+      if (!settings.warm_starting) {
+        point.normal_impulse = Scalar{0};
+        point.tangent_impulse = Scalar{0};
+      }
+    }
+  }
+
+  // Warm start: apply last step's impulses before the passes, once every
+  // target is computed (the targets use the velocities before any impulse)
+  if (settings.warm_starting) {
+    for (std::size_t c = 0; c < contacts.size(); ++c) {
+      Contact& contact = contacts[c];
+      const Scalar inverse_mass1 = InverseMass(*contact.bodies[0].body);
+      const Scalar inverse_mass2 = InverseMass(*contact.bodies[1].body);
+      const Scalar inverse_inertia1 = InverseInertia(contact.bodies[0]);
+      const Scalar inverse_inertia2 = InverseInertia(contact.bodies[1]);
+      const Vec2f tangent = contact.contact_normal.Perpendicular();
+      for (std::uint8_t i = 0; i < contact.point_count; ++i) {
+        const ContactPoint& point = contact.points[i];
+        if (point.normal_impulse == Scalar{0} &&
+            point.tangent_impulse == Scalar{0}) {
+          continue;
+        }
+        ApplyImpulse(contact, scratch[2 * c + i],
+                     contact.contact_normal * point.normal_impulse +
+                         tangent * point.tangent_impulse,
+                     inverse_mass1, inverse_mass2, inverse_inertia1,
+                     inverse_inertia2);
+      }
     }
   }
 

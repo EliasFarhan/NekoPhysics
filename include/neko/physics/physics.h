@@ -1,6 +1,7 @@
 #ifndef NEKO_PHYSICS_PHYSICS_H_
 #define NEKO_PHYSICS_PHYSICS_H_
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -460,6 +461,15 @@ struct PhysicsWorldConfig {
   /// Slowest approach speed that bounces, in m/s, see
   /// @ref ContactSolverSettings::restitution_threshold. The default is 1.
   Scalar restitution_threshold{1};
+  /// Whether the contact solver starts from last step's impulses, see
+  /// @ref ContactSolverSettings::warm_starting.
+  ///
+  /// The world keeps the impulses of every touching solid pair in a contact
+  /// cache, matched by @ref ContactPoint::id. The cache is simulation state:
+  /// @ref PhysicsWorld::CopyFrom copies it and
+  /// @ref PhysicsWorld::GenerateChecksum hashes it, so rollback replays stay
+  /// exact.
+  bool warm_starting = true;
   /// @ref Allocator for all tables; `nullptr` means @ref DefaultAllocator.
   ///
   /// @warning Must outlive the world.
@@ -845,6 +855,9 @@ class PhysicsWorld {
   [[nodiscard]] ColliderMass GetColliderMass(const Collider& collider) const;
   // Sets inverse_inertia from inertia_mode for every active dynamic body
   void UpdateInertia();
+  // Copies the cached impulses into this step's contacts, and back
+  void WarmStartContacts();
+  void CacheContactImpulses();
 
   PhysicsWorldConfig config_;
   SweepAndPrune default_broadphase_;
@@ -876,6 +889,22 @@ class PhysicsWorld {
   // the solver's working memory (two points per contact)
   ArrayList<Contact> contacts_;
   ArrayList<internal::ContactPointScratch> contact_scratch_;
+  // The broadphase pair of each contact (DetectContact may swap the colliders)
+  ArrayList<ColliderPair> contact_pairs_;
+  // Impulses of the touching solid pairs at the end of the last step, sorted
+  // by pair, to warm start the next one; copied and hashed (simulation state)
+  struct CachedPoint {
+    std::uint8_t id = 0;
+    Scalar normal_impulse{};
+    Scalar tangent_impulse{};
+  };
+  struct CachedContact {
+    ColliderPair pair{};
+    std::array<CachedPoint, 2> points{};
+    std::uint8_t point_count = 0;
+  };
+  ArrayList<CachedContact> contact_cache_;
+  ArrayList<CachedContact> new_contact_cache_;
 
   ContactListener* contact_listener_ = nullptr;
   BoundingSurfaceHierarchy* bsh_ = nullptr;

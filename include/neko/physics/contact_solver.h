@@ -40,6 +40,13 @@ struct ContactPoint {
   /// `(n.y, -n.x)`. Its size never exceeds `Contact::friction` times
   /// `normal_impulse` (Coulomb's law).
   Scalar tangent_impulse{};
+  /// Feature id: which faces and corner of the two shapes made this point.
+  ///
+  /// The same pair of shapes touching the same way gives the same id from
+  /// one step to the next, which is how the world recognizes a point to warm
+  /// start it with last step's impulses (see
+  /// @ref PhysicsWorldConfig::warm_starting). Circles use 0.
+  std::uint8_t id = 0;
 };
 
 /// Contact between two solid colliders, found by the narrowphase and solved
@@ -139,6 +146,14 @@ struct ContactSolverSettings {
   /// a resting body would keep bouncing on the tiny speeds that gravity adds
   /// every step.
   Scalar restitution_threshold{1};
+  /// Whether to start from the points' `normal_impulse` and
+  /// `tangent_impulse` instead of zero (warm starting).
+  ///
+  /// The impulses that held a pile last step are almost the ones that hold it
+  /// now: applying them first leaves the passes only the small difference to
+  /// find, so a stack settles with fewer passes. The world fills them in from
+  /// its contact cache; a contact built by hand has zero impulses either way.
+  bool warm_starting = true;
 };
 
 namespace internal {
@@ -194,8 +209,9 @@ struct ContactPointScratch {
 /// infinite in that contact.
 ///
 /// @param contacts The step's solid contacts, filled by
-/// @ref PhysicsWorld::DetectContact. Their `normal_impulse` values are
-/// overwritten.
+/// @ref PhysicsWorld::DetectContact. Their impulses are the warm start (or
+/// are reset to 0 without warm starting) and hold the step's totals when it
+/// returns.
 /// @param scratch Working memory, two entries per contact.
 /// @param settings Time step, passes and tolerances.
 /// @pre `scratch.size() >= 2 * contacts.size()`, and every contact's body and

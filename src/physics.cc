@@ -1,11 +1,13 @@
 #include "neko/physics/physics.h"
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cassert>
 #include <limits>
 #include <optional>
 #include <type_traits>
+#include <vector>
 
 #include "neko/core/platform.h"
 #include "neko/core/profile.h"
@@ -157,9 +159,13 @@ bool ClipSegment(Vec2f& v1, Vec2f& v2, Vec2f side, Scalar offset) {
 // - its two corners are clipped to the width of the reference face;
 // - the clipped points below the reference face are the manifold, each with
 //   its depth below that face.
+//
+// Each point gets a feature id from the reference face (which box, which axis,
+// which side), the incident face (axis, side) and the incident corner, so the
+// same way of touching gives the same id next step.
 void ClipBoxes(const BoxShape& reference, const BoxShape& incident,
                const AxisOverlap& axis, Vec2f reference_normal,
-               Contact* contact) {
+               std::uint8_t reference_is_b, Contact* contact) {
   const Scalar reference_half =
       axis.is_y_axis ? reference.half_size.y() : reference.half_size.x();
   const Vec2f tangent = axis.is_y_axis ? reference.axis_x : reference.axis_y;
@@ -191,10 +197,20 @@ void ClipBoxes(const BoxShape& reference, const BoxShape& incident,
       !ClipSegment(v1, v2, -tangent, tangent_half - center_along_tangent)) {
     return;
   }
-  for (const Vec2f& point : {v1, v2}) {
-    const Scalar separation = Vec2f::Dot(reference_normal, point - face_center);
+  const Vec2f reference_axis =
+      axis.is_y_axis ? reference.axis_y : reference.axis_x;
+  const auto face_id = static_cast<std::uint8_t>(
+      reference_is_b | (axis.is_y_axis ? 2u : 0u) |
+      (Vec2f::Dot(reference_normal, reference_axis) > Scalar{0} ? 4u : 0u) |
+      (incident_on_x ? 0u : 8u) | (along > Scalar{0} ? 0u : 16u));
+  const std::array<Vec2f, 2> clipped = {v1, v2};
+  for (std::uint8_t corner = 0; corner < 2; ++corner) {
+    const Scalar separation =
+        Vec2f::Dot(reference_normal, clipped[corner] - face_center);
     if (separation <= Scalar{0}) {
-      contact->points[contact->point_count] = {point, -separation};
+      ContactPoint& point = contact->points[contact->point_count];
+      point = {clipped[corner], -separation};
+      point.id = static_cast<std::uint8_t>(face_id | (corner << 5));
       ++contact->point_count;
     }
   }
@@ -261,14 +277,14 @@ bool CollideBoxes(const BoxShape& a, const BoxShape& b, Contact* contact) {
     contact->contact_point = Support(a, -best_b.normal);
     contact->penetration = best_b.overlap;
     // b's face looks toward a: along the normal
-    ClipBoxes(b, a, best_b, best_b.normal, contact);
+    ClipBoxes(b, a, best_b, best_b.normal, 1, contact);
   } else {
     // Reference face on a: b's corner deepest toward a
     contact->contact_normal = best_a.normal;
     contact->contact_point = Support(b, best_a.normal);
     contact->penetration = best_a.overlap;
     // a's face looks toward b: against the normal
-    ClipBoxes(a, b, best_a, -best_a.normal, contact);
+    ClipBoxes(a, b, best_a, -best_a.normal, 0, contact);
   }
   return true;
 }
@@ -458,7 +474,13 @@ PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config)
       contacts_(MakeList<Contact>(ConfigAllocator(config),
                                   config.max_touching_pairs)),
       contact_scratch_(MakeList<internal::ContactPointScratch>(
-          ConfigAllocator(config), 2 * config.max_touching_pairs)) {
+          ConfigAllocator(config), 2 * config.max_touching_pairs)),
+      contact_pairs_(MakeList<ColliderPair>(ConfigAllocator(config),
+                                            config.max_touching_pairs)),
+      contact_cache_(MakeList<CachedContact>(ConfigAllocator(config),
+                                             config.max_touching_pairs)),
+      new_contact_cache_(MakeList<CachedContact>(ConfigAllocator(config),
+                                                 config.max_touching_pairs)) {
   assert(config.max_bodies <= std::numeric_limits<Index>::max() &&
          config.max_colliders <= std::numeric_limits<Index>::max());
   // Fixed size from here on: SortNewTouchingPairs indexes these two directly
@@ -582,6 +604,15 @@ NEKO_HOT bool PhysicsWorld::DetectContact(Body& body1, Collider& collider1,
                 on_x ? Vec2f{face.x(), high} : Vec2f{high, face.y()},
                 contact->penetration};
             contact->point_count = low == high ? 1 : 2;
+            // Ids: which axis, which side, which end of the overlap
+            const auto side = static_cast<std::uint8_t>(
+                (on_x ? 2u : 0u) |
+                (contact->contact_normal.x() + contact->contact_normal.y() >
+                         Scalar{0}
+                     ? 4u
+                     : 0u));
+            contact->points[0].id = side;
+            contact->points[1].id = static_cast<std::uint8_t>(side | 1u);
           }
           break;
         }
@@ -687,6 +718,7 @@ NEKO_HOT void PhysicsWorld::ResolveNarrowphase() {
   NEKO_PROFILE_FUNCTION();
   new_touching_pairs_.clear();
   contacts_.clear();
+  contact_pairs_.clear();
   for (const auto& pair : Broadphase().GetPossiblePairs()) {
     auto& collider1 = colliders_[pair.c1().index()];
     auto& collider2 = colliders_[pair.c2().index()];
@@ -716,6 +748,7 @@ NEKO_HOT void PhysicsWorld::ResolveNarrowphase() {
     if (!is_trigger) {
       if (contacts_.size() < config_.max_touching_pairs) {
         contacts_.push_back(contact);
+        contact_pairs_.push_back(pair);
       } else {
         assert(false && "PhysicsWorldConfig::max_touching_pairs reached");
       }
@@ -728,12 +761,19 @@ NEKO_HOT void PhysicsWorld::ResolveNarrowphase() {
   }
   // All the step's contacts together: each pass sees the others' pushes
   const auto t_resolve_start = StepProfileNow();
+  if (config_.warm_starting) {
+    WarmStartContacts();
+  }
   SolveContacts(contacts_, {contact_scratch_.data(), 2 * contacts_.size()},
                 {.dt = config_.dt,
                  .velocity_iterations = config_.velocity_iterations,
                  .baumgarte = config_.baumgarte,
                  .penetration_slop = config_.penetration_slop,
-                 .restitution_threshold = config_.restitution_threshold});
+                 .restitution_threshold = config_.restitution_threshold,
+                 .warm_starting = config_.warm_starting});
+  if (config_.warm_starting) {
+    CacheContactImpulses();
+  }
   StepProfileMark(StepPhase::kResolve, t_resolve_start);
 
   const auto t_sort_start = StepProfileNow();
@@ -899,7 +939,56 @@ ColliderIndex PhysicsWorld::AddOrientedBoxCollider(BodyIndex body) {
   return collider.collider_index;
 }
 
+void PhysicsWorld::WarmStartContacts() {
+  // The cache is sorted by pair: one binary search per contact, then the
+  // points matched by feature id
+  for (std::size_t c = 0; c < contacts_.size(); ++c) {
+    const auto cached = std::lower_bound(
+        contact_cache_.begin(), contact_cache_.end(), contact_pairs_[c],
+        [](const CachedContact& entry, const ColliderPair& pair) {
+          return entry.pair < pair;
+        });
+    if (cached == contact_cache_.end() || cached->pair != contact_pairs_[c]) {
+      continue;
+    }
+    Contact& contact = contacts_[c];
+    for (std::uint8_t i = 0; i < contact.point_count; ++i) {
+      for (std::uint8_t k = 0; k < cached->point_count; ++k) {
+        if (cached->points[k].id == contact.points[i].id) {
+          contact.points[i].normal_impulse = cached->points[k].normal_impulse;
+          contact.points[i].tangent_impulse = cached->points[k].tangent_impulse;
+          break;
+        }
+      }
+    }
+  }
+}
+
+void PhysicsWorld::CacheContactImpulses() {
+  new_contact_cache_.clear();
+  for (std::size_t c = 0; c < contacts_.size(); ++c) {
+    const Contact& contact = contacts_[c];
+    CachedContact entry{.pair = contact_pairs_[c],
+                        .point_count = contact.point_count};
+    for (std::uint8_t i = 0; i < contact.point_count; ++i) {
+      entry.points[i] = {contact.points[i].id, contact.points[i].normal_impulse,
+                         contact.points[i].tangent_impulse};
+    }
+    new_contact_cache_.push_back(entry);
+  }
+  // Pairs are unique, so the order is total and deterministic
+  std::sort(new_contact_cache_.begin(), new_contact_cache_.end(),
+            [](const CachedContact& lhs, const CachedContact& rhs) {
+              return lhs.pair < rhs.pair;
+            });
+  std::swap(contact_cache_, new_contact_cache_);
+}
+
 void PhysicsWorld::RemoveCollider(ColliderIndex index) {
+  // Forget its cached impulses: a later collider may reuse the index
+  std::erase_if(contact_cache_, [index](const CachedContact& entry) {
+    return entry.pair.c1() == index || entry.pair.c2() == index;
+  });
   auto& collider = colliders_[index.index()];
   switch (collider.type) {
     case ShapeType::kAabb:
@@ -1096,6 +1185,7 @@ void PhysicsWorld::Clear() {
   colliders_.clear();
   touching_pairs_.clear();
   new_touching_pairs_.clear();
+  contact_cache_.clear();
 }
 
 NEKO_HOT Aabbf PhysicsWorld::GetAabb(const Collider& collider) const {
@@ -1178,6 +1268,8 @@ void PhysicsWorld::CopyFrom(const PhysicsWorld& physics_world) {
   circles_ = physics_world.circles_;
   colliders_ = physics_world.colliders_;
   touching_pairs_ = physics_world.touching_pairs_;
+  // Warm starting reads it next step: part of the simulation state
+  contact_cache_ = physics_world.contact_cache_;
 }
 
 std::uint32_t PhysicsWorld::GenerateChecksum() const {
@@ -1202,6 +1294,16 @@ std::uint32_t PhysicsWorld::GenerateChecksum() const {
     checksum.Add(touching_pair.pair.c1());
     checksum.Add(touching_pair.pair.c2());
     checksum.Add(touching_pair.is_trigger);
+  }
+  for (const auto& entry : contact_cache_) {
+    checksum.Add(entry.pair.c1());
+    checksum.Add(entry.pair.c2());
+    checksum.Add(static_cast<std::uint32_t>(entry.point_count));
+    for (std::uint8_t i = 0; i < entry.point_count; ++i) {
+      checksum.Add(static_cast<std::uint32_t>(entry.points[i].id));
+      checksum.Add(entry.points[i].normal_impulse);
+      checksum.Add(entry.points[i].tangent_impulse);
+    }
   }
   return checksum.Get();
 }

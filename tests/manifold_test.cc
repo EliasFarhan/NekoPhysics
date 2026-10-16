@@ -217,6 +217,24 @@ TEST(Manifold, TouchingFlatGivesTwoPointsAtZeroDepth) {
   EXPECT_EQ(contact.points[1].penetration, Scalar{0});
 }
 
+TEST(Manifold, FeatureIdsStayTheSameWhileTheContactLasts) {
+  // The same box touching the same way a little later (moved and slightly
+  // turned): same ids, so the world can carry the impulses over (warm
+  // starting); the two points have different ids
+  Fixture f;
+  const auto body = f.AddBody({Scalar{3}, Ratio(4, 10)});
+  const auto box = f.AddOrientedBox(body, {Scalar{1}, Ratio(1, 2)});
+  const auto first = f.Detect(f.ground, box);
+  f.world.body(body).position = {Ratio(31, 10), Ratio(41, 100)};
+  f.world.body(body).rotation.set_angle(Radian{Degrees(1)});
+  const auto later = f.Detect(f.ground, box);
+  ASSERT_EQ(first.point_count, 2);
+  ASSERT_EQ(later.point_count, 2);
+  EXPECT_NE(first.points[0].id, first.points[1].id);
+  EXPECT_EQ(first.points[0].id, later.points[0].id);
+  EXPECT_EQ(first.points[1].id, later.points[1].id);
+}
+
 TEST(Manifold, TriggerPairsGetNoPoints) {
   Fixture f;
   const auto box = f.AddOrientedBox(f.AddBody({Scalar{0}, Ratio(4, 10)}),
