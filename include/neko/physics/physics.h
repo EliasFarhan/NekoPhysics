@@ -46,10 +46,12 @@
 ///   static).
 /// - @ref Collider attaches a shape to a body, with an offset, a restitution
 ///   (bounciness) and a trigger flag. A body can have several colliders.
-/// - Shapes are @ref CircleCollider (a radius) and @ref AabbCollider (an
-///   axis-aligned box, by half size). Collider offsets turn with the body,
-///   but contacts don't use the rotation yet: a box stays axis-aligned (see
-///   @ref AabbCollider).
+/// - Shapes are @ref CircleCollider (a radius), @ref AabbCollider (an
+///   axis-aligned box, by half size) and @ref OrientedBoxCollider (a box
+///   that turns with its body). Collider offsets turn with the body; an
+///   @ref AabbCollider stays axis-aligned. Contacts find where shapes touch
+///   but don't make bodies spin yet: the contact impulse goes through the
+///   center of mass.
 /// - @ref ContactListener is the interface your game implements to receive
 ///   trigger and collision enter/exit events.
 /// - Collision detection runs in two phases. The broadphase, a
@@ -245,11 +247,12 @@ struct Body {
 
 /// Attaches a shape to a @ref Body and sets how it reacts to contacts.
 ///
-/// Created with @ref PhysicsWorld::AddCircleCollider or
-/// @ref PhysicsWorld::AddAabbCollider, which fill in `body_index`,
+/// Created with @ref PhysicsWorld::AddCircleCollider,
+/// @ref PhysicsWorld::AddAabbCollider or
+/// @ref PhysicsWorld::AddOrientedBoxCollider, which fill in `body_index`,
 /// `collider_index`, `shape_index` and `type`; you then set the other fields
-/// and the shape size (@ref PhysicsWorld::circle or @ref PhysicsWorld::aabb
-/// with `shape_index`).
+/// and the shape size (@ref PhysicsWorld::circle, @ref PhysicsWorld::aabb or
+/// @ref PhysicsWorld::oriented_box with `shape_index`).
 ///
 /// A collider is either:
 /// - a **trigger** (`is_trigger`, the default): overlaps are only reported
@@ -281,7 +284,8 @@ struct Collider {
   BodyIndex body_index{};
   /// Index of this collider (its own slot in the world).
   ColliderIndex collider_index{};
-  /// Slot of the shape in the circle or box table, depending on `type`.
+  /// Slot of the shape in the circle, box or oriented box table, depending
+  /// on `type`.
   ShapeIndex shape_index{};
   /// Kind of shape; @ref ShapeType::kNone marks a free slot.
   ShapeType type = ShapeType::kNone;
@@ -323,9 +327,8 @@ struct CircleCollider {
 /// On a rotating body the box doesn't turn: its center follows the rotated
 /// offset, but its sides stay parallel to the world axes, for collisions and
 /// for the broadphase. For the inertia it counts as a box of the same size
-/// (a box's inertia about its center doesn't depend on its angle). Give
-/// rotating bodies circles, or set @ref InertiaMode::kFixedRotation on
-/// bodies whose boxes must line up with their contacts.
+/// (a box's inertia about its center doesn't depend on its angle). For a box
+/// that turns with its body, use @ref OrientedBoxCollider.
 struct AabbCollider {
   /// Half the width and half the height of the box, in world units.
   ///
@@ -340,6 +343,42 @@ struct AabbCollider {
 /// @param collider @ref AabbCollider to hash.
 /// @return FNV-1a hash of the half size.
 [[nodiscard]] std::uint32_t GenerateChecksum(const AabbCollider& collider);
+
+/// Box shape of a @ref Collider that turns with its body.
+///
+/// Its center is the body position plus the rotated collider offset, and its
+/// sides follow the body's local axes (@ref Rotation::x_axis and
+/// @ref Rotation::y_axis): a crate that tips over, a plank, a tilted ramp
+/// (a static body whose rotation is set once).
+///
+/// Collisions with other boxes use the separating axis theorem (SAT): two
+/// convex shapes don't overlap if and only if some axis separates their
+/// projections, and for two boxes it is enough to test the four face
+/// normals. When every axis overlaps, the one with the smallest overlap gives
+/// the contact normal and the penetration. Contact points come from the
+/// deepest corner (one point per pair); resting face to face needs two points,
+/// which comes later.
+///
+/// It costs more than an @ref AabbCollider (four projections instead of four
+/// comparisons), so keep @ref AabbCollider for boxes that never turn.
+///
+/// A negative half size marks a free slot.
+struct OrientedBoxCollider {
+  /// Half the width and half the height of the box along the body's local x
+  /// and y axes, in world units.
+  ///
+  /// @ref PhysicsWorld::AddOrientedBoxCollider sets it to zero: set the real
+  /// size afterwards. Each component is a @ref Scalar; the default of -1
+  /// marks a free slot.
+  Vec2f half_size{Scalar{-1}, Scalar{-1}};
+};
+
+/// Returns a hash of `collider`'s half size.
+///
+/// @param collider @ref OrientedBoxCollider to hash.
+/// @return FNV-1a hash of the half size.
+[[nodiscard]] std::uint32_t GenerateChecksum(
+    const OrientedBoxCollider& collider);
 
 /// Pair of colliders that touched at the end of the last step.
 ///
@@ -425,8 +464,9 @@ struct PhysicsWorldConfig {
 /// are reused by later additions. For rollback netcode, keep snapshot worlds
 /// built with the same config and use @ref CopyFrom to save and restore.
 ///
-/// @note References returned by @ref body, @ref collider, @ref circle and
-/// @ref aabb point into the world's tables: don't keep them across a
+/// @note References returned by @ref body, @ref collider, @ref circle,
+/// @ref aabb and @ref oriented_box point into the world's tables: don't keep
+/// them across a
 /// @ref CopyFrom or a move of the world; keep indices instead.
 class PhysicsWorld {
  public:
@@ -462,7 +502,8 @@ class PhysicsWorld {
   /// Narrowphase test of two colliders: checks whether their exact shapes
   /// overlap and fills in `contact`.
   ///
-  /// Handles circle-circle, box-box and circle-box. The contact normal,
+  /// Handles every pair of circles, boxes and oriented boxes. The contact
+  /// normal,
   /// point and penetration are only computed when both colliders are solid;
   /// for a trigger pair only the overlap result matters. Called by
   /// @ref ResolveNarrowphase; it doesn't change the bodies.
@@ -609,6 +650,17 @@ class PhysicsWorld {
   /// @return The new collider's index, or @ref kInvalidColliderIndex when
   /// `max_colliders` colliders are in use.
   ColliderIndex AddAabbCollider(BodyIndex body);
+  /// Adds an oriented box collider of half size zero to `body`.
+  ///
+  /// The box turns with the body (see @ref OrientedBoxCollider). The
+  /// collider is a trigger with restitution 1 and no offset: set
+  /// `is_trigger`, `restitution` and the half size
+  /// (`oriented_box(collider(index).shape_index).half_size`) afterwards.
+  ///
+  /// @param body @ref Body to attach the collider to.
+  /// @return The new collider's index, or @ref kInvalidColliderIndex when
+  /// `max_colliders` colliders are in use.
+  ColliderIndex AddOrientedBoxCollider(BodyIndex body);
   /// Removes a collider and its shape, freeing their slots.
   ///
   /// @param index @ref Collider to remove.
@@ -660,6 +712,23 @@ class PhysicsWorld {
   /// @return The circle shape.
   [[nodiscard]] const CircleCollider& circle(ShapeIndex shape_index) const {
     return circles_[shape_index.index()];
+  }
+  /// Returns the oriented box shape at `shape_index`.
+  ///
+  /// @param shape_index `shape_index` of a collider of type
+  /// @ref ShapeType::kOrientedBox.
+  /// @return The oriented box shape, which can be edited in place.
+  [[nodiscard]] OrientedBoxCollider& oriented_box(ShapeIndex shape_index) {
+    return oriented_boxes_[shape_index.index()];
+  }
+  /// Returns the oriented box shape at @p shape_index (read-only).
+  ///
+  /// @param shape_index `shape_index` of a collider of type
+  /// @ref ShapeType::kOrientedBox.
+  /// @return The oriented box shape.
+  [[nodiscard]] const OrientedBoxCollider& oriented_box(
+      ShapeIndex shape_index) const {
+    return oriented_boxes_[shape_index.index()];
   }
 
   /// Replaces the broadphase.
@@ -751,6 +820,7 @@ class PhysicsWorld {
   ArrayList<Body> bodies_;
   ArrayList<AabbCollider> aabbs_;
   ArrayList<CircleCollider> circles_;
+  ArrayList<OrientedBoxCollider> oriented_boxes_;
   ArrayList<Collider> colliders_;
   ArrayList<TouchingPair> touching_pairs_;
   ArrayList<TouchingPair> new_touching_pairs_;

@@ -88,7 +88,11 @@ constexpr auto kInvalidShapeIndex = ShapeIndex{};
 enum class ShapeType : std::uint8_t {
   kAabb,    ///< Axis-aligned box, see @ref AabbCollider.
   kCircle,  ///< Circle, see @ref CircleCollider.
-  kNone     ///< No shape: marks a free collider slot.
+  kNone,    ///< No shape: marks a free collider slot.
+  /// Box that turns with its body, see @ref OrientedBoxCollider. Listed after
+  /// `kNone` so the values of the older shapes, which are part of the
+  /// checksums, didn't change when it was added.
+  kOrientedBox
 };
 
 /// Strongly typed index of a @ref Collider in a @ref PhysicsWorld.

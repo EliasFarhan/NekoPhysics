@@ -98,6 +98,157 @@ constexpr bool IsFreeCircle(const CircleCollider& circle) {
 constexpr bool IsFreeAabb(const AabbCollider& aabb) {
   return aabb.half_size.x() < Scalar{0};
 }
+constexpr bool IsFreeOrientedBox(const OrientedBoxCollider& box) {
+  return box.half_size.x() < Scalar{0};
+}
+
+// A box in the world for the narrowphase: center, unit axes (its local x and y
+// in world space) and half size along them. An AabbCollider is the same with
+// the world axes.
+struct BoxShape {
+  Vec2f center;
+  Vec2f axis_x;
+  Vec2f axis_y;
+  Vec2f half_size;
+};
+
+// Half the length of the box's shadow on a unit axis
+Scalar ProjectedRadius(const BoxShape& box, Vec2f axis) {
+  return box.half_size.x() * Abs(Vec2f::Dot(axis, box.axis_x)) +
+         box.half_size.y() * Abs(Vec2f::Dot(axis, box.axis_y));
+}
+
+// Overlap of the shadows of a and b on a unit axis (negative when separated),
+// and the axis turned to point from b toward a, the contact normal convention
+struct AxisOverlap {
+  Scalar overlap;
+  Vec2f normal;
+};
+
+AxisOverlap OverlapAlong(const BoxShape& a, const BoxShape& b, Vec2f axis) {
+  const Scalar distance = Vec2f::Dot(a.center - b.center, axis);
+  return {ProjectedRadius(a, axis) + ProjectedRadius(b, axis) - Abs(distance),
+          distance < Scalar{0} ? -axis : axis};
+}
+
+// The box's farthest point in a direction: a corner, or the middle of an edge
+// when the direction is exactly perpendicular to it
+Vec2f Support(const BoxShape& box, Vec2f direction) {
+  Vec2f point = box.center;
+  const Scalar along_x = Vec2f::Dot(direction, box.axis_x);
+  const Scalar along_y = Vec2f::Dot(direction, box.axis_y);
+  if (along_x > Scalar{0}) {
+    point += box.axis_x * box.half_size.x();
+  } else if (along_x < Scalar{0}) {
+    point -= box.axis_x * box.half_size.x();
+  }
+  if (along_y > Scalar{0}) {
+    point += box.axis_y * box.half_size.y();
+  } else if (along_y < Scalar{0}) {
+    point -= box.axis_y * box.half_size.y();
+  }
+  return point;
+}
+
+// Separating axis test of two boxes. The face normals of both boxes are the
+// only axes that can separate them: if one of them separates the shadows, the
+// boxes don't overlap (touching counts as overlapping, like the other
+// shapes). Otherwise the axis of smallest overlap is the contact normal and
+// the overlap is the penetration. The order is fixed (a's x and y axes, then
+// b's) and a later axis replaces an earlier one only when strictly smaller, so
+// the choice is deterministic. Fills contact when it isn't null.
+bool CollideBoxes(const BoxShape& a, const BoxShape& b, Contact* contact) {
+  AxisOverlap best_a = OverlapAlong(a, b, a.axis_x);
+  if (best_a.overlap < Scalar{0}) {
+    return false;
+  }
+  const AxisOverlap a_y = OverlapAlong(a, b, a.axis_y);
+  if (a_y.overlap < Scalar{0}) {
+    return false;
+  }
+  if (a_y.overlap < best_a.overlap) {
+    best_a = a_y;
+  }
+  AxisOverlap best_b = OverlapAlong(a, b, b.axis_x);
+  if (best_b.overlap < Scalar{0}) {
+    return false;
+  }
+  const AxisOverlap b_y = OverlapAlong(a, b, b.axis_y);
+  if (b_y.overlap < Scalar{0}) {
+    return false;
+  }
+  if (b_y.overlap < best_b.overlap) {
+    best_b = b_y;
+  }
+  if (contact == nullptr) {
+    return true;
+  }
+  // b's face wins only when clearly smaller (under 15/16 of a's): when two
+  // overlaps are nearly equal, rounding would otherwise flip the normal from
+  // one step to the next
+  if (best_b.overlap * Scalar{16} < best_a.overlap * Scalar{15}) {
+    // Reference face on b: a's corner deepest toward b
+    contact->contact_normal = best_b.normal;
+    contact->contact_point = Support(a, -best_b.normal);
+    contact->penetration = best_b.overlap;
+  } else {
+    // Reference face on a: b's corner deepest toward a
+    contact->contact_normal = best_a.normal;
+    contact->contact_point = Support(b, best_a.normal);
+    contact->penetration = best_a.overlap;
+  }
+  return true;
+}
+
+// A box (body 1) against a circle (body 2), computed in the box's frame like
+// the AabbCollider case: the closest point of the box to the circle center,
+// or the nearest face when the center is inside. The normal points from the
+// circle toward the box. Fills contact when it isn't null.
+bool CollideBoxCircle(const BoxShape& box, Vec2f circle_center, Scalar radius,
+                      Contact* contact) {
+  const Vec2f delta = circle_center - box.center;
+  const Vec2f local{Vec2f::Dot(delta, box.axis_x),
+                    Vec2f::Dot(delta, box.axis_y)};
+  const Vec2f clamped{Clamp(local.x(), -box.half_size.x(), box.half_size.x()),
+                      Clamp(local.y(), -box.half_size.y(), box.half_size.y())};
+  const Vec2f box_to_circle = local - clamped;
+  if (box_to_circle != Vec2f::Zero()) {
+    if (CompareLength(box_to_circle, radius) > 0) {
+      return false;
+    }
+    if (contact != nullptr) {
+      const Scalar distance = box_to_circle.Length();
+      const Vec2f local_normal = box_to_circle * (Scalar{1} / distance);
+      contact->contact_normal =
+          -(box.axis_x * local_normal.x() + box.axis_y * local_normal.y());
+      contact->contact_point =
+          box.center + box.axis_x * clamped.x() + box.axis_y * clamped.y();
+      contact->penetration = radius - distance;
+    }
+    return true;
+  }
+  if (contact == nullptr) {
+    return true;
+  }
+  // The circle center is inside the box: push it out through the nearest
+  // face
+  const Scalar distance_x = box.half_size.x() - Abs(local.x());
+  const Scalar distance_y = box.half_size.y() - Abs(local.y());
+  if (distance_x < distance_y) {
+    const Vec2f outward = local.x() < Scalar{0} ? -box.axis_x : box.axis_x;
+    contact->contact_normal = -outward;
+    contact->contact_point =
+        box.center + outward * box.half_size.x() + box.axis_y * local.y();
+    contact->penetration = radius + distance_x;
+  } else {
+    const Vec2f outward = local.y() < Scalar{0} ? -box.axis_y : box.axis_y;
+    contact->contact_normal = -outward;
+    contact->contact_point =
+        box.center + box.axis_x * local.x() + outward * box.half_size.y();
+    contact->penetration = radius + distance_y;
+  }
+  return true;
+}
 
 // Center of the collider's shape in the world: the offset turns with the body.
 // At angle 0 (sin 0, cos 1) the rotated offset is the offset bit for bit, and
@@ -194,6 +345,12 @@ std::uint32_t GenerateChecksum(const AabbCollider& collider) {
   return checksum.Get();
 }
 
+std::uint32_t GenerateChecksum(const OrientedBoxCollider& collider) {
+  Checksum checksum;
+  checksum.Add(collider.half_size);
+  return checksum.Get();
+}
+
 PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config)
     : config_(config),
       default_broadphase_(config.max_colliders, config.max_broadphase_pairs,
@@ -203,6 +360,8 @@ PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config)
                                     config.max_colliders)),
       circles_(MakeList<CircleCollider>(ConfigAllocator(config),
                                         config.max_colliders)),
+      oriented_boxes_(MakeList<OrientedBoxCollider>(ConfigAllocator(config),
+                                                    config.max_colliders)),
       colliders_(
           MakeList<Collider>(ConfigAllocator(config), config.max_colliders)),
       touching_pairs_(MakeList<TouchingPair>(ConfigAllocator(config),
@@ -258,10 +417,48 @@ NEKO_HOT bool PhysicsWorld::DetectContact(Body& body1, Collider& collider1,
   contact->restitution = Max(collider1.restitution, collider2.restitution);
 
   const bool collision = !(collider1.is_trigger || collider2.is_trigger);
+  // The contact details are only needed for solid pairs
+  Contact* const details = collision ? contact : nullptr;
+  const auto axis_aligned_box = [this](const Body& body,
+                                       const Collider& collider) {
+    return BoxShape{WorldCenter(body, collider), Vec2f::Right(), Vec2f::Up(),
+                    aabbs_[collider.shape_index.index()].half_size};
+  };
+  const auto oriented_box = [this](const Body& body, const Collider& collider) {
+    return BoxShape{WorldCenter(body, collider), body.rotation.x_axis(),
+                    body.rotation.y_axis(),
+                    oriented_boxes_[collider.shape_index.index()].half_size};
+  };
 
   switch (collider1.type) {
+    case ShapeType::kOrientedBox:
+      switch (collider2.type) {
+        case ShapeType::kOrientedBox:
+          does_intersect =
+              CollideBoxes(oriented_box(body1, collider1),
+                           oriented_box(body2, collider2), details);
+          break;
+        case ShapeType::kAabb:
+          does_intersect =
+              CollideBoxes(oriented_box(body1, collider1),
+                           axis_aligned_box(body2, collider2), details);
+          break;
+        case ShapeType::kCircle:
+          does_intersect = CollideBoxCircle(
+              oriented_box(body1, collider1), WorldCenter(body2, collider2),
+              circles_[collider2.shape_index.index()].radius, details);
+          break;
+        default:
+          break;
+      }
+      break;
     case ShapeType::kAabb:
       switch (collider2.type) {
+        case ShapeType::kOrientedBox:
+          does_intersect =
+              CollideBoxes(axis_aligned_box(body1, collider1),
+                           oriented_box(body2, collider2), details);
+          break;
         case ShapeType::kAabb: {
           const auto center1 = WorldCenter(body1, collider1);
           const auto center2 = WorldCenter(body2, collider2);
@@ -340,7 +537,10 @@ NEKO_HOT bool PhysicsWorld::DetectContact(Body& body1, Collider& collider1,
       break;
     case ShapeType::kCircle:
       switch (collider2.type) {
-        case ShapeType::kAabb: {
+        case ShapeType::kAabb:
+        case ShapeType::kOrientedBox: {
+          // The box is body 1 of the contact, so the normal points from the
+          // circle toward the box
           does_intersect =
               DetectContact(body2, collider2, body1, collider1, contact);
           break;
@@ -559,6 +759,26 @@ ColliderIndex PhysicsWorld::AddAabbCollider(BodyIndex body) {
   return collider.collider_index;
 }
 
+ColliderIndex PhysicsWorld::AddOrientedBoxCollider(BodyIndex body) {
+  const auto collider_slot =
+      AcquireSlot(colliders_, config_.max_colliders, IsFreeCollider);
+  const auto shape_slot =
+      collider_slot.has_value()
+          ? AcquireSlot(oriented_boxes_, config_.max_colliders,
+                        IsFreeOrientedBox)
+          : std::nullopt;
+  if (!collider_slot.has_value() || !shape_slot.has_value()) {
+    return kInvalidColliderIndex;
+  }
+  oriented_boxes_[*shape_slot].half_size = Vec2f::Zero();
+  auto& collider = colliders_[*collider_slot];
+  collider.body_index = body;
+  collider.collider_index = ColliderIndex{*collider_slot};
+  collider.shape_index = ShapeIndex{*shape_slot};
+  collider.type = ShapeType::kOrientedBox;
+  return collider.collider_index;
+}
+
 void PhysicsWorld::RemoveCollider(ColliderIndex index) {
   auto& collider = colliders_[index.index()];
   switch (collider.type) {
@@ -567,6 +787,9 @@ void PhysicsWorld::RemoveCollider(ColliderIndex index) {
       break;
     case ShapeType::kCircle:
       circles_[collider.shape_index.index()] = CircleCollider{};
+      break;
+    case ShapeType::kOrientedBox:
+      oriented_boxes_[collider.shape_index.index()] = OrientedBoxCollider{};
       break;
     default:
       break;
@@ -620,8 +843,12 @@ NEKO_HOT PhysicsWorld::ColliderMass PhysicsWorld::GetColliderMass(
       return {Pi<Scalar>() * radius_square,
               DivideBy<2>(radius_square) + offset_square};
     }
-    case ShapeType::kAabb: {
-      const Vec2f half_size = aabbs_[collider.shape_index.index()].half_size;
+    case ShapeType::kAabb:
+    case ShapeType::kOrientedBox: {
+      const Vec2f half_size =
+          collider.type == ShapeType::kAabb
+              ? aabbs_[collider.shape_index.index()].half_size
+              : oriented_boxes_[collider.shape_index.index()].half_size;
       // Box: m (w^2 + h^2) / 12 = m (half_w^2 + half_h^2) / 3
       return {Scalar{4} * half_size.x() * half_size.y(),
               DivideBy<3>(half_size.x() * half_size.x() +
@@ -748,6 +975,7 @@ NEKO_HOT void PhysicsWorld::Step() {
 void PhysicsWorld::Clear() {
   bodies_.clear();
   aabbs_.clear();
+  oriented_boxes_.clear();
   circles_.clear();
   colliders_.clear();
   touching_pairs_.clear();
@@ -755,11 +983,22 @@ void PhysicsWorld::Clear() {
 }
 
 NEKO_HOT Aabbf PhysicsWorld::GetAabb(const Collider& collider) const {
-  const auto center =
-      WorldCenter(bodies_[collider.body_index.index()], collider);
+  const Body& body = bodies_[collider.body_index.index()];
+  const auto center = WorldCenter(body, collider);
   if (collider.type == ShapeType::kAabb) {
     return Aabbf::FromCenter(center,
                              aabbs_[collider.shape_index.index()].half_size);
+  }
+  if (collider.type == ShapeType::kOrientedBox) {
+    // The tight box around the turned box: each half extent adds the shadows
+    // of both turned half sides on that world axis
+    const Vec2f half_size =
+        oriented_boxes_[collider.shape_index.index()].half_size;
+    const Scalar cos = Abs(body.rotation.cos());
+    const Scalar sin = Abs(body.rotation.sin());
+    return Aabbf::FromCenter(center,
+                             {cos * half_size.x() + sin * half_size.y(),
+                              sin * half_size.x() + cos * half_size.y()});
   }
   return Circlef{center, circles_[collider.shape_index.index()].radius}
       .GetAabb();
@@ -819,6 +1058,7 @@ void PhysicsWorld::CopyFrom(const PhysicsWorld& physics_world) {
   // share a config
   bodies_ = physics_world.bodies_;
   aabbs_ = physics_world.aabbs_;
+  oriented_boxes_ = physics_world.oriented_boxes_;
   circles_ = physics_world.circles_;
   colliders_ = physics_world.colliders_;
   touching_pairs_ = physics_world.touching_pairs_;
@@ -837,6 +1077,10 @@ std::uint32_t PhysicsWorld::GenerateChecksum() const {
   }
   for (const auto& circle : circles_) {
     checksum.Add(neko::GenerateChecksum(circle));
+  }
+  // Empty in worlds without oriented boxes, which keep their old checksums
+  for (const auto& oriented_box : oriented_boxes_) {
+    checksum.Add(neko::GenerateChecksum(oriented_box));
   }
   for (const auto& touching_pair : touching_pairs_) {
     checksum.Add(touching_pair.pair.c1());
