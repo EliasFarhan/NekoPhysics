@@ -73,16 +73,48 @@ struct SampleParameter {
   }
 };
 
-/// Writes `parameter`'s value as a decimal number, such as `"0.75"` or `"-2"`.
+/// A number a sample measures and shows: the result of an experiment.
 ///
-/// Integer only, for the DS console as well as the PC menu. Doesn't write the
-/// unit or a terminating null character.
+/// Like @ref SampleParameter, the value is the fraction `value / scale` kept as
+/// integers, so both hosts print it without floating point (the PC menu and
+/// the DS console). The sample updates it in @ref Sample::FixedUpdate, for
+/// instance with @ref ToDecimal.
+struct SampleReadout {
+  /// Short name shown by the hosts.
+  const char* name = "";
+  /// Unit shown after the value; empty if none.
+  const char* unit = "";
+  /// Denominator: 1, 10, 100 or 1000.
+  int scale = 1;
+  /// Current numerator.
+  int value = 0;
+  /// `false` while there is nothing to show yet (the hosts print `-`).
+  bool is_valid = false;
+};
+
+/// Returns `value * scale` rounded to the nearest integer (halves away from
+/// zero): the numerator of `value` for a @ref SampleReadout of that `scale`.
 ///
-/// @param parameter The @ref SampleParameter to print.
+/// @param value The number to convert.
+/// @param scale Denominator, such as 100 for two decimals.
+/// @return The numerator.
+/// @note With @ref Fixed16 the product must stay below 32768: keep
+/// `|value| * scale` under it (for instance meters with `scale = 100` up to
+/// 327 m).
+[[nodiscard]] int ToDecimal(Scalar value, int scale);
+
+/// Writes `numerator / scale` as a decimal number, such as `"0.75"` or `"-2"`.
+///
+/// Integer only, for the DS console as well as the PC menu: prints a
+/// @ref SampleParameter or a @ref SampleReadout. Doesn't write a unit or a
+/// terminating null character.
+///
+/// @param numerator The value's numerator.
+/// @param scale 1, 10, 100 or 1000: the number of decimals is the number of
+/// zeros.
 /// @param buffer Where to write; the text is cut if it doesn't fit.
 /// @return The number of characters written.
-std::size_t FormatParameterValue(const SampleParameter& parameter,
-                                 std::span<char> buffer);
+std::size_t FormatDecimal(int numerator, int scale, std::span<char> buffer);
 
 /// What the host platform gives a sample when it begins.
 ///
@@ -229,6 +261,12 @@ class Sample {
   ///
   /// @return A view of the sample's own @ref SampleParameter array.
   [[nodiscard]] virtual std::span<SampleParameter> parameters() { return {}; }
+  /// Returns the values the sample measures, empty by default.
+  ///
+  /// @return A view of the sample's own @ref SampleReadout array.
+  [[nodiscard]] virtual std::span<const SampleReadout> readouts() const {
+    return {};
+  }
 
   /// Duration of one @ref FixedUpdate step, as a @ref Scalar: 1/60 s, one DS
   /// frame.
@@ -327,6 +365,10 @@ class SampleRegistry {
   /// nothing.
   /// @param value New numerator (see @ref SampleParameter).
   void SetParameter(std::size_t parameter_index, int value);
+  /// Returns the readouts of the selected sample (empty if none).
+  ///
+  /// @return The current @ref SampleReadout values.
+  [[nodiscard]] std::span<const SampleReadout> readouts() const;
   /// Fills a draw list with the selected sample's frame.
   ///
   /// Clears the list, sets its camera to the context's world bounds, then

@@ -163,9 +163,8 @@ TEST(SampleRng, RandomColorsAreBright) {
 namespace {
 
 std::string Format(int value, int scale) {
-  const neko::SampleParameter parameter{.scale = scale, .value = value};
   std::array<char, 16> buffer{};
-  const auto length = neko::FormatParameterValue(parameter, buffer);
+  const auto length = neko::FormatDecimal(value, scale, buffer);
   return {buffer.data(), length};
 }
 
@@ -232,6 +231,15 @@ TEST(SampleParameter, FormatsDecimals) {
   EXPECT_EQ(Format(-7, 1), "-7");
   EXPECT_EQ(Format(0, 1), "0");
   EXPECT_EQ(Format(-2147483647 - 1, 1), "-2147483648");
+}
+
+TEST(SampleReadout, ToDecimalRoundsHalfAwayFromZero) {
+  EXPECT_EQ(neko::ToDecimal(neko::Ratio(3, 4), 100), 75);
+  EXPECT_EQ(neko::ToDecimal(neko::Ratio(-3, 4), 100), -75);
+  EXPECT_EQ(neko::ToDecimal(neko::Ratio(1, 3), 100), 33);
+  EXPECT_EQ(neko::ToDecimal(neko::Ratio(2, 3), 100), 67);
+  EXPECT_EQ(neko::ToDecimal(neko::Ratio(-2, 3), 100), -67);
+  EXPECT_EQ(neko::ToDecimal(neko::Scalar{5}, 1), 5);
 }
 
 TEST(SampleParameter, ToScalarIsTheRatio) {

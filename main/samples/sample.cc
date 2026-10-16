@@ -31,16 +31,22 @@ void BounceInside(Body& body, const Aabbf& bounds) {
   }
 }
 
-std::size_t FormatParameterValue(const SampleParameter& parameter,
-                                 std::span<char> buffer) {
-  // Digits of |value| with a decimal point before the last `decimals` ones,
-  // built backwards; unsigned so that INT_MIN has a magnitude
+int ToDecimal(Scalar value, int scale) {
+  const Scalar scaled = value * static_cast<Scalar>(scale);
+  // The conversion truncates toward zero: add half away from zero first
+  const Scalar half = Ratio(1, 2);
+  return static_cast<int>(scaled < Scalar{0} ? scaled - half : scaled + half);
+}
+
+std::size_t FormatDecimal(int numerator, int scale, std::span<char> buffer) {
+  // Digits of |numerator| with a decimal point before the last `decimals`
+  // ones, built backwards; unsigned so that INT_MIN has a magnitude
   int decimals = 0;
-  for (int scale = parameter.scale; scale >= 10; scale /= 10) {
+  for (int rest = scale; rest >= 10; rest /= 10) {
     ++decimals;
   }
-  const bool is_negative = parameter.value < 0;
-  auto magnitude = static_cast<unsigned>(parameter.value);
+  const bool is_negative = numerator < 0;
+  auto magnitude = static_cast<unsigned>(numerator);
   if (is_negative) {
     magnitude = 0u - magnitude;
   }
@@ -116,6 +122,12 @@ void SampleRegistry::SetParameter(std::size_t parameter_index, int value) {
   const int clamped = std::clamp(value, parameter.min, parameter.max);
   parameter.value = parameter.min + (clamped - parameter.min) / step * step;
   Select(current_index_, context_);
+}
+
+std::span<const SampleReadout> SampleRegistry::readouts() const {
+  const Sample* sample = current();
+  return sample == nullptr ? std::span<const SampleReadout>{}
+                           : sample->readouts();
 }
 
 void SampleRegistry::Draw(DrawList& draw_list) const {
