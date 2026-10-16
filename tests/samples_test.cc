@@ -1,4 +1,5 @@
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -23,8 +24,52 @@ constexpr int kSampleSteps = 300;
 struct SampleRun {
   std::uint32_t initial_checksum = 0;
   std::uint32_t final_checksum = 0;
+  std::uint32_t draw_checksum = 0;
   std::size_t drawn_shapes = 0;
   neko::Aabbf camera{};
+};
+
+// FNV-1a over every shape of the draw list (positions, sizes and colors). It
+// only sees what the sample shows, so unlike the world checksum it doesn't
+// change when Body or Collider gain fields, as long as everything moves
+// exactly as before.
+class DrawChecksum {
+ public:
+  void Add(std::uint32_t word) {
+    for (int shift = 0; shift < 32; shift += 8) {
+      hash_ ^= (word >> shift) & 0xFFu;
+      hash_ *= 16777619u;
+    }
+  }
+  void Add(neko::Scalar value) {
+    static_assert(sizeof(neko::Scalar) == sizeof(std::uint32_t));
+    Add(std::bit_cast<std::uint32_t>(value));
+  }
+  void Add(neko::Vec2f value) {
+    Add(value.x());
+    Add(value.y());
+  }
+  void Add(const neko::DrawList& draw_list) {
+    for (const auto& circle : draw_list.circles) {
+      Add(circle.center);
+      Add(circle.radius);
+      Add(std::uint32_t{circle.color});
+    }
+    for (const auto& box : draw_list.boxes) {
+      Add(box.center);
+      Add(box.half_size);
+      Add(std::uint32_t{box.color});
+    }
+    for (const auto& line : draw_list.lines) {
+      Add(line.a);
+      Add(line.b);
+      Add(std::uint32_t{line.color});
+    }
+  }
+  [[nodiscard]] std::uint32_t Get() const { return hash_; }
+
+ private:
+  std::uint32_t hash_ = 2166136261u;
 };
 
 SampleRun RunSample(neko::SampleRegistry& registry, std::size_t index) {
@@ -38,6 +83,9 @@ SampleRun RunSample(neko::SampleRegistry& registry, std::size_t index) {
   run.final_checksum = registry.current()->GenerateChecksum();
   neko::DrawList draw_list;
   registry.Draw(draw_list);
+  DrawChecksum draw_checksum;
+  draw_checksum.Add(draw_list);
+  run.draw_checksum = draw_checksum.Get();
   run.drawn_shapes = draw_list.circles.size() + draw_list.boxes.size() +
                      draw_list.lines.size();
   run.camera = draw_list.camera;
@@ -50,19 +98,23 @@ class SampleTest : public ::testing::TestWithParam<std::size_t> {};
 struct GoldenSampleChecksums {
   std::uint32_t initial = 0;
   std::uint32_t final = 0;
+  // DrawChecksum after kSampleSteps steps
+  std::uint32_t draw = 0;
 };
 
 // Checksums of each sample with Scalar = Fixed16 and the PC sample_config,
 // before and after kSampleSteps steps. Pinned on 2026-10-16 with MSVC 14.51,
 // after the samples were made y-up. A change means a sample's simulation
-// changed: on purpose (re-pin, and say why in the commit) or by accident.
+// changed: on purpose (re-pin, and say why in the commit) or by accident. The
+// draw checksums were pinned with MSVC 14.51 before adding rotation: the
+// samples don't rotate, so they must keep them when the world checksums change.
 constexpr std::array<GoldenSampleChecksums, 6> kGoldenSampleChecksums = {{
-    {0x86675e94u, 0x12f15718u},  // 01 Kinematic
-    {0xaf6f2b7du, 0xc3937196u},  // 02 Planets
-    {0xc9ce3c39u, 0x03aa8553u},  // 03 Triggers
-    {0x48069a77u, 0xda83ca14u},  // 04 Ground
-    {0xc959e990u, 0x446cd868u},  // 05 Collisions
-    {0xcbbe58dfu, 0xc5137570u},  // 06 Move Into
+    {0x86675e94u, 0x12f15718u, 0x79313a0cu},  // 01 Kinematic
+    {0xaf6f2b7du, 0xc3937196u, 0x08e3bb1au},  // 02 Planets
+    {0xc9ce3c39u, 0x03aa8553u, 0x783c5572u},  // 03 Triggers
+    {0x48069a77u, 0xda83ca14u, 0x496de950u},  // 04 Ground
+    {0xc959e990u, 0x446cd868u, 0xf15dcbf7u},  // 05 Collisions
+    {0xcbbe58dfu, 0xc5137570u, 0x9720691bu},  // 06 Move Into
 }};
 
 }  // namespace
@@ -95,6 +147,7 @@ TEST_P(SampleTest, GoldenChecksums) {
     EXPECT_EQ(run.initial_checksum, golden.initial)
         << registry.name(GetParam());
     EXPECT_EQ(run.final_checksum, golden.final) << registry.name(GetParam());
+    EXPECT_EQ(run.draw_checksum, golden.draw) << registry.name(GetParam());
   }
 }
 
