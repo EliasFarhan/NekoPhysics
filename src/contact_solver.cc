@@ -28,11 +28,42 @@ Vec2f PointVelocity(const Body& body, Vec2f r) {
   return body.velocity + r.Perpendicular2() * body.angular_velocity;
 }
 
+Vec2f RelativeVelocity(const Contact& contact,
+                       const internal::ContactPointScratch& point) {
+  return PointVelocity(*contact.bodies[0].body, point.r1) -
+         PointVelocity(*contact.bodies[1].body, point.r2);
+}
+
 Scalar NormalVelocity(const Contact& contact,
                       const internal::ContactPointScratch& point) {
-  return Vec2f::Dot(PointVelocity(*contact.bodies[0].body, point.r1) -
-                        PointVelocity(*contact.bodies[1].body, point.r2),
-                    contact.contact_normal);
+  return Vec2f::Dot(RelativeVelocity(contact, point), contact.contact_normal);
+}
+
+// One over the effective inverse mass along a direction at the point, 0 when
+// neither body can move
+Scalar EffectiveMass(Scalar inverse_mass_sum, Scalar inverse_inertia1,
+                     Scalar inverse_inertia2,
+                     const internal::ContactPointScratch& point,
+                     Vec2f direction) {
+  const Scalar lever1 = Vec2f::Cross(point.r1, direction);
+  const Scalar lever2 = Vec2f::Cross(point.r2, direction);
+  const Scalar inverse_effective_mass = inverse_mass_sum +
+                                        lever1 * lever1 * inverse_inertia1 +
+                                        lever2 * lever2 * inverse_inertia2;
+  return inverse_effective_mass > Scalar{0} ? Scalar{1} / inverse_effective_mass
+                                            : Scalar{0};
+}
+
+// Applies an impulse at the point: +impulse to body 1, -impulse to body 2
+void ApplyImpulse(Contact& contact, const internal::ContactPointScratch& point,
+                  Vec2f impulse, Scalar inverse_mass1, Scalar inverse_mass2,
+                  Scalar inverse_inertia1, Scalar inverse_inertia2) {
+  Body& body1 = *contact.bodies[0].body;
+  Body& body2 = *contact.bodies[1].body;
+  body1.velocity += impulse * inverse_mass1;
+  body1.angular_velocity += Vec2f::Cross(point.r1, impulse) * inverse_inertia1;
+  body2.velocity -= impulse * inverse_mass2;
+  body2.angular_velocity -= Vec2f::Cross(point.r2, impulse) * inverse_inertia2;
 }
 }  // namespace
 
@@ -62,14 +93,12 @@ NEKO_HOT void SolveContacts(std::span<Contact> contacts,
       internal::ContactPointScratch& data = scratch[2 * c + i];
       data.r1 = point.position - contact.bodies[0].body->position;
       data.r2 = point.position - contact.bodies[1].body->position;
-      const Scalar lever1 = Vec2f::Cross(data.r1, contact.contact_normal);
-      const Scalar lever2 = Vec2f::Cross(data.r2, contact.contact_normal);
-      const Scalar inverse_effective_mass =
-          inverse_mass1 + inverse_mass2 + lever1 * lever1 * inverse_inertia1 +
-          lever2 * lever2 * inverse_inertia2;
-      data.normal_mass = inverse_effective_mass > Scalar{0}
-                             ? Scalar{1} / inverse_effective_mass
-                             : Scalar{0};
+      data.normal_mass =
+          EffectiveMass(inverse_mass1 + inverse_mass2, inverse_inertia1,
+                        inverse_inertia2, data, contact.contact_normal);
+      data.tangent_mass = EffectiveMass(
+          inverse_mass1 + inverse_mass2, inverse_inertia1, inverse_inertia2,
+          data, contact.contact_normal.Perpendicular());
       const Scalar approach = NormalVelocity(contact, data);
       const Scalar bounce = approach < -settings.restitution_threshold
                                 ? -contact.restitution * approach
@@ -80,21 +109,38 @@ NEKO_HOT void SolveContacts(std::span<Contact> contacts,
               : Scalar{0};
       data.target_velocity = Max(bounce, push_out);
       point.normal_impulse = Scalar{0};
+      point.tangent_impulse = Scalar{0};
     }
   }
 
   for (int pass = 0; pass < settings.velocity_iterations; ++pass) {
     for (std::size_t c = 0; c < contacts.size(); ++c) {
       Contact& contact = contacts[c];
-      Body& body1 = *contact.bodies[0].body;
-      Body& body2 = *contact.bodies[1].body;
-      const Scalar inverse_mass1 = InverseMass(body1);
-      const Scalar inverse_mass2 = InverseMass(body2);
+      const Scalar inverse_mass1 = InverseMass(*contact.bodies[0].body);
+      const Scalar inverse_mass2 = InverseMass(*contact.bodies[1].body);
       const Scalar inverse_inertia1 = InverseInertia(contact.bodies[0]);
       const Scalar inverse_inertia2 = InverseInertia(contact.bodies[1]);
+      const Vec2f tangent = contact.contact_normal.Perpendicular();
       for (std::uint8_t i = 0; i < contact.point_count; ++i) {
         ContactPoint& point = contact.points[i];
         const internal::ContactPointScratch& data = scratch[2 * c + i];
+
+        // Friction first: stop the sliding, within the Coulomb limit of the
+        // push accumulated so far
+        const Scalar max_friction = contact.friction * point.normal_impulse;
+        const Scalar tangent_change =
+            -Vec2f::Dot(RelativeVelocity(contact, data), tangent) *
+            data.tangent_mass;
+        const Scalar tangent_total =
+            Clamp(point.tangent_impulse + tangent_change, -max_friction,
+                  max_friction);
+        const Scalar friction_impulse = tangent_total - point.tangent_impulse;
+        point.tangent_impulse = tangent_total;
+        if (friction_impulse != Scalar{0}) {
+          ApplyImpulse(contact, data, tangent * friction_impulse, inverse_mass1,
+                       inverse_mass2, inverse_inertia1, inverse_inertia2);
+        }
+
         const Scalar change =
             (data.target_velocity - NormalVelocity(contact, data)) *
             data.normal_mass;
@@ -103,16 +149,11 @@ NEKO_HOT void SolveContacts(std::span<Contact> contacts,
         const Scalar total = Max(point.normal_impulse + change, Scalar{0});
         const Scalar impulse = total - point.normal_impulse;
         point.normal_impulse = total;
-        if (impulse == Scalar{0}) {
-          continue;
+        if (impulse != Scalar{0}) {
+          ApplyImpulse(contact, data, contact.contact_normal * impulse,
+                       inverse_mass1, inverse_mass2, inverse_inertia1,
+                       inverse_inertia2);
         }
-        const Vec2f push = contact.contact_normal * impulse;
-        body1.velocity += push * inverse_mass1;
-        body1.angular_velocity +=
-            Vec2f::Cross(data.r1, push) * inverse_inertia1;
-        body2.velocity -= push * inverse_mass2;
-        body2.angular_velocity -=
-            Vec2f::Cross(data.r2, push) * inverse_inertia2;
       }
     }
   }

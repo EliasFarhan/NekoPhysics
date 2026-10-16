@@ -52,6 +52,8 @@ struct Fixture {
     // A contact bounces with the larger restitution of its two colliders:
     // 0 here lets the box's restitution decide
     world.collider(ground).restitution = Scalar{0};
+    // Frictionless: these are normal impulse experiments
+    world.collider(ground).friction = Scalar{0};
     world.aabb(world.collider(ground).shape_index).half_size = {Scalar{10},
                                                                 Scalar{1}};
   }
@@ -261,6 +263,7 @@ TEST(OffCenterImpulse, CircleHittingABoxEdgeSpinsTheBoxNotTheCircle) {
   const auto plank_collider = world.AddOrientedBoxCollider(plank);
   world.collider(plank_collider).is_trigger = false;
   world.collider(plank_collider).restitution = Scalar{0};
+  world.collider(plank_collider).friction = Scalar{0};
   world.oriented_box(world.collider(plank_collider).shape_index).half_size = {
       Scalar{2}, Ratio(1, 4)};
   const auto ball = world.AddBody();

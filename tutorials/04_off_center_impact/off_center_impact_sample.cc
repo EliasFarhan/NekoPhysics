@@ -26,8 +26,11 @@ void OffCenterImpactSample::Begin(const SampleContext& context) {
     const ColliderIndex collider_index = world_.AddAabbCollider(ground_index_);
     Collider& collider = world_.collider(collider_index);
     collider.is_trigger = false;
-    // A contact uses the larger restitution: 0 lets the box's decide
+    // A contact uses the larger restitution: 0 lets the box's decide. And
+    // no friction, so the impulse stays along the normal (friction is
+    // chapter 05)
     collider.restitution = Scalar{0};
+    collider.friction = Scalar{0};
     world_.aabb(collider.shape_index).half_size = kGroundHalfSize;
   }
 

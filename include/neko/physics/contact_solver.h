@@ -33,6 +33,13 @@ struct ContactPoint {
   /// Divided by the time step it is the contact force: a 1 kg box resting on
   /// two points carries about `9.81 * dt / 2` at each.
   Scalar normal_impulse{};
+  /// Total friction impulse along the tangent at this point during the step,
+  /// in N s.
+  ///
+  /// The tangent is the normal turned a quarter turn clockwise,
+  /// `(n.y, -n.x)`. Its size never exceeds `Contact::friction` times
+  /// `normal_impulse` (Coulomb's law).
+  Scalar tangent_impulse{};
 };
 
 /// Contact between two solid colliders, found by the narrowphase and solved
@@ -84,6 +91,9 @@ struct Contact {
   Scalar restitution{1};
   /// Overlap depth along `contact_normal`, in world units: the deepest point's.
   Scalar penetration{};
+  /// Friction coefficient of the contact, `sqrt(friction1 * friction2)` of
+  /// the two colliders (see @ref Collider::friction).
+  Scalar friction{};
 
   /// Returns the relative velocity of the two bodies' centers along the
   /// normal.
@@ -138,11 +148,13 @@ struct ContactPointScratch {
   Vec2f r1{};
   Vec2f r2{};
   Scalar normal_mass{};
+  Scalar tangent_mass{};
   Scalar target_velocity{};
 };
 }  // namespace internal
 
-/// Solves all the contacts of a step together with accumulated impulses.
+/// Solves all the contacts of a step together with accumulated impulses,
+/// along the normals (contacts push) and the tangents (friction).
 ///
 /// For each point, the solver wants the bodies' velocities at the point (each
 /// `v + w x r`) to separate at a target speed along the normal: the bounce
@@ -166,6 +178,15 @@ struct ContactPointScratch {
 /// impulse instead would add a new bounce every pass. The passes converge
 /// toward impulses that satisfy every contact at once, which is what lets a
 /// box rest flat on two points and a pile settle.
+///
+/// Friction works the same way along the tangent `t = (n.y, -n.x)`, before
+/// the normal in each pass: the target is no sliding (tangent speed 0), and
+/// the accumulated friction impulse is clamped to
+/// `[-friction * normal_impulse, friction * normal_impulse]`. Inside the
+/// range the surfaces stick (static friction); at the limit they slide and
+/// friction resists with its maximum, `friction` times the push (kinetic
+/// friction). The friction impulse acts at the point, so it also spins the
+/// bodies: a sliding ball starts to roll.
 ///
 /// Only @ref BodyType::kDynamic bodies move; static and kinematic bodies have
 /// infinite mass and inertia. A body whose collider in the contact is an

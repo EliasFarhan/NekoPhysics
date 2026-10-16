@@ -25,7 +25,7 @@ namespace neko::tutorial {
 // impulse pushes the ball along it. With w the ball's velocity when it hits
 // (the velocity before the contact step plus one step of gravity):
 //
-//   impulse direction     n                          (no friction yet)
+//   impulse direction     n                          (frictionless ramp)
 //   bounce velocity       w' = w - (1 + e) (w . n) n (reflection about the
 //                                                     face, scaled by e)
 //   rebound ratio         -(w' . n) / (w . n) = e

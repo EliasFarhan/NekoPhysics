@@ -288,6 +288,14 @@ struct Collider {
   ///
   /// A contact uses the larger restitution of its two colliders.
   Scalar restitution{1};
+  /// Friction coefficient: how hard the surfaces grip, from 0 (ice) to about
+  /// 1 (rubber).
+  ///
+  /// Coulomb friction: sliding along a contact is resisted by a force up to
+  /// `friction` times the force pressing the two shapes together. A contact
+  /// uses `sqrt(friction1 * friction2)`, so a slippery surface stays
+  /// slippery whatever touches it. 0.5 by default.
+  Scalar friction{0.5f};
   /// @ref Body the collider is attached to.
   BodyIndex body_index{};
   /// Index of this collider (its own slot in the world).

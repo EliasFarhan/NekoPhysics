@@ -75,11 +75,13 @@ inline void BuildFallingPile(PhysicsWorld& world) {
 // with MSVC 14.51 for the iterative contact solver (M3 stage 1): contacts are
 // solved together in 8 passes with accumulated impulses, Baumgarte push-out
 // and slop instead of an instant position correction, and Step integrates
-// positions after the contacts. Steps 0 and 1 (no contact yet) are unchanged.
+// positions after the contacts. Re-pinned again the same day for friction
+// (M3 stage 2): Collider::friction (0.5 by default) is hashed, and the
+// contacts grip.
 // The DS test ROM must print the same values.
 inline constexpr std::pair<int, std::uint32_t> kFallingPileGoldenChecksums[] = {
-    {0, 0x87505a93u},   {1, 0x28d365c7u},   {60, 0x52744c5du},
-    {120, 0x64f61ac7u}, {300, 0xf79b2760u}, {600, 0x2a2503d5u},
+    {0, 0x84d0a2d9u},   {1, 0x1ce45825u},   {60, 0xfc41b8e7u},
+    {120, 0x48471e66u}, {300, 0x332ccc02u}, {600, 0x14b833c5u},
 };
 
 // FNV-1a over the raw bits of every body's position and velocity, and nothing
@@ -111,11 +113,12 @@ inline std::uint32_t TrajectoryChecksum(const PhysicsWorld& world,
 // steps of kFallingPileGoldenChecksums. Pinned on 2026-10-16 before rotation
 // (unchanged by M5, whose stages didn't move non-rotating scenes), re-pinned
 // on 2026-10-17 with MSVC 14.51 for the iterative contact solver (M3 stage 1),
-// which changes how every contact moves the bodies.
+// which changes how every contact moves the bodies, and again for friction
+// (M3 stage 2).
 inline constexpr std::pair<int, std::uint32_t>
     kFallingPileTrajectoryChecksums[] = {
-        {0, 0x239c5dc0u},   {1, 0xbc032ed3u},   {60, 0x2650ae46u},
-        {120, 0xf4127d03u}, {300, 0xf16b5463u}, {600, 0x025e8a20u},
+        {0, 0x239c5dc0u},   {1, 0xbc032ed3u},   {60, 0xcb80c80bu},
+        {120, 0x2c14ec5fu}, {300, 0xf232ec59u}, {600, 0xbd1514b0u},
 };
 
 }  // namespace neko::scenes

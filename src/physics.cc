@@ -398,6 +398,7 @@ std::uint32_t GenerateChecksum(const Collider& collider) {
   Checksum checksum;
   checksum.Add(collider.offset);
   checksum.Add(collider.restitution);
+  checksum.Add(collider.friction);
   checksum.Add(collider.body_index);
   checksum.Add(collider.collider_index);
   checksum.Add(collider.shape_index);
@@ -493,6 +494,7 @@ NEKO_HOT bool PhysicsWorld::DetectContact(Body& body1, Collider& collider1,
   contact->bodies[1].collider = &collider2;
 
   contact->restitution = Max(collider1.restitution, collider2.restitution);
+  contact->friction = Sqrt(collider1.friction * collider2.friction);
   contact->point_count = 0;
 
   const bool collision = !(collider1.is_trigger || collider2.is_trigger);

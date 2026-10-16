@@ -17,9 +17,9 @@ namespace neko::tutorial {
 //
 // A box of mass 1 kg (parameter "Width", 1 m tall), turned by `a` degrees
 // (parameter "Tilt"), moves down at `v` m/s (parameter "Speed") without
-// gravity and hits a static ground with its lowest corner. The contact
-// impulse `j` acts at that corner, at `r` from the center, so it changes both
-// the velocity and the spin:
+// gravity and hits a static, frictionless ground with its lowest corner. The
+// contact impulse `j` acts at that corner, at `r` from the center, so it
+// changes both the velocity and the spin:
 //
 //   lever arm            r x n = r.x                (n = (0, 1), up)
 //   inertia              I = m (w^2 + h^2) / 12

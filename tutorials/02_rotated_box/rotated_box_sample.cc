@@ -28,6 +28,9 @@ void RotatedBoxSample::Begin(const SampleContext& context) {
     Collider& collider = world_.collider(collider_index);
     collider.is_trigger = false;
     collider.restitution = Scalar{0};
+    // Frictionless: the impulse stays along the normal (friction is chapter
+    // 05). A contact uses sqrt(friction1 * friction2), so 0 here is enough.
+    collider.friction = Scalar{0};
     world_.oriented_box(collider.shape_index).half_size = kRampHalfSize;
   }
 
