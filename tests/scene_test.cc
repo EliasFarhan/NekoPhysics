@@ -29,6 +29,28 @@ TEST(Scene, FallingPileGoldenChecksums) {
   }
 }
 
+// Positions and velocities only: see neko::scenes::TrajectoryChecksum
+TEST(Scene, FallingPileGoldenTrajectory) {
+  if constexpr (!std::is_same_v<neko::Scalar, neko::Fixed16>) {
+    GTEST_SKIP() << "golden checksums are for NEKO_SCALAR=FIXED16";
+  } else {
+    neko::PhysicsWorld world{};
+    neko::scenes::BuildFallingPile(world);
+    int step = 0;
+    for (const auto& [expected_step, checksum] :
+         neko::scenes::kFallingPileTrajectoryChecksums) {
+      while (step < expected_step) {
+        world.Step();
+        ++step;
+      }
+      EXPECT_EQ(neko::scenes::TrajectoryChecksum(
+                    world, neko::scenes::kFallingPileBodyCount),
+                checksum)
+          << "step " << step;
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

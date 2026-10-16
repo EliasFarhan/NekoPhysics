@@ -1,6 +1,7 @@
 #ifndef TESTS_SCENES_FALLING_PILE_H_
 #define TESTS_SCENES_FALLING_PILE_H_
 
+#include <bit>
 #include <cstdint>
 #include <utility>
 
@@ -9,6 +10,8 @@
 namespace neko::scenes {
 
 inline constexpr int kFallingPileDynamicCount = 64;
+// 3 static boxes, the dynamic bodies and the kinematic paddle, in AddBody order
+inline constexpr Index kFallingPileBodyCount = kFallingPileDynamicCount + 4;
 
 // num / den computed in Scalar, so the scene is built without any float
 // arithmetic
@@ -76,6 +79,41 @@ inline void BuildFallingPile(PhysicsWorld& world) {
 inline constexpr std::pair<int, std::uint32_t> kFallingPileGoldenChecksums[] = {
     {0, 0x61c2e799u},   {1, 0xfa00ce4cu},   {60, 0x1846fbd1u},
     {120, 0x2e3c79a0u}, {300, 0x4ab151e4u}, {600, 0x3e890176u},
+};
+
+// FNV-1a over the raw bits of every body's position and velocity, and nothing
+// else. Unlike PhysicsWorld::GenerateChecksum it ignores the other body fields
+// and the colliders, so it stays the same when Body gains fields (rotation)
+// as long as the bodies move exactly as before.
+inline std::uint32_t TrajectoryChecksum(const PhysicsWorld& world,
+                                        Index body_count) {
+  std::uint32_t hash = 2166136261u;
+  const auto add = [&hash](Scalar value) {
+    static_assert(sizeof(Scalar) == sizeof(std::uint32_t));
+    const auto word = std::bit_cast<std::uint32_t>(value);
+    for (int shift = 0; shift < 32; shift += 8) {
+      hash ^= (word >> shift) & 0xFFu;
+      hash *= 16777619u;
+    }
+  };
+  for (Index i = 0; i < body_count; ++i) {
+    const Body& body = world.body(BodyIndex{i});
+    add(body.position.x());
+    add(body.position.y());
+    add(body.velocity.x());
+    add(body.velocity.y());
+  }
+  return hash;
+}
+
+// Golden TrajectoryChecksum of BuildFallingPile with Scalar = Fixed16, at the
+// steps of kFallingPileGoldenChecksums. Pinned on 2026-10-16 with MSVC 14.51,
+// before adding rotation: rotation must leave it unchanged for scenes that
+// don't rotate, even though the world checksums change.
+inline constexpr std::pair<int, std::uint32_t>
+    kFallingPileTrajectoryChecksums[] = {
+        {0, 0x239c5dc0u},   {1, 0xbc032ed3u},   {60, 0xef6ec3cbu},
+        {120, 0xd7b4b787u}, {300, 0x961cc555u}, {600, 0x0c1e0cb7u},
 };
 
 }  // namespace neko::scenes

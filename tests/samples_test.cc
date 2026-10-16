@@ -1,5 +1,7 @@
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <type_traits>
 
 #include <gtest/gtest.h>
 
@@ -38,6 +40,24 @@ SampleRun RunSample(neko::SampleRegistry& registry, std::size_t index) {
 
 class SampleTest : public ::testing::TestWithParam<std::size_t> {};
 
+struct GoldenSampleChecksums {
+  std::uint32_t initial = 0;
+  std::uint32_t final = 0;
+};
+
+// Checksums of each sample with Scalar = Fixed16 and the PC sample_config,
+// before and after kSampleSteps steps. Pinned on 2026-10-16 with MSVC 14.51,
+// after the samples were made y-up. A change means a sample's simulation
+// changed: on purpose (re-pin, and say why in the commit) or by accident.
+constexpr std::array<GoldenSampleChecksums, 6> kGoldenSampleChecksums = {{
+    {0x86675e94u, 0x12f15718u},  // 01 Kinematic
+    {0xaf6f2b7du, 0xc3937196u},  // 02 Planets
+    {0xc9ce3c39u, 0x03aa8553u},  // 03 Triggers
+    {0x48069a77u, 0xda83ca14u},  // 04 Ground
+    {0xc959e990u, 0x446cd868u},  // 05 Collisions
+    {0xcbbe58dfu, 0xc5137570u},  // 06 Move Into
+}};
+
 }  // namespace
 
 // The samples build their scenes with a fixed-seed SampleRng and simulate only
@@ -56,6 +76,19 @@ TEST_P(SampleTest, SameSeedGivesSameChecksum) {
   EXPECT_EQ(first.final_checksum, restarted.final_checksum);
   EXPECT_EQ(first.initial_checksum, other.initial_checksum);
   EXPECT_EQ(first.final_checksum, other.final_checksum);
+}
+
+TEST_P(SampleTest, GoldenChecksums) {
+  if constexpr (!std::is_same_v<neko::Scalar, neko::Fixed16>) {
+    GTEST_SKIP() << "golden checksums are for NEKO_SCALAR=FIXED16";
+  } else {
+    neko::SampleRegistry registry;
+    const auto run = RunSample(registry, GetParam());
+    const auto& golden = kGoldenSampleChecksums[GetParam()];
+    EXPECT_EQ(run.initial_checksum, golden.initial)
+        << registry.name(GetParam());
+    EXPECT_EQ(run.final_checksum, golden.final) << registry.name(GetParam());
+  }
 }
 
 TEST_P(SampleTest, DrawsInsideTheWorldBounds) {
