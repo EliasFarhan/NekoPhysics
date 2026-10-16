@@ -64,6 +64,8 @@ struct Report {
   bool hooks_ok = false;
   bool pile_ok = false;
   ChecksumSample pile_checksums[6] = {};
+  // TrajectoryChecksum: positions and velocities only
+  ChecksumSample pile_trajectories[6] = {};
   PairCountSample pile_pair_counts[6] = {};
   Timing pile_timing{};
 
@@ -73,6 +75,12 @@ struct Report {
 
   neko::StepPhaseTicks heavy_phase_ticks{};
   int heavy_phase_steps = 0;
+
+  // The heavy pile with every body spinning: same contacts (rotation doesn't
+  // change them yet), so the difference with heavy_timing is the cost of
+  // turning 252 bodies
+  std::uint32_t spin_checksum = 0;
+  Timing spin_timing{};
 };
 
 Report g_report;
@@ -203,10 +211,18 @@ bool RunFallingPile() {
       ++step;
     }
     const std::uint32_t checksum = world.GenerateChecksum();
-    ok = ok && checksum == expected;
+    const std::uint32_t trajectory = neko::scenes::TrajectoryChecksum(
+        world, neko::scenes::kFallingPileBodyCount);
+    const std::uint32_t expected_trajectory =
+        neko::scenes::kFallingPileTrajectoryChecksums[sample_index].second;
+    ok = ok && checksum == expected && trajectory == expected_trajectory;
     Log("%3d %08" PRIx32 " %08" PRIx32 " %s\n", step, checksum, expected,
         checksum == expected ? "OK" : "FAIL");
+    Log("    traj %08" PRIx32 " %s\n", trajectory,
+        trajectory == expected_trajectory ? "OK" : "FAIL");
     g_report.pile_checksums[sample_index] = {step, checksum, expected};
+    g_report.pile_trajectories[sample_index] = {step, trajectory,
+                                                expected_trajectory};
     g_report.pile_pair_counts[sample_index] = SamplePairCounts(step, world);
     ++sample_index;
   }
@@ -282,6 +298,23 @@ void RunHeavyPile() {
   LogTiming("255", g_report.heavy_timing);
 }
 
+// Same scene with every dynamic body spinning at -2 to 2 rad/s: the cost of
+// turning (the sine and cosine of each body every step)
+void RunSpinningHeavyPile() {
+  neko::PhysicsWorld world{};
+  BuildHeavyPile(world);
+  for (neko::Index i = 3; i < 255; ++i) {
+    world.body(neko::BodyIndex{i}).angular_velocity =
+        static_cast<neko::Scalar>(i % 5 - 2);
+  }
+  for (int step = 0; step < kHeavySteps; ++step) {
+    TimedStep(world, g_report.spin_timing);
+  }
+  g_report.spin_checksum = world.GenerateChecksum();
+  Log("255 spinning: %08" PRIx32 "\n", g_report.spin_checksum);
+  LogTiming("255 spin", g_report.spin_timing);
+}
+
 // Same scene, run to a resting pile, then profiled with StepPhase ticks: slower
 // than RunHeavyPile because of the extra cpuGetTiming() reads, so its own Step
 // timing isn't part of the reported avg/max ms.
@@ -334,6 +367,7 @@ int main() {
   g_report.hooks_ok = CheckMathHooks();
   g_report.pile_ok = RunFallingPile();
   RunHeavyPile();
+  RunSpinningHeavyPile();
   RunHeavyPileProfile();
   Log("DONE %s\n", g_report.hooks_ok && g_report.pile_ok ? "OK" : "FAIL");
   TestsDone();
