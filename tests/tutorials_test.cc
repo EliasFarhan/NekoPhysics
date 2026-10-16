@@ -12,10 +12,12 @@
 #include "main/samples/sample_config.h"
 #include "tutorials/00_bounce/bounce_sample.h"
 #include "tutorials/01_rotation/rotation_sample.h"
+#include "tutorials/02_rotated_box/rotated_box_sample.h"
 
 namespace {
 
 using neko::tutorial::BounceSample;
+using neko::tutorial::RotatedBoxSample;
 using neko::tutorial::RotationSample;
 
 // static_cast<float> would be a useless cast when Scalar is float. A template
@@ -260,6 +262,125 @@ TEST(RotationTutorial, SameParametersSameRun) {
   registry.SetParameter(RotationSample::kForce, 40);
   const std::uint32_t changed = run();
   registry.SetParameter(RotationSample::kForce, 20);
+  const std::uint32_t restored = run();
+  EXPECT_NE(first, changed);
+  EXPECT_EQ(first, restored);
+}
+
+namespace {
+
+struct RotatedBoxRun {
+  float normal_x = 0.0f;
+  float normal_y = 0.0f;
+  std::optional<float> measured_x;
+  std::optional<float> measured_y;
+  std::optional<float> predicted_bounce_x;
+  std::optional<float> predicted_bounce_y;
+  std::optional<float> bounce_x;
+  std::optional<float> bounce_y;
+  std::optional<float> rebound_ratio;
+};
+
+// Drops the ball on the ramp and runs until the first bounce (5 s at most).
+// Angle in degrees, restitution in percents, drop height in centimeters.
+RotatedBoxRun RunRotatedBox(int angle, int restitution_percent,
+                            int drop_height_cm = 250) {
+  RotatedBoxSample sample;
+  auto values = sample.parameters();
+  values[RotatedBoxSample::kRampAngle].value = angle;
+  values[RotatedBoxSample::kRestitution].value = restitution_percent;
+  values[RotatedBoxSample::kDropHeight].value = drop_height_cm;
+  sample.Begin(neko::SampleContext{neko::sample_config::kWorldBounds});
+  for (int step = 0; step < 300 && !sample.measured_bounce().has_value();
+       ++step) {
+    sample.FixedUpdate();
+  }
+  RotatedBoxRun run;
+  run.normal_x = ToFloat(sample.predicted_normal().x());
+  run.normal_y = ToFloat(sample.predicted_normal().y());
+  if (const auto normal = sample.measured_normal(); normal.has_value()) {
+    run.measured_x = ToFloat(normal->x());
+    run.measured_y = ToFloat(normal->y());
+  }
+  if (const auto bounce = sample.predicted_bounce(); bounce.has_value()) {
+    run.predicted_bounce_x = ToFloat(bounce->x());
+    run.predicted_bounce_y = ToFloat(bounce->y());
+  }
+  if (const auto bounce = sample.measured_bounce(); bounce.has_value()) {
+    run.bounce_x = ToFloat(bounce->x());
+    run.bounce_y = ToFloat(bounce->y());
+  }
+  if (const auto ratio = sample.rebound_ratio(); ratio.has_value()) {
+    run.rebound_ratio = ToFloat(*ratio);
+  }
+  sample.End();
+  return run;
+}
+
+class RotatedBoxTest : public ::testing::TestWithParam<std::pair<int, int>> {};
+
+}  // namespace
+
+// The experiment of chapter 02. The ramp's face normal is (-sin a, cos a);
+// SAT picks it as the contact normal, the impulse is along it, and the ball
+// leaves with w - (1 + e) (w . n) n: its normal speed scaled by e, its
+// speed along the face unchanged.
+TEST_P(RotatedBoxTest, BounceFollowsTheTurnedFaceNormal) {
+  const auto [angle, restitution_percent] = GetParam();
+  const auto run = RunRotatedBox(angle, restitution_percent);
+  const float radians = static_cast<float>(angle) * 3.14159265f / 180.0f;
+  EXPECT_NEAR(run.normal_x, -std::sin(radians), 0.001f);
+  EXPECT_NEAR(run.normal_y, std::cos(radians), 0.001f);
+
+  ASSERT_TRUE(run.measured_x.has_value());
+  EXPECT_NEAR(*run.measured_x, run.normal_x, 0.002f);
+  EXPECT_NEAR(*run.measured_y, run.normal_y, 0.002f);
+  ASSERT_TRUE(run.bounce_x.has_value());
+  EXPECT_NEAR(*run.bounce_x, *run.predicted_bounce_x, 0.005f);
+  EXPECT_NEAR(*run.bounce_y, *run.predicted_bounce_y, 0.005f);
+  ASSERT_TRUE(run.rebound_ratio.has_value());
+  EXPECT_NEAR(*run.rebound_ratio,
+              static_cast<float>(restitution_percent) / 100.0f, 0.003f);
+}
+
+INSTANTIATE_TEST_SUITE_P(AnglesAndRestitutions, RotatedBoxTest,
+                         ::testing::Values(std::pair{0, 75}, std::pair{20, 75},
+                                           std::pair{-30, 50},
+                                           std::pair{45, 100},
+                                           std::pair{-45, 25},
+                                           std::pair{10, 0}));
+
+// On a flat ramp the ball bounces straight up; tilted to the right
+// (positive angle) its face points up-left, so the ball leaves to the left
+TEST(RotatedBoxTutorial, TiltDecidesTheBounceSide) {
+  const auto flat = RunRotatedBox(0, 75);
+  ASSERT_TRUE(flat.bounce_x.has_value());
+  EXPECT_EQ(*flat.bounce_x, 0.0f);
+  EXPECT_GT(*flat.bounce_y, 0.0f);
+  const auto left = RunRotatedBox(30, 75);
+  const auto right = RunRotatedBox(-30, 75);
+  ASSERT_TRUE(left.bounce_x.has_value() && right.bounce_x.has_value());
+  EXPECT_LT(*left.bounce_x, 0.0f);
+  EXPECT_GT(*right.bounce_x, 0.0f);
+  EXPECT_NEAR(*left.bounce_x, -*right.bounce_x, 0.005f) << "mirror images";
+}
+
+TEST(RotatedBoxTutorial, SameParametersSameRun) {
+  std::vector<neko::SampleRegistry::Entry> samples;
+  samples.push_back({"02 Rotated box", std::make_unique<RotatedBoxSample>()});
+  neko::SampleRegistry registry{std::move(samples)};
+  const neko::SampleContext context{neko::sample_config::kWorldBounds};
+  const auto run = [&registry] {
+    for (int step = 0; step < 120; ++step) {
+      registry.FixedUpdate();
+    }
+    return registry.current()->GenerateChecksum();
+  };
+  registry.Select(0, context);
+  const std::uint32_t first = run();
+  registry.SetParameter(RotatedBoxSample::kRampAngle, -20);
+  const std::uint32_t changed = run();
+  registry.SetParameter(RotatedBoxSample::kRampAngle, 20);
   const std::uint32_t restored = run();
   EXPECT_NE(first, changed);
   EXPECT_EQ(first, restored);
