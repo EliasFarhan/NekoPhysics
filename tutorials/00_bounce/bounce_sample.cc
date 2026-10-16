@@ -1,11 +1,11 @@
 #include "tutorials/00_bounce/bounce_sample.h"
 
+#include "main/samples/body_draw.h"
+
 namespace neko::tutorial {
 namespace {
 constexpr Scalar kBallRadius = Ratio(1, 4);
 constexpr Vec2f kGroundHalfSize{Scalar{6}, Ratio(1, 4)};
-// Velocity drawn as the distance covered in this time, in seconds
-constexpr Scalar kVelocityDrawTime = Ratio(1, 10);
 }  // namespace
 
 void BounceSample::Begin(const SampleContext& context) {
@@ -81,9 +81,8 @@ void BounceSample::Draw(DrawList& draw_list) const {
   if (measured_apex_.has_value()) {
     draw_height(*measured_apex_, sample_color::kYellow);
   }
-  draw_list.lines.push_back({ball.position,
-                             ball.position + ball.velocity * kVelocityDrawTime,
-                             sample_color::kSky});
+  DrawOrientation(ball, kBallRadius, sample_color::kWhite, draw_list);
+  DrawVelocity(ball, sample_color::kSky, draw_list);
 }
 
 void BounceSample::End() {

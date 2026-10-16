@@ -11,10 +11,12 @@
 #include "main/samples/sample.h"
 #include "main/samples/sample_config.h"
 #include "tutorials/00_bounce/bounce_sample.h"
+#include "tutorials/01_rotation/rotation_sample.h"
 
 namespace {
 
 using neko::tutorial::BounceSample;
+using neko::tutorial::RotationSample;
 
 // static_cast<float> would be a useless cast when Scalar is float. A template
 // so that if constexpr discards the branch that doesn't compile for the type.
@@ -113,6 +115,151 @@ TEST(BounceTutorial, SameParametersSameRun) {
   registry.SetParameter(BounceSample::kRestitution, 80);
   const std::uint32_t changed = run();
   registry.SetParameter(BounceSample::kRestitution, 50);
+  const std::uint32_t restored = run();
+  EXPECT_NE(first, changed);
+  EXPECT_EQ(first, restored);
+}
+
+namespace {
+
+// Parameters of the rotation experiment, in the units of its sliders:
+// tenths of newtons, centimeters, tenths of kilograms, hundredths of seconds
+struct RotationParameters {
+  int force = 20;
+  int lever_arm = 50;
+  int mass = 10;
+  int width = 200;
+  int height = 100;
+  int push_time = 100;
+};
+
+struct RotationRun {
+  float predicted_inertia = 0.0f;
+  float measured_inertia = 0.0f;
+  float torque = 0.0f;
+  float push_time = 0.0f;
+  float predicted_spin = 0.0f;
+  float spin = 0.0f;
+  float spin_later = 0.0f;
+  float predicted_turn = 0.0f;
+  std::optional<float> measured_turn;
+  bool center_moved = false;
+};
+
+// Runs the push, then one more second of coasting
+RotationRun RunRotation(const RotationParameters& parameters) {
+  RotationSample sample;
+  auto values = sample.parameters();
+  values[RotationSample::kForce].value = parameters.force;
+  values[RotationSample::kLeverArm].value = parameters.lever_arm;
+  values[RotationSample::kMass].value = parameters.mass;
+  values[RotationSample::kWidth].value = parameters.width;
+  values[RotationSample::kHeight].value = parameters.height;
+  values[RotationSample::kPushTime].value = parameters.push_time;
+  sample.Begin(neko::SampleContext{neko::sample_config::kWorldBounds});
+  const neko::Vec2f start = sample.box().position;
+  RotationRun run;
+  for (int step = 0; step < sample.push_steps(); ++step) {
+    sample.FixedUpdate();
+  }
+  run.spin = ToFloat(sample.spin());
+  for (int step = 0; step < 60; ++step) {
+    sample.FixedUpdate();
+  }
+  run.spin_later = ToFloat(sample.spin());
+  run.predicted_inertia = ToFloat(sample.predicted_inertia());
+  run.measured_inertia = ToFloat(sample.measured_inertia());
+  run.torque = ToFloat(sample.torque());
+  run.push_time = ToFloat(sample.push_time());
+  run.predicted_spin = ToFloat(sample.predicted_spin());
+  run.predicted_turn = ToFloat(sample.predicted_turn());
+  if (sample.measured_turn().has_value()) {
+    run.measured_turn = ToFloat(*sample.measured_turn());
+  }
+  run.center_moved = sample.box().position != start;
+  sample.End();
+  return run;
+}
+
+class RotationTest : public ::testing::TestWithParam<RotationParameters> {};
+
+}  // namespace
+
+// The experiment of chapter 01. A couple of torque 2 r F spins the box with
+// alpha = tau / I: after T seconds omega = alpha T (exact with semi-implicit
+// Euler, up to rounding), and the angle is alpha T^2 / 2 plus the time-step
+// error alpha T dt / 2 (the angular velocity is updated before the angle).
+TEST_P(RotationTest, SpinAndAngleFollowTorqueOverInertia) {
+  const RotationParameters& parameters = GetParam();
+  const auto run = RunRotation(parameters);
+  const float mass = static_cast<float>(parameters.mass) / 10.0f;
+  const float width = static_cast<float>(parameters.width) / 100.0f;
+  const float height = static_cast<float>(parameters.height) / 100.0f;
+  const float inertia = mass * (width * width + height * height) / 12.0f;
+  const float torque = 2.0f * static_cast<float>(parameters.lever_arm) /
+                       100.0f * static_cast<float>(parameters.force) / 10.0f;
+
+  // Inertia from the box collider: m (w^2 + h^2) / 12
+  EXPECT_NEAR(run.predicted_inertia, inertia, inertia * 0.002f);
+  EXPECT_NEAR(run.measured_inertia, inertia, inertia * 0.005f);
+  EXPECT_NEAR(run.torque, torque, torque * 0.001f);
+
+  // Spin after the push, then coasting at that spin
+  const float alpha = torque / inertia;
+  const float spin = alpha * run.push_time;
+  EXPECT_NEAR(run.predicted_spin, spin, spin * 0.005f);
+  EXPECT_NEAR(run.spin, spin, spin * 0.01f);
+  EXPECT_EQ(run.spin_later, run.spin) << "nothing slows it down";
+
+  // Angle: ahead of alpha T^2 / 2 by about alpha T dt / 2
+  ASSERT_TRUE(run.measured_turn.has_value());
+  const float dt =
+      run.push_time / static_cast<float>(parameters.push_time * 60 / 100);
+  const float turn = alpha * run.push_time * run.push_time / 2.0f;
+  const float time_step_error = alpha * run.push_time * dt / 2.0f;
+  EXPECT_NEAR(run.predicted_turn, turn, turn * 0.005f);
+  EXPECT_GT(*run.measured_turn, run.predicted_turn);
+  EXPECT_NEAR(*run.measured_turn - turn, time_step_error,
+              time_step_error * 0.25f + turn * 0.01f);
+
+  EXPECT_FALSE(run.center_moved) << "a couple doesn't push the center";
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    Parameters, RotationTest,
+    ::testing::Values(RotationParameters{},
+                      RotationParameters{.force = 50, .lever_arm = 150},
+                      RotationParameters{.mass = 50, .push_time = 200},
+                      RotationParameters{.width = 50, .height = 300},
+                      RotationParameters{
+                          .force = 5, .lever_arm = 10, .push_time = 25}));
+
+// The controlled changes have measurable results: twice the lever arm, twice
+// the spin; twice the mass, half the spin
+TEST(RotationTutorial, LeverArmAndMassScaleTheSpin) {
+  const auto base = RunRotation({});
+  const auto long_lever = RunRotation({.lever_arm = 100});
+  const auto heavy = RunRotation({.mass = 20});
+  EXPECT_NEAR(long_lever.spin / base.spin, 2.0f, 0.01f);
+  EXPECT_NEAR(heavy.spin / base.spin, 0.5f, 0.005f);
+}
+
+TEST(RotationTutorial, SameParametersSameRun) {
+  std::vector<neko::SampleRegistry::Entry> samples;
+  samples.push_back({"01 Rotation", std::make_unique<RotationSample>()});
+  neko::SampleRegistry registry{std::move(samples)};
+  const neko::SampleContext context{neko::sample_config::kWorldBounds};
+  const auto run = [&registry] {
+    for (int step = 0; step < 120; ++step) {
+      registry.FixedUpdate();
+    }
+    return registry.current()->GenerateChecksum();
+  };
+  registry.Select(0, context);
+  const std::uint32_t first = run();
+  registry.SetParameter(RotationSample::kForce, 40);
+  const std::uint32_t changed = run();
+  registry.SetParameter(RotationSample::kForce, 20);
   const std::uint32_t restored = run();
   EXPECT_NE(first, changed);
   EXPECT_EQ(first, restored);

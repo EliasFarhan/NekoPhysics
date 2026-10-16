@@ -18,4 +18,5 @@ endfunction()
 
 if(USE_SAMPLES)
     neko_add_tutorial(00_bounce)
+    neko_add_tutorial(01_rotation)
 endif()

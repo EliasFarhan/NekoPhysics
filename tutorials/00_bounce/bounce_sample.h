@@ -28,7 +28,8 @@ namespace neko::tutorial {
 // velocity turns from up to down after the first bounce) and shows both as
 // readouts and as horizontal lines: grey for the drop height, green for the
 // prediction, yellow for the measurement. The sky blue line is the velocity,
-// drawn as the distance covered in 0.1 s.
+// drawn as the distance covered in 0.1 s, and the white radius is the ball's
+// orientation (it never turns: contacts have no friction yet).
 //
 // The world is y-up, in meters and seconds, gravity (0, -9.81) m/s^2.
 class BounceSample final : public Sample {
