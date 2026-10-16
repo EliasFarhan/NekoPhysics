@@ -123,12 +123,81 @@ Scalar ProjectedRadius(const BoxShape& box, Vec2f axis) {
 struct AxisOverlap {
   Scalar overlap;
   Vec2f normal;
+  // Which axis of its box: false for x, true for y
+  bool is_y_axis;
 };
 
-AxisOverlap OverlapAlong(const BoxShape& a, const BoxShape& b, Vec2f axis) {
+AxisOverlap OverlapAlong(const BoxShape& a, const BoxShape& b, Vec2f axis,
+                         bool is_y_axis) {
   const Scalar distance = Vec2f::Dot(a.center - b.center, axis);
   return {ProjectedRadius(a, axis) + ProjectedRadius(b, axis) - Abs(distance),
-          distance < Scalar{0} ? -axis : axis};
+          distance < Scalar{0} ? -axis : axis, is_y_axis};
+}
+
+// Keeps the part of the segment from v1 to v2 where Dot(side, p) <= offset.
+// Returns false when nothing is left.
+bool ClipSegment(Vec2f& v1, Vec2f& v2, Vec2f side, Scalar offset) {
+  const Scalar distance1 = Vec2f::Dot(side, v1) - offset;
+  const Scalar distance2 = Vec2f::Dot(side, v2) - offset;
+  if (distance1 > Scalar{0} && distance2 > Scalar{0}) {
+    return false;
+  }
+  if (distance1 > Scalar{0}) {
+    v1 = v1 + (v2 - v1) * (distance1 / (distance1 - distance2));
+  } else if (distance2 > Scalar{0}) {
+    v2 = v2 + (v1 - v2) * (distance2 / (distance2 - distance1));
+  }
+  return true;
+}
+
+// The contact manifold of two overlapping boxes, given the reference box (the
+// owner of the separating axis), the axis as found by SAT and the outward
+// normal of the reference face (pointing toward the incident box):
+// - the incident face is the face of the other box most opposed to it;
+// - its two corners are clipped to the width of the reference face;
+// - the clipped points below the reference face are the manifold, each with
+//   its depth below that face.
+void ClipBoxes(const BoxShape& reference, const BoxShape& incident,
+               const AxisOverlap& axis, Vec2f reference_normal,
+               Contact* contact) {
+  const Scalar reference_half =
+      axis.is_y_axis ? reference.half_size.y() : reference.half_size.x();
+  const Vec2f tangent = axis.is_y_axis ? reference.axis_x : reference.axis_y;
+  const Scalar tangent_half =
+      axis.is_y_axis ? reference.half_size.x() : reference.half_size.y();
+  const Vec2f face_center =
+      reference.center + reference_normal * reference_half;
+
+  // Incident face: the incident box's face whose normal points most against
+  // the reference normal (x wins a tie, for determinism)
+  const Scalar along_x = Vec2f::Dot(incident.axis_x, reference_normal);
+  const Scalar along_y = Vec2f::Dot(incident.axis_y, reference_normal);
+  const bool incident_on_x = Abs(along_x) >= Abs(along_y);
+  const Vec2f axis_n = incident_on_x ? incident.axis_x : incident.axis_y;
+  const Scalar along = incident_on_x ? along_x : along_y;
+  const Vec2f incident_normal = along > Scalar{0} ? -axis_n : axis_n;
+  const Vec2f edge = incident_on_x ? incident.axis_y : incident.axis_x;
+  const Scalar normal_half =
+      incident_on_x ? incident.half_size.x() : incident.half_size.y();
+  const Scalar edge_half =
+      incident_on_x ? incident.half_size.y() : incident.half_size.x();
+  const Vec2f incident_center = incident.center + incident_normal * normal_half;
+  Vec2f v1 = incident_center - edge * edge_half;
+  Vec2f v2 = incident_center + edge * edge_half;
+
+  // Side planes of the reference face
+  const Scalar center_along_tangent = Vec2f::Dot(tangent, reference.center);
+  if (!ClipSegment(v1, v2, tangent, center_along_tangent + tangent_half) ||
+      !ClipSegment(v1, v2, -tangent, tangent_half - center_along_tangent)) {
+    return;
+  }
+  for (const Vec2f& point : {v1, v2}) {
+    const Scalar separation = Vec2f::Dot(reference_normal, point - face_center);
+    if (separation <= Scalar{0}) {
+      contact->points[contact->point_count] = {point, -separation};
+      ++contact->point_count;
+    }
+  }
 }
 
 // The box's farthest point in a direction: a corner, or the middle of an edge
@@ -158,22 +227,22 @@ Vec2f Support(const BoxShape& box, Vec2f direction) {
 // b's) and a later axis replaces an earlier one only when strictly smaller, so
 // the choice is deterministic. Fills contact when it isn't null.
 bool CollideBoxes(const BoxShape& a, const BoxShape& b, Contact* contact) {
-  AxisOverlap best_a = OverlapAlong(a, b, a.axis_x);
+  AxisOverlap best_a = OverlapAlong(a, b, a.axis_x, false);
   if (best_a.overlap < Scalar{0}) {
     return false;
   }
-  const AxisOverlap a_y = OverlapAlong(a, b, a.axis_y);
+  const AxisOverlap a_y = OverlapAlong(a, b, a.axis_y, true);
   if (a_y.overlap < Scalar{0}) {
     return false;
   }
   if (a_y.overlap < best_a.overlap) {
     best_a = a_y;
   }
-  AxisOverlap best_b = OverlapAlong(a, b, b.axis_x);
+  AxisOverlap best_b = OverlapAlong(a, b, b.axis_x, false);
   if (best_b.overlap < Scalar{0}) {
     return false;
   }
-  const AxisOverlap b_y = OverlapAlong(a, b, b.axis_y);
+  const AxisOverlap b_y = OverlapAlong(a, b, b.axis_y, true);
   if (b_y.overlap < Scalar{0}) {
     return false;
   }
@@ -191,11 +260,15 @@ bool CollideBoxes(const BoxShape& a, const BoxShape& b, Contact* contact) {
     contact->contact_normal = best_b.normal;
     contact->contact_point = Support(a, -best_b.normal);
     contact->penetration = best_b.overlap;
+    // b's face looks toward a: along the normal
+    ClipBoxes(b, a, best_b, best_b.normal, contact);
   } else {
     // Reference face on a: b's corner deepest toward a
     contact->contact_normal = best_a.normal;
     contact->contact_point = Support(b, best_a.normal);
     contact->penetration = best_a.overlap;
+    // a's face looks toward b: against the normal
+    ClipBoxes(a, b, best_a, -best_a.normal, contact);
   }
   return true;
 }
@@ -415,6 +488,7 @@ NEKO_HOT bool PhysicsWorld::DetectContact(Body& body1, Collider& collider1,
   contact->bodies[1].collider = &collider2;
 
   contact->restitution = Max(collider1.restitution, collider2.restitution);
+  contact->point_count = 0;
 
   const bool collision = !(collider1.is_trigger || collider2.is_trigger);
   // The contact details are only needed for solid pairs
@@ -481,6 +555,26 @@ NEKO_HOT bool PhysicsWorld::DetectContact(Body& body1, Collider& collider1,
                   delta.y() > neko::Scalar{0} ? Vec2f::Up() : Vec2f::Down();
               contact->penetration = penetration_y;
             }
+            // Manifold: the ends of the overlap along the face, on body 2's
+            // face toward body 1 (like the incident face of oriented boxes),
+            // all at the same depth
+            const bool on_x = penetration_x < penetration_y;
+            const auto face =
+                center2 + Vec2f{contact->contact_normal.x() * half2.x(),
+                                contact->contact_normal.y() * half2.y()};
+            const auto low =
+                on_x ? Max(center1.y() - half1.y(), center2.y() - half2.y())
+                     : Max(center1.x() - half1.x(), center2.x() - half2.x());
+            const auto high =
+                on_x ? Min(center1.y() + half1.y(), center2.y() + half2.y())
+                     : Min(center1.x() + half1.x(), center2.x() + half2.x());
+            contact->points[0] = {
+                on_x ? Vec2f{face.x(), low} : Vec2f{low, face.y()},
+                contact->penetration};
+            contact->points[1] = {
+                on_x ? Vec2f{face.x(), high} : Vec2f{high, face.y()},
+                contact->penetration};
+            contact->point_count = low == high ? 1 : 2;
           }
           break;
         }
@@ -572,6 +666,12 @@ NEKO_HOT bool PhysicsWorld::DetectContact(Body& body1, Collider& collider1,
       break;
     default:
       break;
+  }
+  // Circles, and boxes whose clipping kept no point (only when rounding
+  // leaves the corners a hair above the face): one point, the deepest one
+  if (collision && does_intersect && contact->point_count == 0) {
+    contact->points[0] = {contact->contact_point, contact->penetration};
+    contact->point_count = 1;
   }
   return does_intersect;
 }
