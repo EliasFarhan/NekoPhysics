@@ -2,6 +2,7 @@
 #define NEKO_PHYSICS_CONTACT_SOLVER_H_
 #include <array>
 #include <cstdint>
+#include <span>
 
 #include "neko/math/vec2.h"
 
@@ -18,22 +19,30 @@ struct CollidingBody {
   Collider* collider = nullptr;  ///< @ref Collider that touches the other one.
 };
 
-/// One point of a contact manifold: where the shapes touch, and how deep.
+/// One point of a contact manifold: where the shapes touch, how deep, and the
+/// impulse the solver pushed there.
 struct ContactPoint {
   /// World-space position of the point, in meters.
   Vec2f position{};
   /// Overlap depth at this point along @ref Contact::contact_normal, in
   /// meters: 0 when the shapes just touch there.
   Scalar penetration{};
+  /// Total impulse pushed along the normal at this point during the step, in
+  /// N s; never negative (contacts push, they don't pull).
+  ///
+  /// Divided by the time step it is the contact force: a 1 kg box resting on
+  /// two points carries about `9.81 * dt / 2` at each.
+  Scalar normal_impulse{};
 };
 
-/// Contact between two solid colliders, found by the narrowphase and resolved
-/// with an impulse.
+/// Contact between two solid colliders, found by the narrowphase and solved
+/// with impulses.
 ///
 /// @ref PhysicsWorld::DetectContact fills it in when two colliders overlap;
-/// @ref Resolve then fixes velocities and positions. A `Contact` lives only for
-/// the step that created it: games normally never build one, they receive
-/// @ref ContactListener events instead.
+/// @ref SolveContacts then fixes the velocities of all the step's contacts
+/// together. A `Contact` lives only for the step that created it: games
+/// normally never build one, they receive @ref ContactListener events
+/// instead.
 ///
 /// Conventions: `contact_normal` is a unit vector pointing from `bodies[1]`
 /// towards `bodies[0]`, and `penetration` is how deep the shapes overlap along
@@ -60,11 +69,8 @@ struct Contact {
   /// `points` for the full manifold.
   Vec2f contact_point{};
   /// The contact manifold: the first `point_count` entries are the points
-  /// where the shapes touch, each with its own penetration.
-  ///
-  /// For a contact with an oriented box, @ref Resolve applies its impulses
-  /// at these points, which makes the bodies spin; other contacts push
-  /// through the centers of mass.
+  /// where the shapes touch, each with its own penetration. The solver pushes
+  /// at each of them.
   std::array<ContactPoint, 2> points{};
   /// Number of valid entries in `points`: 1 or 2 for a solid contact, 0 for a
   /// trigger pair (only the overlap is computed).
@@ -73,68 +79,109 @@ struct Contact {
   /// two colliders.
   ///
   /// 0 stops the bodies along the normal (no bounce), 1 is a perfectly elastic
-  /// bounce that keeps the speed along the normal.
+  /// bounce that keeps the speed along the normal. Slow impacts don't bounce
+  /// (see @ref ContactSolverSettings::restitution_threshold).
   Scalar restitution{1};
-  /// Overlap depth along `contact_normal`, in world units.
+  /// Overlap depth along `contact_normal`, in world units: the deepest point's.
   Scalar penetration{};
 
-  /// Applies the impulse and the position correction that separate the two
-  /// bodies.
-  ///
-  /// Impulse-based solving: instead of simulating contact forces over time,
-  /// the solver instantly changes the velocities so that the bodies stop
-  /// approaching each other (and bounce back according to `restitution`).
-  /// The change is shared by inverse mass, so a light body moves more than a
-  /// heavy one. Then the bodies are moved apart by `penetration`, again shared
-  /// by inverse mass, so they don't stay sunk into each other.
-  ///
-  /// When one of the colliders is an @ref OrientedBoxCollider, the impulse
-  /// is applied at each point of the manifold instead, which turns the
-  /// bodies (an off-center hit makes a box spin). For each point, one after
-  /// the other:
-  ///
-  /// @code
-  /// r1 = point - body1.position;  r2 = point - body2.position
-  /// // Velocity of each body at the point: v + w x r
-  /// vn = Dot(v1 + w1 x r1 - v2 - w2 x r2, n)       // < 0: approaching
-  /// rn1 = Cross(r1, n);  rn2 = Cross(r2, n)        // lever arms
-  /// k = 1/m1 + 1/m2 + rn1^2 / I1 + rn2^2 / I2      // effective inverse mass
-  /// j = (-restitution * vn_before - vn) / k        // impulse size, >= 0
-  /// v1 += j n / m1;  w1 += rn1 j / I1               // and the opposite
-  /// v2 -= j n / m2;  w2 -= rn2 j / I2               // for body 2
-  /// @endcode
-  ///
-  /// `k` says how much the point's velocity changes per unit of impulse:
-  /// the farther the point from the center (along the tangent), the more of
-  /// the impulse goes into spin, the less into motion. `vn_before` is the
-  /// point's approach speed before any impulse of this contact, so both
-  /// points bounce with the same restitution. A single pass over the points
-  /// doesn't settle a box lying flat (the second point's impulse disturbs the
-  /// first): it rocks a little. An iterative solver fixes that later. The
-  /// penetration is still corrected once, through the centers of mass.
-  ///
-  /// Contacts between circles and axis-aligned boxes keep the
-  /// center-of-mass impulse: a circle's normal goes through its center (no
-  /// lever arm) and an @ref AabbCollider doesn't turn, so spinning its body
-  /// would be misleading.
-  ///
-  /// Only @ref BodyType::kDynamic bodies are affected: static and kinematic
-  /// bodies behave as if their mass and inertia were infinite. If neither
-  /// body is dynamic (or both have an inverse mass of 0) nothing happens. If
-  /// the bodies are already separating, only the position is corrected.
-  ///
-  /// @pre Both `bodies[i].body` and `bodies[i].collider` pointers are valid.
-  void Resolve();
-  /// Returns the relative velocity of the two bodies along the normal.
+  /// Returns the relative velocity of the two bodies' centers along the
+  /// normal.
   ///
   /// Computed as the dot product of `bodies[0].velocity - bodies[1].velocity`
   /// with `contact_normal`. Negative when the bodies are moving towards each
-  /// other, positive when they are already separating.
+  /// other, positive when they are already separating. The solver uses the
+  /// velocity at each point instead, which includes the spin.
   ///
   /// @pre Both `bodies[i].body` pointers are valid.
   /// @return The separating velocity, in world units per second.
   [[nodiscard]] Scalar CalculateSeparateVelocity() const;
 };
+
+/// Settings of @ref SolveContacts, taken from the @ref PhysicsWorldConfig.
+struct ContactSolverSettings {
+  /// Time step, in seconds: turns a penetration into a correction speed.
+  Scalar dt{1.0f / 60.0f};
+  /// Number of passes over all the contacts.
+  ///
+  /// Each pass corrects every point a little, and the corrections disturb
+  /// each other (a box's second point undoes part of its first point's
+  /// push), so the solver repeats them: more passes, more accurate stacks,
+  /// more CPU time. 1 is the single pass of a one-shot solver.
+  int velocity_iterations = 8;
+  /// Fraction of the penetration (beyond the slop) removed per step, the
+  /// Baumgarte factor, from 0 to 1.
+  ///
+  /// Overlapping shapes are pushed apart by a target separating speed of
+  /// `baumgarte / dt * (penetration - penetration_slop)` instead of being
+  /// moved: 0.2 removes about a fifth of the overlap each step. Larger values
+  /// correct faster but make resting objects pop and jitter.
+  Scalar baumgarte{0.2f};
+  /// Overlap left alone, in meters.
+  ///
+  /// Shapes resting on each other keep overlapping by about this much, so
+  /// the contact stays alive from one step to the next instead of flickering
+  /// between touching and separated.
+  Scalar penetration_slop{0.005f};
+  /// Slowest approach speed that bounces, in m/s.
+  ///
+  /// Below it a contact doesn't bounce whatever its restitution: without it,
+  /// a resting body would keep bouncing on the tiny speeds that gravity adds
+  /// every step.
+  Scalar restitution_threshold{1};
+};
+
+namespace internal {
+// Per-point data computed once per step by SolveContacts and reused by every
+// pass
+struct ContactPointScratch {
+  Vec2f r1{};
+  Vec2f r2{};
+  Scalar normal_mass{};
+  Scalar target_velocity{};
+};
+}  // namespace internal
+
+/// Solves all the contacts of a step together with accumulated impulses.
+///
+/// For each point, the solver wants the bodies' velocities at the point (each
+/// `v + w x r`) to separate at a target speed along the normal: the bounce
+/// `-restitution * vn` for an impact faster than the threshold, or the
+/// Baumgarte push-out of the penetration, whichever is larger (0 when the
+/// shapes just touch). It then runs `velocity_iterations` passes over every
+/// point of every contact, in order:
+///
+/// @code
+/// vn = Dot(v1 + w1 x r1 - v2 - w2 x r2, n)       // current approach speed
+/// k = 1/m1 + 1/m2 + Cross(r1, n)^2 / I1 + Cross(r2, n)^2 / I2
+/// dj = (target - vn) / k                         // impulse to reach target
+/// total = max(normal_impulse + dj, 0)            // contacts never pull
+/// dj = total - normal_impulse;  normal_impulse = total
+/// apply dj * n at the point to body 1, -dj * n to body 2
+/// @endcode
+///
+/// Clamping the accumulated impulse, not each pass's increment, lets a later
+/// pass take back part of an earlier push (when a neighbor already did the
+/// work) without ever pulling the bodies together. Repeating a one-shot
+/// impulse instead would add a new bounce every pass. The passes converge
+/// toward impulses that satisfy every contact at once, which is what lets a
+/// box rest flat on two points and a pile settle.
+///
+/// Only @ref BodyType::kDynamic bodies move; static and kinematic bodies have
+/// infinite mass and inertia. A body whose collider in the contact is an
+/// @ref AabbCollider doesn't spin (its shape can't turn): its inertia is
+/// infinite in that contact.
+///
+/// @param contacts The step's solid contacts, filled by
+/// @ref PhysicsWorld::DetectContact. Their `normal_impulse` values are
+/// overwritten.
+/// @param scratch Working memory, two entries per contact.
+/// @param settings Time step, passes and tolerances.
+/// @pre `scratch.size() >= 2 * contacts.size()`, and every contact's body and
+/// collider pointers are valid.
+void SolveContacts(std::span<Contact> contacts,
+                   std::span<internal::ContactPointScratch> scratch,
+                   const ContactSolverSettings& settings);
 }  // namespace neko
 
 #endif  // NEKO_PHYSICS_CONTACT_SOLVER_H_

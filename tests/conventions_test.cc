@@ -81,16 +81,78 @@ TEST(Conventions, TouchingCountsAsOverlapping) {
   EXPECT_EQ(circles.world.touching_pairs().size(), 1u);
 }
 
-TEST(Conventions, NoSlopPenetrationIsCorrectedInOneStep) {
-  // Overlapping by 0.5 at rest: one step pushes them exactly apart, half each
-  // (equal masses)
+TEST(Conventions, PenetrationBeyondTheSlopIsPushedOutGradually) {
+  // Overlapping by 0.5 at rest: the first step gives them the Baumgarte
+  // separating speed 0.2 / dt * (0.5 - 0.005), not a jump in position
   TwoCircles circles{{neko::Scalar{0}, Ratio(3, 2)},
                      {neko::Scalar{0}, neko::Scalar{0}}};
+  const neko::PhysicsWorldConfig config;
   circles.world.Step();
-  const auto distance = (circles.world.body(neko::BodyIndex{0}).position -
-                         circles.world.body(neko::BodyIndex{1}).position)
-                            .Length();
-  EXPECT_LT(neko::Abs(distance - neko::Scalar{2}), Ratio(1, 10000));
+  const auto& upper = circles.world.body(neko::BodyIndex{0});
+  const auto& lower = circles.world.body(neko::BodyIndex{1});
+  const auto separating = (upper.velocity - lower.velocity).y();
+  const auto expected =
+      config.baumgarte / config.dt * (Ratio(1, 2) - config.penetration_slop);
+  EXPECT_LT(neko::Abs(separating - expected), Ratio(5, 100));
+  for (int step = 0; step < 10; ++step) {
+    circles.world.Step();
+  }
+  const auto distance = (upper.position - lower.position).Length();
+  EXPECT_GT(distance, neko::Scalar{2} - config.penetration_slop);
+}
+
+namespace {
+// A 1 m box of mass 1 above a static ground whose top is at y = 0
+struct BoxOnGround {
+  explicit BoxOnGround(neko::Scalar restitution) {
+    const auto ground = world.AddBody();
+    world.body(ground).type = neko::BodyType::kStatic;
+    world.body(ground).position = {neko::Scalar{0}, neko::Scalar{-1}};
+    const auto ground_collider = world.AddAabbCollider(ground);
+    world.collider(ground_collider).is_trigger = false;
+    world.collider(ground_collider).restitution = restitution;
+    world.aabb(world.collider(ground_collider).shape_index).half_size = {
+        neko::Scalar{10}, neko::Scalar{1}};
+    box = world.AddBody();
+    world.body(box).position = {neko::Scalar{0}, Ratio(1, 2)};
+    const auto box_collider = world.AddAabbCollider(box);
+    world.collider(box_collider).is_trigger = false;
+    world.collider(box_collider).restitution = restitution;
+    world.aabb(world.collider(box_collider).shape_index).half_size = {
+        Ratio(1, 2), Ratio(1, 2)};
+  }
+  neko::Scalar penetration() const {
+    return Ratio(1, 2) - world.body(box).position.y();
+  }
+  neko::PhysicsWorld world;
+  neko::BodyIndex box{};
+};
+}  // namespace
+
+TEST(Conventions, RestingBodiesOverlapByAboutTheSlop) {
+  BoxOnGround resting{neko::Scalar{0}};
+  for (int step = 0; step < 120; ++step) {
+    resting.world.Step();
+  }
+  const neko::PhysicsWorldConfig config;
+  EXPECT_GE(resting.penetration(), neko::Scalar{0});
+  EXPECT_LT(resting.penetration(), config.penetration_slop + Ratio(1, 1000));
+  // At rest: the velocity solved in the step is zero, not one step of gravity
+  EXPECT_EQ(resting.world.body(resting.box).velocity.y(), neko::Scalar{0});
+}
+
+TEST(Conventions, ImpactsSlowerThanTheThresholdDontBounce) {
+  // Restitution 1, touching the ground, moving down (plus one step of
+  // gravity, 0.16 m/s): at 0.5 m/s it stops, at 2 m/s it bounces
+  BoxOnGround slow{neko::Scalar{1}};
+  slow.world.body(slow.box).velocity = {neko::Scalar{0}, -Ratio(1, 2)};
+  slow.world.Step();
+  EXPECT_EQ(slow.world.body(slow.box).velocity.y(), neko::Scalar{0});
+
+  BoxOnGround fast{neko::Scalar{1}};
+  fast.world.body(fast.box).velocity = {neko::Scalar{0}, neko::Scalar{-2}};
+  fast.world.Step();
+  EXPECT_GT(fast.world.body(fast.box).velocity.y(), neko::Scalar{2});
 }
 
 // A macro rather than if constexpr: outside a template, the discarded branch

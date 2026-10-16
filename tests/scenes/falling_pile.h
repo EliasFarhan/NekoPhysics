@@ -71,14 +71,15 @@ inline void BuildFallingPile(PhysicsWorld& world) {
 
 // Golden checksums of BuildFallingPile with Scalar = Fixed16, shared by
 // tests/scene_test.cc and the DS test ROM (nds/main.cc) so there is one source
-// to re-pin when the simulation changes on purpose. Re-pinned on 2026-10-16
-// with MSVC 14.51 for rotation (M5 stage 1): the body checksum now covers the
-// rotation, angular velocity, torque, inverse inertia and inertia mode. The
-// bodies move exactly as before (kFallingPileTrajectoryChecksums unchanged).
+// to re-pin when the simulation changes on purpose. Re-pinned on 2026-10-17
+// with MSVC 14.51 for the iterative contact solver (M3 stage 1): contacts are
+// solved together in 8 passes with accumulated impulses, Baumgarte push-out
+// and slop instead of an instant position correction, and Step integrates
+// positions after the contacts. Steps 0 and 1 (no contact yet) are unchanged.
 // The DS test ROM must print the same values.
 inline constexpr std::pair<int, std::uint32_t> kFallingPileGoldenChecksums[] = {
-    {0, 0x87505a93u},   {1, 0x28d365c7u},   {60, 0x320691a4u},
-    {120, 0x63a61481u}, {300, 0x8261d08eu}, {600, 0x3dd70c02u},
+    {0, 0x87505a93u},   {1, 0x28d365c7u},   {60, 0x52744c5du},
+    {120, 0x64f61ac7u}, {300, 0xf79b2760u}, {600, 0x2a2503d5u},
 };
 
 // FNV-1a over the raw bits of every body's position and velocity, and nothing
@@ -107,13 +108,14 @@ inline std::uint32_t TrajectoryChecksum(const PhysicsWorld& world,
 }
 
 // Golden TrajectoryChecksum of BuildFallingPile with Scalar = Fixed16, at the
-// steps of kFallingPileGoldenChecksums. Pinned on 2026-10-16 with MSVC 14.51,
-// before adding rotation: rotation must leave it unchanged for scenes that
-// don't rotate, even though the world checksums change.
+// steps of kFallingPileGoldenChecksums. Pinned on 2026-10-16 before rotation
+// (unchanged by M5, whose stages didn't move non-rotating scenes), re-pinned
+// on 2026-10-17 with MSVC 14.51 for the iterative contact solver (M3 stage 1),
+// which changes how every contact moves the bodies.
 inline constexpr std::pair<int, std::uint32_t>
     kFallingPileTrajectoryChecksums[] = {
-        {0, 0x239c5dc0u},   {1, 0xbc032ed3u},   {60, 0xef6ec3cbu},
-        {120, 0xd7b4b787u}, {300, 0x961cc555u}, {600, 0x0c1e0cb7u},
+        {0, 0x239c5dc0u},   {1, 0xbc032ed3u},   {60, 0x2650ae46u},
+        {120, 0xf4127d03u}, {300, 0xf16b5463u}, {600, 0x025e8a20u},
 };
 
 }  // namespace neko::scenes

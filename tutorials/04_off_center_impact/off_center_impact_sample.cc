@@ -55,24 +55,27 @@ void OffCenterImpactSample::Begin(const SampleContext& context) {
 }
 
 void OffCenterImpactSample::FixedUpdate() {
-  const Vec2f velocity_before = world_.body(box_index_).velocity;
+  // The contact is found and solved with the box where it was at the start
+  // of the step: the step moves and turns it afterwards
+  const Body& before = world_.body(box_index_);
+  const Vec2f velocity_before = before.velocity;
+  const Vec2f position_before = before.position;
+  const Rotation rotation_before = before.rotation;
   world_.Step();
   if (lever_arm_.has_value() || world_.touching_pairs().empty()) {
     return;
   }
-  // The impact step: the corner that hit is the lowest bottom corner at the
-  // angle of this step (the step turned the box before the contact)
   const Body& box = world_.body(box_index_);
   const Vec2f half = half_size();
-  const Vec2f left = box.rotation.Rotate({-half.x(), -half.y()});
-  const Vec2f right = box.rotation.Rotate({half.x(), -half.y()});
+  const Vec2f left = rotation_before.Rotate({-half.x(), -half.y()});
+  const Vec2f right = rotation_before.Rotate({half.x(), -half.y()});
   const Vec2f r = left.y() < right.y() ? left : right;
   lever_arm_ = Vec2f::Cross(r, Vec2f::Up());
   approach_velocity_ = velocity_before.y();
   measured_velocity_ = box.velocity.y();
   measured_spin_ = box.angular_velocity;
-  impact_center_ = box.position;
-  impact_point_ = box.position + r;
+  impact_center_ = position_before;
+  impact_point_ = position_before + r;
 
   readouts_[0].value = ToDecimal(*lever_arm_, readouts_[0].scale);
   readouts_[1].value = ToDecimal(*predicted_spin(), readouts_[1].scale);

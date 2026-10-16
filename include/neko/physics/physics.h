@@ -58,8 +58,9 @@
 ///   @ref BoundingSurfaceHierarchy (@ref SweepAndPrune by default, or a
 ///   @ref QuadTree), cheaply finds pairs whose bounding boxes overlap. The
 ///   narrowphase (@ref PhysicsWorld::DetectContact) tests the exact shapes of
-///   those pairs only and builds a @ref Contact. @ref Contact::Resolve then
-///   pushes solid shapes apart with an impulse.
+///   those pairs only and builds a @ref Contact. @ref SolveContacts then
+///   pushes solid shapes apart with impulses, all the step's contacts
+///   together, in several passes.
 /// - Math types: @ref Vec2f (2D vector of @ref Scalar), @ref Aabbf and
 ///   @ref Circlef.
 ///
@@ -84,9 +85,10 @@
 ///   up to rounding (it is computed with one reciprocal).
 /// - **Touching counts.** Shapes whose boundaries exactly touch overlap with
 ///   zero penetration: the pair is touching and gets a contact.
-/// - **No tolerances yet.** There is no penetration slop and no restitution
-///   threshold: a contact removes its whole penetration in the step that
-///   finds it, and bounces at any speed.
+/// - **Tolerances.** Overlaps up to @ref PhysicsWorldConfig::penetration_slop
+///   (5 mm) are left alone, deeper ones are pushed out by a fifth
+///   (@ref PhysicsWorldConfig::baumgarte) per step, and impacts slower than
+///   @ref PhysicsWorldConfig::restitution_threshold (1 m/s) don't bounce.
 /// - **Fixed-point ranges.** @ref Fixed16 holds values from -32768 to about
 ///   32767.99998 in steps of 1/65536 (about 0.000015). A product outside that
 ///   range overflows: @ref Vec2f::Dot and @ref Vec2f::SquareLength do for
@@ -170,16 +172,22 @@ enum class InertiaMode : std::uint8_t {
 /// point it turns around; colliders are placed around it with their offset.
 ///
 /// Each @ref PhysicsWorld::Step integrates dynamic bodies with semi-implicit
-/// Euler, the same way for motion and for spin:
+/// Euler, the same way for motion and for spin, with the contacts solved
+/// between the velocities and the positions:
 ///
 /// @code
 /// velocity += (gravity + force * inverse_mass) * dt;
-/// position += velocity * dt;
 /// angular_velocity += torque * inverse_inertia * dt;
-/// angle += angular_velocity * dt;  // then wrapped to one turn
 /// force = 0;
 /// torque = 0;
+/// // ... the contact solver corrects velocity and angular_velocity ...
+/// position += velocity * dt;
+/// angle += angular_velocity * dt;  // then wrapped to one turn
 /// @endcode
+///
+/// Moving the positions last, with the corrected velocities, is what lets a
+/// resting body stay at rest: its velocity after the contacts is zero, so it
+/// doesn't sink by one step of gravity and get pushed back every step.
 ///
 /// Torque is to spin what force is to motion, and inertia is to spin what
 /// mass is to motion: the angular acceleration is `torque / inertia`.
@@ -430,6 +438,20 @@ struct PhysicsWorldConfig {
   /// Maximum number of pairs whose bounding boxes overlap, for the default
   /// broadphase (@ref SweepAndPrune).
   std::size_t max_broadphase_pairs = 2048;
+  /// Passes of the contact solver over all the contacts of a step, see
+  /// @ref ContactSolverSettings::velocity_iterations.
+  ///
+  /// The solver's cost grows linearly with it.
+  int velocity_iterations = 8;
+  /// Fraction of a penetration removed per step, see
+  /// @ref ContactSolverSettings::baumgarte. The default is 0.2.
+  Scalar baumgarte{0.2f};
+  /// Overlap left alone, in meters, see
+  /// @ref ContactSolverSettings::penetration_slop. The default is 0.005.
+  Scalar penetration_slop{0.005f};
+  /// Slowest approach speed that bounces, in m/s, see
+  /// @ref ContactSolverSettings::restitution_threshold. The default is 1.
+  Scalar restitution_threshold{1};
   /// @ref Allocator for all tables; `nullptr` means @ref DefaultAllocator.
   ///
   /// @warning Must outlive the world.
@@ -444,20 +466,21 @@ struct PhysicsWorldConfig {
 /// positions to draw them. See the namespace documentation for a full
 /// example.
 ///
-/// Each @ref Step runs three phases:
+/// Each @ref Step runs four phases:
 ///
-/// - **Integration**: the inertia of dynamic bodies is computed from their
-///   colliders, then dynamic bodies get gravity, forces and torques, and
-///   kinematic bodies move and turn at their velocities.
+/// - **Velocities**: the inertia of dynamic bodies is computed from their
+///   colliders, then dynamic bodies get gravity, forces and torques.
 /// - **Broadphase**: a fast, approximate pass that finds the pairs of
 ///   colliders whose bounding boxes overlap, to avoid testing every collider
 ///   against every other one.
-/// - **Narrowphase**: the exact shape test of each candidate pair, contact
-///   resolution for solid pairs and the enter/exit events.
+/// - **Narrowphase**: the exact shape test of each candidate pair, the
+///   contact solver for the solid pairs and the enter/exit events.
+/// - **Positions**: dynamic and kinematic bodies move and turn at their
+///   (corrected) velocities.
 ///
 /// See @ref Body for the integration formula, @ref ResolveBroadphase and
 /// @ref ResolveNarrowphase for the two collision phases, and
-/// @ref Contact::Resolve for contact resolution.
+/// @ref SolveContacts for the contact solver.
 ///
 /// Bodies, colliders and shapes live in fixed-size tables and are referred to
 /// by index (@ref BodyIndex, @ref ColliderIndex, @ref ShapeIndex); freed slots
@@ -841,6 +864,10 @@ class PhysicsWorld {
   ArrayList<std::uint32_t> touching_pair_bucket_count_;
   ArrayList<std::uint32_t> touching_pair_bucket_start_;
   ArrayList<TouchingPair> sorted_touching_pairs_;
+  // The step's solid contacts, solved together after the narrowphase, and
+  // the solver's working memory (two points per contact)
+  ArrayList<Contact> contacts_;
+  ArrayList<internal::ContactPointScratch> contact_scratch_;
 
   ContactListener* contact_listener_ = nullptr;
   BoundingSurfaceHierarchy* bsh_ = nullptr;

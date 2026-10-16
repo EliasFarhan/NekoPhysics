@@ -65,8 +65,12 @@ class BounceTest : public ::testing::TestWithParam<std::pair<int, int>> {};
 }  // namespace
 
 // The experiment of chapter 00: the apex after one bounce is e^2 h, up to the
-// time step. Semi-implicit Euler samples the arc every dt, so the measured
-// apex is below the prediction, by less than the impact speed times dt.
+// time step. Two errors of about one step: the contact is found a step late,
+// when the ball already sank by up to v dt, and it bounces at e (v + g dt)
+// (that step's gravity included), which adds up to e^2 (v + g dt) dt to the
+// apex; and the apex falls between two samples of the arc, which removes up
+// to e (v + g dt) dt. Measured with FIXED16, the error goes from -0.22 v dt (e
+// = 0.25) to +1.03 v dt (e = 1).
 TEST_P(BounceTest, ApexIsRestitutionSquaredTimesHeight) {
   const auto [drop_height_cm, restitution_percent] = GetParam();
   const auto run = RunBounce(drop_height_cm, restitution_percent);
@@ -77,8 +81,11 @@ TEST_P(BounceTest, ApexIsRestitutionSquaredTimesHeight) {
       << "up to the rounding of the parameters";
   const float impact_speed = std::sqrt(2.0f * 9.81f * drop_height);
   const float dt = 1.0f / 60.0f;
-  EXPECT_LT(*run.measured, run.predicted);
-  EXPECT_GT(*run.measured, run.predicted - impact_speed * dt);
+  const float rebound_speed = restitution * (impact_speed + 9.81f * dt);
+  // 5 mm for rounding (the penetration slop), on both sides
+  EXPECT_GT(*run.measured, run.predicted - rebound_speed * dt - 0.005f);
+  EXPECT_LT(*run.measured,
+            run.predicted + restitution * rebound_speed * dt + 0.005f);
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -340,9 +347,16 @@ TEST_P(RotatedBoxTest, BounceFollowsTheTurnedFaceNormal) {
   EXPECT_NEAR(*run.measured_x, run.normal_x, 0.002f);
   EXPECT_NEAR(*run.measured_y, run.normal_y, 0.002f);
   ASSERT_TRUE(run.bounce_x.has_value());
+  ASSERT_TRUE(run.rebound_ratio.has_value());
+  if (restitution_percent == 0) {
+    // No bounce: the ball leaves at the Baumgarte push-out speed of its
+    // overlap, at most baumgarte (0.2) times its approach speed
+    EXPECT_GE(*run.rebound_ratio, 0.0f);
+    EXPECT_LE(*run.rebound_ratio, 0.2f);
+    return;
+  }
   EXPECT_NEAR(*run.bounce_x, *run.predicted_bounce_x, 0.005f);
   EXPECT_NEAR(*run.bounce_y, *run.predicted_bounce_y, 0.005f);
-  ASSERT_TRUE(run.rebound_ratio.has_value());
   EXPECT_NEAR(*run.rebound_ratio,
               static_cast<float>(restitution_percent) / 100.0f, 0.003f);
 }
@@ -553,10 +567,17 @@ TEST_P(OffCenterImpactTest, ImpactMatchesTheImpulseAtTheCorner) {
   const auto run = RunImpact(parameters);
   ASSERT_TRUE(run.lever_arm.has_value());
   EXPECT_LT(*run.lever_arm, 0.0f) << "the left corner hits";
-  EXPECT_NEAR(run.measured_velocity, run.predicted_velocity, 0.005f);
-  EXPECT_NEAR(run.measured_spin, run.predicted_spin, 0.01f);
-  EXPECT_NEAR(run.corner_rebound,
-              static_cast<float>(parameters.restitution) / 100.0f, 0.005f);
+  if (parameters.restitution == 0) {
+    // No bounce: the corner leaves at the Baumgarte push-out speed of its
+    // overlap, at most baumgarte (0.2) times its approach speed
+    EXPECT_GE(run.corner_rebound, 0.0f);
+    EXPECT_LE(run.corner_rebound, 0.2f);
+  } else {
+    EXPECT_NEAR(run.measured_velocity, run.predicted_velocity, 0.005f);
+    EXPECT_NEAR(run.measured_spin, run.predicted_spin, 0.01f);
+    EXPECT_NEAR(run.corner_rebound,
+                static_cast<float>(parameters.restitution) / 100.0f, 0.005f);
+  }
   // Analytic check of the prediction itself, in float
   const float width = static_cast<float>(parameters.width) / 100.0f;
   const float inertia = (width * width + 1.0f) / 12.0f;

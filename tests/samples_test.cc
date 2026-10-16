@@ -103,19 +103,19 @@ struct GoldenSampleChecksums {
 };
 
 // Checksums of each sample with Scalar = Fixed16 and the PC sample_config,
-// before and after kSampleSteps steps. Re-pinned on 2026-10-16 with MSVC
-// 14.51 when the body checksum gained the rotation fields (M5 stage 1). A
-// change means a sample's simulation changed: on purpose (re-pin, and say why
-// in the commit) or by accident. The draw checksums were pinned before adding
-// rotation and didn't change with it: the samples don't rotate, and they still
-// move exactly as before.
+// before and after kSampleSteps steps, and what it draws then. A change means
+// a sample's simulation changed: on purpose (re-pin, and say why in the
+// commit) or by accident. Re-pinned on 2026-10-17 with MSVC 14.51 for the
+// iterative contact solver (M3 stage 1): the samples with contacts (03 to 06)
+// move differently, final and draw checksums; the initial ones and the
+// samples without contacts (01, 02) are unchanged.
 constexpr std::array<GoldenSampleChecksums, 6> kGoldenSampleChecksums = {{
     {0xd773ba35u, 0x56e9ea97u, 0x79313a0cu},  // 01 Kinematic
     {0xd1972602u, 0x70e2fecau, 0x08e3bb1au},  // 02 Planets
-    {0x0caa1f34u, 0xcc228d31u, 0x783c5572u},  // 03 Triggers
-    {0x69646404u, 0xdba3b5a3u, 0x496de950u},  // 04 Ground
-    {0xc5d5205du, 0xb0052452u, 0xf15dcbf7u},  // 05 Collisions
-    {0x5b15d928u, 0x63f2b627u, 0x9720691bu},  // 06 Move Into
+    {0x0caa1f34u, 0x023c706au, 0x59c17111u},  // 03 Triggers
+    {0x69646404u, 0xcd514015u, 0x1b6a7e38u},  // 04 Ground
+    {0xc5d5205du, 0x806f4a4au, 0x4e49f99du},  // 05 Collisions
+    {0x5b15d928u, 0xda2b58a5u, 0x845ac4ddu},  // 06 Move Into
 }};
 
 }  // namespace

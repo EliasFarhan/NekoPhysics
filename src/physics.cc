@@ -452,8 +452,12 @@ PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config)
           ConfigAllocator(config), config.max_colliders)),
       touching_pair_bucket_start_(MakeList<std::uint32_t>(
           ConfigAllocator(config), config.max_colliders + 1)),
-      sorted_touching_pairs_(MakeList<TouchingPair>(
-          ConfigAllocator(config), config.max_touching_pairs)) {
+      sorted_touching_pairs_(MakeList<TouchingPair>(ConfigAllocator(config),
+                                                    config.max_touching_pairs)),
+      contacts_(MakeList<Contact>(ConfigAllocator(config),
+                                  config.max_touching_pairs)),
+      contact_scratch_(MakeList<internal::ContactPointScratch>(
+          ConfigAllocator(config), 2 * config.max_touching_pairs)) {
   assert(config.max_bodies <= std::numeric_limits<Index>::max() &&
          config.max_colliders <= std::numeric_limits<Index>::max());
   // Fixed size from here on: SortNewTouchingPairs indexes these two directly
@@ -461,6 +465,7 @@ PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config)
   touching_pair_bucket_count_.resize(config.max_colliders);
   touching_pair_bucket_start_.resize(config.max_colliders + 1);
   body_area_.resize(config.max_bodies);
+  contact_scratch_.resize(2 * config.max_touching_pairs);
   body_unit_inertia_.resize(config.max_bodies);
 }
 
@@ -679,6 +684,7 @@ NEKO_HOT bool PhysicsWorld::DetectContact(Body& body1, Collider& collider1,
 NEKO_HOT void PhysicsWorld::ResolveNarrowphase() {
   NEKO_PROFILE_FUNCTION();
   new_touching_pairs_.clear();
+  contacts_.clear();
   for (const auto& pair : Broadphase().GetPossiblePairs()) {
     auto& collider1 = colliders_[pair.c1().index()];
     auto& collider2 = colliders_[pair.c2().index()];
@@ -706,9 +712,11 @@ NEKO_HOT void PhysicsWorld::ResolveNarrowphase() {
       continue;
     }
     if (!is_trigger) {
-      const auto t_resolve_start = StepProfileNow();
-      contact.Resolve();
-      StepProfileMark(StepPhase::kResolve, t_resolve_start);
+      if (contacts_.size() < config_.max_touching_pairs) {
+        contacts_.push_back(contact);
+      } else {
+        assert(false && "PhysicsWorldConfig::max_touching_pairs reached");
+      }
     }
     if (new_touching_pairs_.size() < config_.max_touching_pairs) {
       new_touching_pairs_.push_back({pair, is_trigger});
@@ -716,6 +724,16 @@ NEKO_HOT void PhysicsWorld::ResolveNarrowphase() {
       assert(false && "PhysicsWorldConfig::max_touching_pairs reached");
     }
   }
+  // All the step's contacts together: each pass sees the others' pushes
+  const auto t_resolve_start = StepProfileNow();
+  SolveContacts(contacts_, {contact_scratch_.data(), 2 * contacts_.size()},
+                {.dt = config_.dt,
+                 .velocity_iterations = config_.velocity_iterations,
+                 .baumgarte = config_.baumgarte,
+                 .penetration_slop = config_.penetration_slop,
+                 .restitution_threshold = config_.restitution_threshold});
+  StepProfileMark(StepPhase::kResolve, t_resolve_start);
+
   const auto t_sort_start = StepProfileNow();
   SortNewTouchingPairs();
   NotifyContactChanges();
@@ -1033,43 +1051,39 @@ NEKO_HOT void PhysicsWorld::Step() {
   UpdateInertia();
   StepProfileMark(StepPhase::kInertia, t_inertia_start);
 
-  const auto t_integration_start = StepProfileNow();
+  // Semi-implicit Euler around the contacts: velocities first (forces and
+  // gravity), then the contact solver corrects them, then the positions move
+  // with the corrected velocities. A resting body ends the step at rest
+  // instead of sinking by one step of gravity and being pushed back.
+  auto t_integration_start = StepProfileNow();
   for (auto& body : bodies_) {
-    if (!body.is_active) {
+    if (!body.is_active || body.type != BodyType::kDynamic) {
       continue;
     }
-    switch (body.type) {
-      case BodyType::kDynamic: {
-        // Gravity is an acceleration: no division by the inverse mass
-        body.velocity +=
-            (config_.gravity + body.force * body.inverse_mass) * dt;
-
-        body.position += body.velocity * dt;
-
-        // The same semi-implicit Euler for the spin: torque / inertia is the
-        // angular acceleration
-        if (body.torque != Scalar{0}) {
-          body.angular_velocity += body.torque * body.inverse_inertia * dt;
-        }
-        Turn(body, dt);
-
-        body.force = Vec2f::Zero();
-        body.torque = Scalar{0};
-        break;
-      }
-      case BodyType::kKinematic: {
-        body.position += body.velocity * dt;
-        Turn(body, dt);
-        break;
-      }
-      default:
-        break;
+    // Gravity is an acceleration: no division by the inverse mass
+    body.velocity += (config_.gravity + body.force * body.inverse_mass) * dt;
+    // The same for the spin: torque / inertia is the angular acceleration
+    if (body.torque != Scalar{0}) {
+      body.angular_velocity += body.torque * body.inverse_inertia * dt;
     }
+    body.force = Vec2f::Zero();
+    body.torque = Scalar{0};
   }
   StepProfileMark(StepPhase::kIntegration, t_integration_start);
 
   ResolveBroadphase();
   ResolveNarrowphase();
+
+  t_integration_start = StepProfileNow();
+  for (auto& body : bodies_) {
+    if (!body.is_active || (body.type != BodyType::kDynamic &&
+                            body.type != BodyType::kKinematic)) {
+      continue;
+    }
+    body.position += body.velocity * dt;
+    Turn(body, dt);
+  }
+  StepProfileMark(StepPhase::kIntegration, t_integration_start);
 }
 
 void PhysicsWorld::Clear() {

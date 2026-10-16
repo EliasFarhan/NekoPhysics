@@ -1,6 +1,7 @@
 // Off-center collision impulses (M5 stage 4): contacts with an oriented box
 // apply their impulse at each manifold point, with lever arms, so an
 // off-center hit makes a body spin.
+#include <array>
 #include <cmath>
 #include <type_traits>
 
@@ -81,14 +82,20 @@ struct Fixture {
     world.body(body).inverse_inertia = world.ComputeInverseInertia(body);
     return body;
   }
-  neko::Contact Collide() {
+  // Detects the contact and solves it alone. No Baumgarte push-out: these
+  // are pure impulse experiments, the small overlap must not add speed.
+  neko::Contact Collide(int iterations = 8) {
     neko::Contact contact{};
     auto& ground_collider = world.collider(ground);
     auto& box_collider = world.collider(box);
     EXPECT_TRUE(world.DetectContact(world.body(ground_body), ground_collider,
                                     world.body(box_collider.body_index),
                                     box_collider, &contact));
-    contact.Resolve();
+    std::array<neko::internal::ContactPointScratch, 2> scratch{};
+    neko::SolveContacts({&contact, 1}, scratch,
+                        {.dt = world.dt(),
+                         .velocity_iterations = iterations,
+                         .baumgarte = Scalar{0}});
     return contact;
   }
 
@@ -205,26 +212,30 @@ TEST(OffCenterImpulse, HitBelowTheCenterDoesntSpin) {
 }
 
 TEST(OffCenterImpulse, OnePassRocksAFlatLandingAndIterationsSettleIt) {
-  // A flat box touching the ground (two points, zero penetration, so Resolve
-  // doesn't move it) falling at 1 m/s with no bounce. One pass: point 0's
-  // impulse turns the box, point 1's corrects that, and the box is left
-  // rocking. Repeating the pass converges to rest: what an iterative solver
-  // does.
-  Fixture f;
-  const auto body =
-      f.AddBox(Scalar{0}, Scalar{0}, {Scalar{0}, Scalar{-1}}, Scalar{0});
-  const auto contact = f.Collide();
+  // A flat box touching the ground (two points) falling at 1 m/s with no
+  // bounce. One pass: point 0's impulse turns the box, point 1's corrects
+  // that, and the box is left rocking. More passes, with the accumulated
+  // impulses clamped, converge to rest.
+  Fixture one_pass;
+  const auto rocking =
+      one_pass.AddBox(Scalar{0}, Scalar{0}, {Scalar{0}, Scalar{-1}}, Scalar{0});
+  const auto contact = one_pass.Collide(1);
   ASSERT_EQ(contact.point_count, 2);
-  const auto& box = f.world.body(body);
+  const auto& box = one_pass.world.body(rocking);
   EXPECT_LT(box.velocity.y(), Scalar{0}) << "still falling after one pass";
   EXPECT_GT(box.velocity.y(), Scalar{-1});
   EXPECT_NE(box.angular_velocity, Scalar{0}) << "rocking";
-  neko::Contact again = contact;
-  for (int pass = 0; pass < 30; ++pass) {
-    again.Resolve();
-  }
-  EXPECT_NEAR(ToFloat(box.velocity.y()), 0.0f, 0.01f);
-  EXPECT_NEAR(ToFloat(box.angular_velocity), 0.0f, 0.01f);
+
+  Fixture many_passes;
+  const auto settled = many_passes.AddBox(Scalar{0}, Scalar{0},
+                                          {Scalar{0}, Scalar{-1}}, Scalar{0});
+  const auto solved = many_passes.Collide(30);
+  const auto& rest = many_passes.world.body(settled);
+  EXPECT_NEAR(ToFloat(rest.velocity.y()), 0.0f, 0.01f);
+  EXPECT_NEAR(ToFloat(rest.angular_velocity), 0.0f, 0.01f);
+  // The 1 kg box's 1 N s of momentum, shared by the two points
+  EXPECT_NEAR(ToFloat(solved.points[0].normal_impulse), 0.5f, 0.01f);
+  EXPECT_NEAR(ToFloat(solved.points[1].normal_impulse), 0.5f, 0.01f);
 }
 
 TEST(OffCenterImpulse, AabbContactsKeepTheCenterOfMassImpulse) {
