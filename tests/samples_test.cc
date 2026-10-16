@@ -1,9 +1,16 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <span>
+#include <string>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
 #include <gtest/gtest.h>
+
+#include "neko/physics/physics.h"
 
 #include "main/samples/sample.h"
 #include "main/samples/sample_config.h"
@@ -151,6 +158,114 @@ TEST(SampleRng, RandomColorsAreBright) {
     ASSERT_GE(color, neko::sample_color::kFirstBright);
     ASSERT_LE(color, neko::sample_color::kLastBright);
   }
+}
+
+namespace {
+
+std::string Format(int value, int scale) {
+  const neko::SampleParameter parameter{.scale = scale, .value = value};
+  std::array<char, 16> buffer{};
+  const auto length = neko::FormatParameterValue(parameter, buffer);
+  return {buffer.data(), length};
+}
+
+// One body launched upward at a speed set by a parameter
+class LaunchSample final : public neko::Sample {
+ public:
+  void Begin([[maybe_unused]] const neko::SampleContext& context) override {
+    ++begin_count;
+    const auto index = world_.AddBody();
+    world_.body(index).velocity = {neko::Scalar{0}, parameters_[0].ToScalar()};
+  }
+  void FixedUpdate() override { world_.Step(); }
+  void Draw([[maybe_unused]] neko::DrawList& draw_list) const override {}
+  void End() override { world_.Clear(); }
+  [[nodiscard]] std::uint32_t GenerateChecksum() const override {
+    return world_.GenerateChecksum();
+  }
+  [[nodiscard]] std::span<neko::SampleParameter> parameters() override {
+    return parameters_;
+  }
+
+  int begin_count = 0;
+
+ private:
+  neko::PhysicsWorld world_{{.max_bodies = 1, .max_colliders = 1}};
+  std::array<neko::SampleParameter, 1> parameters_{{
+      {.name = "Speed",
+       .unit = "m/s",
+       .min = -20,
+       .max = 50,
+       .step = 5,
+       .scale = 10,
+       .value = 10},
+  }};
+};
+
+struct LaunchRegistry {
+  LaunchRegistry() {
+    auto owned = std::make_unique<LaunchSample>();
+    sample = owned.get();
+    std::vector<neko::SampleRegistry::Entry> entries;
+    entries.push_back({"Launch", std::move(owned)});
+    registry = std::make_unique<neko::SampleRegistry>(std::move(entries));
+    registry->Select(0, neko::SampleContext{});
+  }
+  std::uint32_t RunChecksum() {
+    for (int step = 0; step < 10; ++step) {
+      registry->FixedUpdate();
+    }
+    return registry->current()->GenerateChecksum();
+  }
+  LaunchSample* sample = nullptr;
+  std::unique_ptr<neko::SampleRegistry> registry;
+};
+
+}  // namespace
+
+TEST(SampleParameter, FormatsDecimals) {
+  EXPECT_EQ(Format(75, 100), "0.75");
+  EXPECT_EQ(Format(5, 100), "0.05");
+  EXPECT_EQ(Format(150, 100), "1.50");
+  EXPECT_EQ(Format(-15, 10), "-1.5");
+  EXPECT_EQ(Format(0, 1000), "0.000");
+  EXPECT_EQ(Format(-7, 1), "-7");
+  EXPECT_EQ(Format(0, 1), "0");
+  EXPECT_EQ(Format(-2147483647 - 1, 1), "-2147483648");
+}
+
+TEST(SampleParameter, ToScalarIsTheRatio) {
+  const neko::SampleParameter parameter{.scale = 100, .value = 75};
+  EXPECT_EQ(parameter.ToScalar(), neko::Ratio(75, 100));
+}
+
+TEST(SampleParameter, SetParameterClampsSnapsAndRestarts) {
+  LaunchRegistry launch;
+  ASSERT_EQ(launch.registry->parameters().size(), 1u);
+  EXPECT_EQ(launch.sample->begin_count, 1);
+
+  launch.registry->SetParameter(0, 23);
+  EXPECT_EQ(launch.registry->parameters()[0].value, 20);  // -20 + 8 * 5
+  EXPECT_EQ(launch.sample->begin_count, 2);
+  launch.registry->SetParameter(0, 1000);
+  EXPECT_EQ(launch.registry->parameters()[0].value, 50);
+  launch.registry->SetParameter(0, -1000);
+  EXPECT_EQ(launch.registry->parameters()[0].value, -20);
+  launch.registry->SetParameter(1, 0);  // out of range: no restart
+  EXPECT_EQ(launch.sample->begin_count, 4);
+}
+
+// The knob of an experiment: changing it changes the run, and setting it back
+// gives the original run again
+TEST(SampleParameter, SameValueSameRun) {
+  LaunchRegistry launch;
+  const auto first = launch.RunChecksum();
+  launch.registry->SetParameter(0, 30);
+  const auto changed = launch.RunChecksum();
+  launch.registry->SetParameter(0, 10);
+  const auto restored = launch.RunChecksum();
+  EXPECT_NE(first, changed);
+  EXPECT_EQ(first, restored);
 }
 
 int main(int argc, char** argv) {

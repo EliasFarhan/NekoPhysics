@@ -1,5 +1,9 @@
 #include "main/samples/sample.h"
 
+#include <algorithm>
+#include <array>
+#include <utility>
+
 #include "neko/core/profile.h"
 #include "neko/physics/physics.h"
 
@@ -27,6 +31,38 @@ void BounceInside(Body& body, const Aabbf& bounds) {
   }
 }
 
+std::size_t FormatParameterValue(const SampleParameter& parameter,
+                                 std::span<char> buffer) {
+  // Digits of |value| with a decimal point before the last `decimals` ones,
+  // built backwards; unsigned so that INT_MIN has a magnitude
+  int decimals = 0;
+  for (int scale = parameter.scale; scale >= 10; scale /= 10) {
+    ++decimals;
+  }
+  const bool is_negative = parameter.value < 0;
+  auto magnitude = static_cast<unsigned>(parameter.value);
+  if (is_negative) {
+    magnitude = 0u - magnitude;
+  }
+  std::array<char, 16> reversed{};
+  std::size_t length = 0;
+  for (int digit = 0; digit <= decimals || magnitude != 0; ++digit) {
+    if (digit == decimals && decimals > 0) {
+      reversed[length++] = '.';
+    }
+    reversed[length++] = static_cast<char>('0' + magnitude % 10u);
+    magnitude /= 10u;
+  }
+  if (is_negative) {
+    reversed[length++] = '-';
+  }
+  const std::size_t written = std::min(length, buffer.size());
+  for (std::size_t i = 0; i < written; ++i) {
+    buffer[i] = reversed[length - 1 - i];
+  }
+  return written;
+}
+
 SampleRegistry::SampleRegistry() {
   samples_.reserve(6);
   samples_.push_back({"01 Kinematic", std::make_unique<KinematicSample>()});
@@ -36,6 +72,9 @@ SampleRegistry::SampleRegistry() {
   samples_.push_back({"05 Collisions", std::make_unique<CollisionsSample>()});
   samples_.push_back({"06 Move Into", std::make_unique<MoveIntoSample>()});
 }
+
+SampleRegistry::SampleRegistry(std::vector<Entry> samples)
+    : samples_(std::move(samples)) {}
 
 SampleRegistry::~SampleRegistry() { Select(kNone, context_); }
 
@@ -55,6 +94,28 @@ void SampleRegistry::FixedUpdate() {
   if (current_index_ != kNone) {
     samples_[current_index_].sample->FixedUpdate();
   }
+}
+
+std::span<const SampleParameter> SampleRegistry::parameters() const {
+  Sample* sample = current();
+  return sample == nullptr ? std::span<const SampleParameter>{}
+                           : sample->parameters();
+}
+
+void SampleRegistry::SetParameter(std::size_t parameter_index, int value) {
+  Sample* sample = current();
+  if (sample == nullptr) {
+    return;
+  }
+  const auto sample_parameters = sample->parameters();
+  if (parameter_index >= sample_parameters.size()) {
+    return;
+  }
+  SampleParameter& parameter = sample_parameters[parameter_index];
+  const int step = std::max(parameter.step, 1);
+  const int clamped = std::clamp(value, parameter.min, parameter.max);
+  parameter.value = parameter.min + (clamped - parameter.min) / step * step;
+  Select(current_index_, context_);
 }
 
 void SampleRegistry::Draw(DrawList& draw_list) const {

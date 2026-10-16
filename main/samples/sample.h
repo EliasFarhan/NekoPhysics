@@ -5,12 +5,14 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <span>
 #include <vector>
 
 #include "neko/math/const.h"
 #include "neko/math/shape.h"
 
 #include "main/samples/draw_list.h"
+#include "main/samples/sample_config.h"
 
 namespace neko {
 
@@ -28,6 +30,59 @@ struct Body;
 /// @param bounds The rectangle to keep the body's position inside, usually
 /// @ref SampleContext::world_bounds.
 void BounceInside(Body& body, const Aabbf& bounds);
+
+/// A number of a sample that the viewer can change: the knob of an experiment.
+///
+/// The value is the fraction `value / scale`, kept as integers: `{.value = 75,
+/// .scale = 100}` is 0.75. Integers keep a parameter exact and identical on
+/// every platform (no float on the DS), and let the hosts print it without
+/// floating-point formatting. The host edits `value` in steps of `step` between
+/// `min` and `max` through @ref SampleRegistry::SetParameter, which restarts
+/// the sample: a run always uses one set of values from its first step, so it
+/// stays deterministic and comparable with other runs.
+///
+/// A sample owns its parameters (usually a `std::array` member), returns them
+/// from @ref Sample::parameters and reads them in @ref Sample::Begin:
+/// @code
+/// std::array<SampleParameter, 1> parameters_{{
+///     {.name = "Restitution", .unit = "", .min = 0, .max = 100, .step = 5,
+///      .scale = 100, .value = 50},
+/// }};
+/// // in Begin
+/// collider.restitution = parameters_[0].ToScalar();
+/// @endcode
+struct SampleParameter {
+  /// Short name shown by the hosts (fits the DS console with its value).
+  const char* name = "";
+  /// Unit shown after the value, such as `"m"` or `"m/s"`; empty if none.
+  const char* unit = "";
+  /// Smallest numerator.
+  int min = 0;
+  /// Largest numerator.
+  int max = 0;
+  /// Increment of the numerator in the host's editor; at least 1.
+  int step = 1;
+  /// Denominator: 1, 10, 100 or 1000, so the value prints as a decimal.
+  int scale = 1;
+  /// Current numerator, between `min` and `max`.
+  int value = 0;
+
+  /// Returns `value / scale` as a @ref Scalar (computed as @ref Ratio).
+  [[nodiscard]] constexpr Scalar ToScalar() const {
+    return Ratio(value, scale);
+  }
+};
+
+/// Writes `parameter`'s value as a decimal number, such as `"0.75"` or `"-2"`.
+///
+/// Integer only, for the DS console as well as the PC menu. Doesn't write the
+/// unit or a terminating null character.
+///
+/// @param parameter The @ref SampleParameter to print.
+/// @param buffer Where to write; the text is cut if it doesn't fit.
+/// @return The number of characters written.
+std::size_t FormatParameterValue(const SampleParameter& parameter,
+                                 std::span<char> buffer);
 
 /// What the host platform gives a sample when it begins.
 ///
@@ -167,6 +222,13 @@ class Sample {
   ///
   /// @return Usually @ref PhysicsWorld::GenerateChecksum of the sample's world.
   [[nodiscard]] virtual std::uint32_t GenerateChecksum() const = 0;
+  /// Returns the parameters the viewer can change, empty by default.
+  ///
+  /// The registry changes them between runs only (@ref SampleRegistry
+  /// changes a value then restarts the sample); read them in @ref Begin.
+  ///
+  /// @return A view of the sample's own @ref SampleParameter array.
+  [[nodiscard]] virtual std::span<SampleParameter> parameters() { return {}; }
 
   /// Duration of one @ref FixedUpdate step, as a @ref Scalar: 1/60 s, one DS
   /// frame.
@@ -199,8 +261,22 @@ class SampleRegistry {
   /// Index meaning "no sample selected".
   static constexpr std::size_t kNone = std::numeric_limits<std::size_t>::max();
 
-  /// Creates every sample, with none selected.
+  /// A registered sample and its menu name.
+  struct Entry {
+    /// Name shown in the menus, a string literal such as `"01 Kinematic"`.
+    const char* name;
+    /// The sample, owned by the registry.
+    std::unique_ptr<Sample> sample;
+  };
+
+  /// Creates the six library samples, with none selected.
   SampleRegistry();
+  /// Creates a registry of other samples, with none selected.
+  ///
+  /// Used by the tutorial programs (one chapter's sample each) and by tests.
+  ///
+  /// @param samples The samples, in menu order.
+  explicit SampleRegistry(std::vector<Entry> samples);
   /// Not copyable: it owns the samples.
   SampleRegistry(const SampleRegistry&) = delete;
   /// Not copyable: it owns the samples.
@@ -237,6 +313,20 @@ class SampleRegistry {
   void Select(std::size_t index, const SampleContext& context);
   /// Advances the selected sample by one fixed step, if any.
   void FixedUpdate();
+  /// Returns the parameters of the selected sample (empty if none).
+  ///
+  /// @return A read-only view; change values with @ref SetParameter.
+  [[nodiscard]] std::span<const SampleParameter> parameters() const;
+  /// Sets a parameter of the selected sample and restarts it.
+  ///
+  /// The value is clamped between the parameter's `min` and `max` and
+  /// snapped down to a multiple of `step` from `min`. The sample restarts even
+  /// when the value doesn't change, like a restart from the menu.
+  ///
+  /// @param parameter_index Index in @ref parameters; out of range does
+  /// nothing.
+  /// @param value New numerator (see @ref SampleParameter).
+  void SetParameter(std::size_t parameter_index, int value);
   /// Fills a draw list with the selected sample's frame.
   ///
   /// Clears the list, sets its camera to the context's world bounds, then
@@ -246,10 +336,6 @@ class SampleRegistry {
   void Draw(DrawList& draw_list) const;
 
  private:
-  struct Entry {
-    const char* name;
-    std::unique_ptr<Sample> sample;
-  };
   std::vector<Entry> samples_;
   std::size_t current_index_ = kNone;
   SampleContext context_{};

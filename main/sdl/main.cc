@@ -17,6 +17,7 @@
 #include <tracy/Tracy.hpp>
 #endif
 
+#include <array>
 #include <cstdio>
 
 namespace {
@@ -45,6 +46,25 @@ void DrawSampleMenu(neko::SampleRegistry& registry,
   }
   if (current != neko::SampleRegistry::kNone && ImGui::Button("Restart")) {
     registry.Select(current, context);
+  }
+  // One slider per parameter, over the step count: the sample restarts when a
+  // value changes
+  const auto parameters = registry.parameters();
+  for (std::size_t index = 0; index < parameters.size(); ++index) {
+    const auto& parameter = parameters[index];
+    const int step = parameter.step > 0 ? parameter.step : 1;
+    int steps = (parameter.value - parameter.min) / step;
+    // The slider shows the formatted value, so the format holds no %d
+    std::array<char, 32> text{};
+    const auto length = neko::FormatParameterValue(
+        parameter, std::span{text.data(), text.size() - 1});
+    std::snprintf(text.data() + length, text.size() - length, " %s",
+                  parameter.unit);
+    if (ImGui::SliderInt(parameter.name, &steps, 0,
+                         (parameter.max - parameter.min) / step, text.data(),
+                         ImGuiSliderFlags_NoInput)) {
+      registry.SetParameter(index, parameter.min + steps * step);
+    }
   }
   ImGui::End();
 }
