@@ -62,9 +62,9 @@ struct Contact {
   /// The contact manifold: the first `point_count` entries are the points
   /// where the shapes touch, each with its own penetration.
   ///
-  /// Informative for now: @ref Resolve pushes the bodies through their
-  /// centers of mass with `penetration`. Contacts that make bodies spin will
-  /// apply their impulses at these points.
+  /// For a contact with an oriented box, @ref Resolve applies its impulses
+  /// at these points, which makes the bodies spin; other contacts push
+  /// through the centers of mass.
   std::array<ContactPoint, 2> points{};
   /// Number of valid entries in `points`: 1 or 2 for a solid contact, 0 for a
   /// trigger pair (only the overlap is computed).
@@ -88,12 +88,42 @@ struct Contact {
   /// heavy one. Then the bodies are moved apart by `penetration`, again shared
   /// by inverse mass, so they don't stay sunk into each other.
   ///
-  /// Only @ref BodyType::kDynamic bodies are affected: static and kinematic
-  /// bodies behave as if their mass was infinite. If neither body is dynamic
-  /// (or both have an inverse mass of 0) nothing happens. If the bodies are
-  /// already separating, only the position is corrected.
+  /// When one of the colliders is an @ref OrientedBoxCollider, the impulse
+  /// is applied at each point of the manifold instead, which turns the
+  /// bodies (an off-center hit makes a box spin). For each point, one after
+  /// the other:
   ///
-  /// @pre Both `bodies[i].body` pointers are valid.
+  /// @code
+  /// r1 = point - body1.position;  r2 = point - body2.position
+  /// // Velocity of each body at the point: v + w x r
+  /// vn = Dot(v1 + w1 x r1 - v2 - w2 x r2, n)       // < 0: approaching
+  /// rn1 = Cross(r1, n);  rn2 = Cross(r2, n)        // lever arms
+  /// k = 1/m1 + 1/m2 + rn1^2 / I1 + rn2^2 / I2      // effective inverse mass
+  /// j = (-restitution * vn_before - vn) / k        // impulse size, >= 0
+  /// v1 += j n / m1;  w1 += rn1 j / I1               // and the opposite
+  /// v2 -= j n / m2;  w2 -= rn2 j / I2               // for body 2
+  /// @endcode
+  ///
+  /// `k` says how much the point's velocity changes per unit of impulse:
+  /// the farther the point from the center (along the tangent), the more of
+  /// the impulse goes into spin, the less into motion. `vn_before` is the
+  /// point's approach speed before any impulse of this contact, so both
+  /// points bounce with the same restitution. A single pass over the points
+  /// doesn't settle a box lying flat (the second point's impulse disturbs the
+  /// first): it rocks a little. An iterative solver fixes that later. The
+  /// penetration is still corrected once, through the centers of mass.
+  ///
+  /// Contacts between circles and axis-aligned boxes keep the
+  /// center-of-mass impulse: a circle's normal goes through its center (no
+  /// lever arm) and an @ref AabbCollider doesn't turn, so spinning its body
+  /// would be misleading.
+  ///
+  /// Only @ref BodyType::kDynamic bodies are affected: static and kinematic
+  /// bodies behave as if their mass and inertia were infinite. If neither
+  /// body is dynamic (or both have an inverse mass of 0) nothing happens. If
+  /// the bodies are already separating, only the position is corrected.
+  ///
+  /// @pre Both `bodies[i].body` and `bodies[i].collider` pointers are valid.
   void Resolve();
   /// Returns the relative velocity of the two bodies along the normal.
   ///
