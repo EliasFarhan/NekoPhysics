@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -14,6 +15,15 @@
 namespace {
 
 using neko::tutorial::BounceSample;
+
+// static_cast<float> would be a useless cast when Scalar is float
+float ToFloat(neko::Scalar value) {
+  if constexpr (std::is_same_v<neko::Scalar, float>) {
+    return value;
+  } else {
+    return static_cast<float>(value);
+  }
+}
 
 struct BounceRun {
   float predicted = 0.0f;
@@ -32,9 +42,9 @@ BounceRun RunBounce(int drop_height_cm, int restitution_percent) {
     sample.FixedUpdate();
   }
   BounceRun run;
-  run.predicted = static_cast<float>(sample.predicted_apex());
+  run.predicted = ToFloat(sample.predicted_apex());
   if (sample.measured_apex().has_value()) {
-    run.measured = static_cast<float>(*sample.measured_apex());
+    run.measured = ToFloat(*sample.measured_apex());
   }
   sample.End();
   return run;

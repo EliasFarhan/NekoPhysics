@@ -182,7 +182,7 @@ int main() {
                  i == cursor ? '>' : ' ', marker, registry.name(i));
     }
     if (parameters.empty()) {
-      rows.Print(kParameterRow, "");
+      rows.Print(kParameterRow, "%s", "");
     } else {
       const auto& parameter = parameters[parameter_cursor];
       std::array<char, 16> value{};
@@ -190,16 +190,15 @@ int main() {
           neko::FormatDecimal(parameter.value, parameter.scale,
                               std::span{value.data(), value.size() - 1});
       value[length] = '\0';
-      rows.Print(kParameterRow, "%u/%u %s %s %s",
-                 static_cast<unsigned>(parameter_cursor + 1),
-                 static_cast<unsigned>(parameters.size()), parameter.name,
-                 value.data(), parameter.unit);
+      rows.Print(kParameterRow, "%zu/%zu %s %s %s", parameter_cursor + 1,
+                 parameters.size(), parameter.name, value.data(),
+                 parameter.unit);
     }
     const auto readouts = registry.readouts();
     for (int row = 0; row < kReadoutRowCount; ++row) {
       const auto index = static_cast<std::size_t>(row);
       if (index >= readouts.size()) {
-        rows.Print(kReadoutRow + row, "");
+        rows.Print(kReadoutRow + row, "%s", "");
         continue;
       }
       const auto& readout = readouts[index];

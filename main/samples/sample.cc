@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <utility>
 
 #include "neko/core/profile.h"
@@ -35,7 +36,11 @@ int ToDecimal(Scalar value, int scale) {
   const Scalar scaled = value * static_cast<Scalar>(scale);
   // The conversion truncates toward zero: add half away from zero first
   const Scalar half = Ratio(1, 2);
-  return static_cast<int>(scaled < Scalar{0} ? scaled - half : scaled + half);
+  // Through std::int32_t: Fixed16 converts to its raw type only, which is
+  // long on devkitARM, so a direct static_cast<int> is ambiguous there
+  const auto rounded = static_cast<std::int32_t>(
+      scaled < Scalar{0} ? scaled - half : scaled + half);
+  return rounded;
 }
 
 std::size_t FormatDecimal(int numerator, int scale, std::span<char> buffer) {
