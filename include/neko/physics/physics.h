@@ -56,6 +56,32 @@
 /// - Math types: @ref Vec2f (2D vector of @ref Scalar), @ref Aabbf and
 ///   @ref Circlef.
 ///
+/// Conventions, checked by `tests/conventions_test.cc`:
+///
+/// - **Units.** Meters, seconds and kilograms: velocities in m/s, forces in
+///   newtons (kg m/s^2), gravity in m/s^2. Mass is given by its inverse,
+///   @ref Body::inverse_mass, in 1/kg.
+/// - **Axes and angles.** The world is y-up (@ref Vec2f::Up is (0, 1) and the
+///   default gravity points down) and a positive angle turns
+///   counter-clockwise (@ref Vec2f::Rotate). Screens are y-down: the sample
+///   hosts flip y when drawing.
+/// - **Contact normal.** @ref Contact::contact_normal points from the second
+///   body toward the first, and @ref Contact::penetration is the overlap depth
+///   along it, positive when the shapes overlap. The normal has unit length
+///   up to rounding (it is computed with one reciprocal).
+/// - **Touching counts.** Shapes whose boundaries exactly touch overlap with
+///   zero penetration: the pair is touching and gets a contact.
+/// - **No tolerances yet.** There is no penetration slop and no restitution
+///   threshold: a contact removes its whole penetration in the step that
+///   finds it, and bounces at any speed.
+/// - **Fixed-point ranges.** @ref Fixed16 holds values from -32768 to about
+///   32767.99998 in steps of 1/65536 (about 0.000015). A product outside that
+///   range overflows: @ref Vec2f::Dot and @ref Vec2f::SquareLength do for
+///   components above about 181 (use @ref Vec2f::Length or
+///   @ref CompareLength). The time step 1/60 s is stored as 1092/65536 s, so
+///   60 steps last 0.99976 s, and a position moves by `velocity * dt` rounded
+///   to 1/65536 m: a body slower than about 0.47 mm/s doesn't move.
+///
 /// A ball falling under the default gravity for one second:
 ///
 /// @code
