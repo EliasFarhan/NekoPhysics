@@ -14,11 +14,13 @@
 #include "tutorials/01_rotation/rotation_sample.h"
 #include "tutorials/02_rotated_box/rotated_box_sample.h"
 #include "tutorials/03_contact_manifold/contact_manifold_sample.h"
+#include "tutorials/04_off_center_impact/off_center_impact_sample.h"
 
 namespace {
 
 using neko::tutorial::BounceSample;
 using neko::tutorial::ContactManifoldSample;
+using neko::tutorial::OffCenterImpactSample;
 using neko::tutorial::RotatedBoxSample;
 using neko::tutorial::RotationSample;
 
@@ -490,6 +492,133 @@ TEST(ContactManifoldTutorial, SameParametersSameRun) {
   registry.SetParameter(ContactManifoldSample::kSpin, 45);
   const std::uint32_t changed = run();
   registry.SetParameter(ContactManifoldSample::kSpin, 30);
+  const std::uint32_t restored = run();
+  EXPECT_NE(first, changed);
+  EXPECT_EQ(first, restored);
+}
+
+namespace {
+
+struct ImpactParameters {
+  int tilt = 20;
+  int restitution = 50;
+  int speed = 200;
+  int width = 200;
+};
+
+struct ImpactRun {
+  std::optional<float> lever_arm;
+  float predicted_velocity = 0.0f;
+  float measured_velocity = 0.0f;
+  float predicted_spin = 0.0f;
+  float measured_spin = 0.0f;
+  float corner_rebound = 0.0f;
+};
+
+// Runs until the box hits the ground (10 s at most)
+ImpactRun RunImpact(const ImpactParameters& parameters) {
+  OffCenterImpactSample sample;
+  auto values = sample.parameters();
+  values[OffCenterImpactSample::kTilt].value = parameters.tilt;
+  values[OffCenterImpactSample::kRestitution].value = parameters.restitution;
+  values[OffCenterImpactSample::kSpeed].value = parameters.speed;
+  values[OffCenterImpactSample::kWidth].value = parameters.width;
+  sample.Begin(neko::SampleContext{neko::sample_config::kWorldBounds});
+  for (int step = 0; step < 600 && !sample.lever_arm().has_value(); ++step) {
+    sample.FixedUpdate();
+  }
+  ImpactRun run;
+  if (sample.lever_arm().has_value()) {
+    run.lever_arm = ToFloat(*sample.lever_arm());
+    run.predicted_velocity = ToFloat(*sample.predicted_velocity());
+    run.measured_velocity = ToFloat(*sample.measured_velocity());
+    run.predicted_spin = ToFloat(*sample.predicted_spin());
+    run.measured_spin = ToFloat(*sample.measured_spin());
+    run.corner_rebound = ToFloat(*sample.corner_rebound());
+  }
+  sample.End();
+  return run;
+}
+
+class OffCenterImpactTest : public ::testing::TestWithParam<ImpactParameters> {
+};
+
+}  // namespace
+
+// The experiment of chapter 04: the impulse at the corner, from
+// k = 1/m + (r x n)^2 / I, gives the velocity and the spin after the hit,
+// and the corner leaves at -e times its approach speed
+TEST_P(OffCenterImpactTest, ImpactMatchesTheImpulseAtTheCorner) {
+  const ImpactParameters& parameters = GetParam();
+  const auto run = RunImpact(parameters);
+  ASSERT_TRUE(run.lever_arm.has_value());
+  EXPECT_LT(*run.lever_arm, 0.0f) << "the left corner hits";
+  EXPECT_NEAR(run.measured_velocity, run.predicted_velocity, 0.005f);
+  EXPECT_NEAR(run.measured_spin, run.predicted_spin, 0.01f);
+  EXPECT_NEAR(run.corner_rebound,
+              static_cast<float>(parameters.restitution) / 100.0f, 0.005f);
+  // Analytic check of the prediction itself, in float
+  const float width = static_cast<float>(parameters.width) / 100.0f;
+  const float inertia = (width * width + 1.0f) / 12.0f;
+  const float speed = static_cast<float>(parameters.speed) / 100.0f;
+  const float e = static_cast<float>(parameters.restitution) / 100.0f;
+  const float impulse =
+      (1.0f + e) * speed / (1.0f + *run.lever_arm * *run.lever_arm / inertia);
+  EXPECT_NEAR(run.predicted_velocity, -speed + impulse, 0.005f);
+  EXPECT_NEAR(run.predicted_spin, *run.lever_arm * impulse / inertia, 0.01f);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    TiltsAndRestitutions, OffCenterImpactTest,
+    ::testing::Values(ImpactParameters{}, ImpactParameters{.tilt = 5},
+                      ImpactParameters{.tilt = 40, .restitution = 100},
+                      ImpactParameters{.restitution = 0, .speed = 50},
+                      ImpactParameters{.tilt = 10, .width = 300},
+                      ImpactParameters{.tilt = 30, .width = 100}));
+
+// The controlled change: the flatter the box lands, the longer the lever arm
+// of its corner, the larger k = 1/m + l^2 / I and the less it bounces. The
+// spin l j / I = (1 + e) v l / (1/m + l^2 / I) peaks when the lever arm is
+// the radius of gyration sqrt(I / m) (0.645 m for the 2 x 1 box): at 30
+// degrees, whose lever arm (0.616 m) is the closest
+TEST(OffCenterImpactTutorial, LeverArmSharesTheImpulseBetweenBounceAndSpin) {
+  float previous_lever = -10.0f;
+  float previous_velocity = -10.0f;
+  int fastest_spin_tilt = 0;
+  float fastest_spin = 0.0f;
+  for (int tilt = 5; tilt <= 40; tilt += 5) {
+    const auto run = RunImpact({.tilt = tilt, .restitution = 100});
+    ASSERT_TRUE(run.lever_arm.has_value()) << tilt;
+    // Tilted more: shorter lever arm (closer to 0), more bounce
+    EXPECT_GT(*run.lever_arm, previous_lever) << tilt;
+    EXPECT_GT(run.measured_velocity, previous_velocity) << tilt;
+    previous_lever = *run.lever_arm;
+    previous_velocity = run.measured_velocity;
+    if (-run.measured_spin > fastest_spin) {
+      fastest_spin = -run.measured_spin;
+      fastest_spin_tilt = tilt;
+    }
+  }
+  EXPECT_EQ(fastest_spin_tilt, 30);
+}
+
+TEST(OffCenterImpactTutorial, SameParametersSameRun) {
+  std::vector<neko::SampleRegistry::Entry> samples;
+  samples.push_back(
+      {"04 Off-center impact", std::make_unique<OffCenterImpactSample>()});
+  neko::SampleRegistry registry{std::move(samples)};
+  const neko::SampleContext context{neko::sample_config::kWorldBounds};
+  const auto run = [&registry] {
+    for (int step = 0; step < 120; ++step) {
+      registry.FixedUpdate();
+    }
+    return registry.current()->GenerateChecksum();
+  };
+  registry.Select(0, context);
+  const std::uint32_t first = run();
+  registry.SetParameter(OffCenterImpactSample::kTilt, 30);
+  const std::uint32_t changed = run();
+  registry.SetParameter(OffCenterImpactSample::kTilt, 20);
   const std::uint32_t restored = run();
   EXPECT_NE(first, changed);
   EXPECT_EQ(first, restored);
