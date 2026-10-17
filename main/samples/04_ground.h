@@ -47,12 +47,14 @@ class GroundSample : public Sample, public ContactListener {
  private:
   static constexpr std::size_t kBodyCount = 3;
   static constexpr std::size_t kMaxPairs = 8;
-  PhysicsWorld world_{{.gravity = Vec2f{Scalar{0}, -Ratio(981, 100)},
-                       .dt = kFixedDeltaTime,
-                       .max_bodies = kBodyCount,
-                       .max_colliders = kBodyCount,
-                       .max_touching_pairs = kMaxPairs,
-                       .max_broadphase_pairs = 1}};
+  PhysicsWorld world_{
+      {.gravity = Vec2f{Scalar{0}, -Ratio(981, 100)},
+       .dt = kFixedDeltaTime,
+       .max_bodies = kBodyCount,
+       .max_colliders = kBodyCount,
+       .max_touching_pairs = kMaxPairs,
+       .max_broadphase_pairs = 1,
+       .velocity_iterations = sample_config::kVelocityIterations}};
   QuadTree quad_tree_{kBodyCount, kMaxPairs};
   BodyIndex circle_body_index_ = kInvalidBodyIndex;
   BodyIndex rect_body_index_ = kInvalidBodyIndex;

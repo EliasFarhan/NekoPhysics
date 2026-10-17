@@ -45,6 +45,12 @@ inline constexpr Index kPlanetCount = 120;
 inline constexpr Index kTriggerCount = 120;
 /// Number of colliding circles in @ref CollisionsSample.
 inline constexpr Index kCollisionCount = 50;
+/// Passes of the contact solver in the samples'
+/// @ref PhysicsWorldConfig::velocity_iterations.
+///
+/// 4 on the DS, where each pass costs about 5 ms for 400 contacts; warm
+/// starting keeps stacks standing with 4.
+inline constexpr int kVelocityIterations = 4;
 #else
 /// World rectangle shown by the hosts, in meters (@ref Scalar).
 ///
@@ -60,6 +66,12 @@ inline constexpr Index kPlanetCount = 1'000;
 inline constexpr Index kTriggerCount = 1'000;
 /// Number of colliding circles in @ref CollisionsSample.
 inline constexpr Index kCollisionCount = 50;
+/// Passes of the contact solver in the samples'
+/// @ref PhysicsWorldConfig::velocity_iterations.
+///
+/// The library default (8) on PC; 4 on the DS, where each pass costs about
+/// 5 ms for 400 contacts and warm starting keeps stacks standing with 4.
+inline constexpr int kVelocityIterations = 8;
 #endif
 
 /// @ref DrawList circle capacity reserved by the hosts: the largest sample.

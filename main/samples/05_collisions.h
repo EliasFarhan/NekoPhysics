@@ -55,11 +55,13 @@ class CollisionsSample : public Sample, public ContactListener {
   };
   static constexpr Index kCircleCount = sample_config::kCollisionCount;
   static constexpr std::size_t kMaxPairs = std::size_t{kCircleCount} * 8;
-  PhysicsWorld world_{{.dt = kFixedDeltaTime,
-                       .max_bodies = kCircleCount,
-                       .max_colliders = kCircleCount,
-                       .max_touching_pairs = kMaxPairs,
-                       .max_broadphase_pairs = 1}};
+  PhysicsWorld world_{
+      {.dt = kFixedDeltaTime,
+       .max_bodies = kCircleCount,
+       .max_colliders = kCircleCount,
+       .max_touching_pairs = kMaxPairs,
+       .max_broadphase_pairs = 1,
+       .velocity_iterations = sample_config::kVelocityIterations}};
   QuadTree quad_tree_{kCircleCount, kMaxPairs};
   std::vector<CollidingBody> bodies_;
   Aabbf bounds_{};

@@ -39,12 +39,14 @@ class PlanetSample : public Sample {
 
  private:
   static constexpr Index kCircleCount = sample_config::kPlanetCount;
-  PhysicsWorld world_{{.gravity = Vec2f::Zero(),
-                       .dt = kFixedDeltaTime,
-                       .max_bodies = kCircleCount,
-                       .max_colliders = 1,
-                       .max_touching_pairs = 1,
-                       .max_broadphase_pairs = 1}};
+  PhysicsWorld world_{
+      {.gravity = Vec2f::Zero(),
+       .dt = kFixedDeltaTime,
+       .max_bodies = kCircleCount,
+       .max_colliders = 1,
+       .max_touching_pairs = 1,
+       .max_broadphase_pairs = 1,
+       .velocity_iterations = sample_config::kVelocityIterations}};
   std::vector<ColorId> colors_;
   Vec2f center_{};
 };
