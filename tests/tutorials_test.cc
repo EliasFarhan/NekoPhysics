@@ -21,6 +21,10 @@
 #include "tutorials/01_rotation/solutions/half_step_sample.h"
 #include "tutorials/01_rotation/solutions/single_force_sample.h"
 #include "tutorials/02_rotated_box/rotated_box_sample.h"
+#include "tutorials/02_rotated_box/solutions/box_on_ramp_sample.h"
+#include "tutorials/02_rotated_box/solutions/corner_sample.h"
+#include "tutorials/02_rotated_box/solutions/tight_bounds_sample.h"
+#include "tutorials/02_rotated_box/solutions/two_ramps_sample.h"
 #include "tutorials/03_contact_manifold/contact_manifold_sample.h"
 #include "tutorials/04_off_center_impact/off_center_impact_sample.h"
 #include "tutorials/05_friction/friction_sample.h"
@@ -35,8 +39,10 @@ namespace {
 
 using neko::Scalar;
 using neko::tutorial::BounceSample;
+using neko::tutorial::BoxOnRampSample;
 using neko::tutorial::ChainSample;
 using neko::tutorial::ContactManifoldSample;
+using neko::tutorial::CornerSample;
 using neko::tutorial::DiskSample;
 using neko::tutorial::DumbbellSample;
 using neko::tutorial::ExplosionSample;
@@ -50,6 +56,8 @@ using neko::tutorial::RotationSample;
 using neko::tutorial::SingleForceSample;
 using neko::tutorial::SpringSample;
 using neko::tutorial::StackingSample;
+using neko::tutorial::TightBoundsSample;
+using neko::tutorial::TwoRampsSample;
 
 // static_cast<float> would be a useless cast when Scalar is float. A template
 // so that if constexpr discards the branch that doesn't compile for the type.
@@ -561,6 +569,176 @@ TEST(RotatedBoxTutorial, SameParametersSameRun) {
   const std::uint32_t restored = run();
   EXPECT_NE(first, changed);
   EXPECT_EQ(first, restored);
+}
+
+// Chapter 02, exercise "corner": when the clamp lands on the ramp's corner,
+// the normal points from the corner to the ball's center (at the step where
+// the world found the contact), not along the face normal
+TEST(RotatedBoxSolutions, CornerNormalPointsFromTheCornerToTheCenter) {
+  for (const int angle : {0, 10, 20, 30}) {
+    for (const int offset_cm : {0, 5, 10, 15}) {
+      CornerSample sample;
+      BeginWith(sample, {{CornerSample::kRampAngle, angle},
+                         {CornerSample::kOffset, offset_cm}});
+      for (int step = 0; step < 300 && !sample.measured_normal().has_value();
+           ++step) {
+        sample.FixedUpdate();
+      }
+      ASSERT_TRUE(sample.measured_normal().has_value()) << angle << offset_cm;
+      ASSERT_TRUE(sample.predicted_normal().has_value());
+      EXPECT_TRUE(sample.hit_corner()) << angle << " " << offset_cm;
+      const neko::Vec2f measured = *sample.measured_normal();
+      const neko::Vec2f predicted = *sample.predicted_normal();
+      EXPECT_NEAR(ToFloat(measured.x()), ToFloat(predicted.x()), 0.002f)
+          << angle << " " << offset_cm;
+      EXPECT_NEAR(ToFloat(measured.y()), ToFloat(predicted.y()), 0.002f)
+          << angle << " " << offset_cm;
+      if (angle >= 10) {
+        EXPECT_LT(ToFloat(neko::Vec2f::Dot(measured, sample.face_normal())),
+                  0.99f)
+            << "not the face normal";
+      }
+      ASSERT_TRUE(sample.sink().has_value());
+      EXPECT_GE(ToFloat(*sample.sink()), 0.0f);
+      sample.End();
+    }
+  }
+}
+
+// Chapter 02, exercise "tight bounds": the broadphase box of a turning box
+// is |cos| hx + |sin| hy by |sin| hx + |cos| hy, as wide as the farthest
+// corner; a probe out of the box's reach is paired with it whenever the
+// bounds' corner covers it, and never touched
+TEST(RotatedBoxSolutions, TightBoundsPairTheProbeWithoutTouchingIt) {
+  for (const auto& [width, height, spin] :
+       {std::tuple{200, 100, 100}, std::tuple{300, 100, 300},
+        std::tuple{100, 250, 170}}) {
+    TightBoundsSample sample;
+    BeginWith(sample, {{TightBoundsSample::kWidth, width},
+                       {TightBoundsSample::kHeight, height},
+                       {TightBoundsSample::kSpin, spin}});
+    // Two turns
+    const int steps = 2 * 377 * 100 / spin + 1;
+    for (int step = 0; step < steps; ++step) {
+      sample.FixedUpdate();
+      const neko::Vec2f bounds = sample.predicted_extents();
+      const neko::Vec2f corners = sample.corner_extents();
+      ASSERT_NEAR(ToFloat(bounds.x()), ToFloat(corners.x()), 0.001f) << step;
+      ASSERT_NEAR(ToFloat(bounds.y()), ToFloat(corners.y()), 0.001f) << step;
+    }
+    EXPECT_EQ(sample.mismatches(), 0) << width << " " << height;
+    EXPECT_EQ(sample.touching_steps(), 0) << width << " " << height;
+    EXPECT_GT(sample.paired_steps(), 0) << width << " " << height;
+    EXPECT_LT(sample.paired_steps(), sample.steps()) << width << " " << height;
+    const float diagonal = ToFloat(sample.half_diagonal());
+    EXPECT_NEAR(ToFloat(sample.widest()), diagonal, diagonal * 0.002f)
+        << width << " " << height;
+    sample.End();
+  }
+}
+
+// Chapter 02, exercise "two ramps": the first bounce reflects about A's face,
+// the flight to B takes the first root of the contact quadratic (within the
+// time-step error), and the second bounce reflects about B's face
+TEST(RotatedBoxSolutions, TwoRampsBounceTwiceAfterAPredictedFlight) {
+  for (const int angle : {15, 20, 30}) {
+    for (const int restitution : {50, 75, 100}) {
+      TwoRampsSample sample;
+      BeginWith(sample, {{TwoRampsSample::kRampAngle, angle},
+                         {TwoRampsSample::kRestitution, restitution}});
+      for (int step = 0; step < 600 && !sample.second_normal().has_value();
+           ++step) {
+        sample.FixedUpdate();
+      }
+      ASSERT_TRUE(sample.measured_bounce().has_value()) << angle;
+      EXPECT_NEAR(ToFloat(sample.measured_bounce()->x()),
+                  ToFloat(sample.predicted_bounce()->x()), 0.005f)
+          << angle << " " << restitution;
+      EXPECT_NEAR(ToFloat(sample.measured_bounce()->y()),
+                  ToFloat(sample.predicted_bounce()->y()), 0.005f)
+          << angle << " " << restitution;
+      ASSERT_TRUE(sample.predicted_flight().has_value());
+      ASSERT_TRUE(sample.second_normal().has_value())
+          << angle << " " << restitution;
+      const float dt = ToFloat(neko::Sample::kFixedDeltaTime);
+      EXPECT_NEAR(ToFloat(*sample.measured_flight()),
+                  ToFloat(*sample.predicted_flight()), 1.5f * dt)
+          << angle << " " << restitution;
+      EXPECT_NEAR(ToFloat(sample.second_normal()->x()),
+                  ToFloat(sample.normal_b().x()), 0.002f)
+          << angle << " " << restitution;
+      EXPECT_NEAR(ToFloat(sample.second_normal()->y()),
+                  ToFloat(sample.normal_b().y()), 0.002f)
+          << angle << " " << restitution;
+      EXPECT_NEAR(ToFloat(*sample.second_ratio()),
+                  static_cast<float>(restitution) / 100.0f, 0.005f)
+          << angle << " " << restitution;
+      sample.End();
+    }
+  }
+}
+
+// Chapter 02, exercise "box on ramp": of the four face axes, the ramp's y
+// axis has the smallest overlap; the contact normal is the ramp's face
+// normal, whatever the angle of the falling box
+TEST(RotatedBoxSolutions, BoxOnRampTakesTheAxisOfSmallestOverlap) {
+  for (const auto& [ramp_angle, box_angle] :
+       {std::pair{20, 0}, std::pair{20, 30}, std::pair{20, -45},
+        std::pair{20, 90}, std::pair{20, 20}, std::pair{-15, 60}}) {
+    BoxOnRampSample sample;
+    BeginWith(sample, {{BoxOnRampSample::kRampAngle, ramp_angle},
+                       {BoxOnRampSample::kBoxAngle, box_angle}});
+    for (int step = 0; step < 300 && !sample.measured_normal().has_value();
+         ++step) {
+      sample.FixedUpdate();
+    }
+    ASSERT_TRUE(sample.measured_normal().has_value()) << box_angle;
+    ASSERT_TRUE(sample.overlaps().has_value());
+    EXPECT_EQ(sample.best_axis(), 1) << ramp_angle << " " << box_angle;
+    for (const Scalar overlap : *sample.overlaps()) {
+      EXPECT_GE(ToFloat(overlap), 0.0f) << "no separating axis";
+    }
+    const neko::Vec2f measured = *sample.measured_normal();
+    EXPECT_NEAR(ToFloat(measured.x()), ToFloat(sample.predicted_normal()->x()),
+                0.002f)
+        << ramp_angle << " " << box_angle;
+    EXPECT_NEAR(ToFloat(measured.y()), ToFloat(sample.predicted_normal()->y()),
+                0.002f)
+        << ramp_angle << " " << box_angle;
+    EXPECT_NEAR(ToFloat(measured.x()), ToFloat(sample.ramp_normal().x()),
+                0.002f);
+    EXPECT_NEAR(ToFloat(measured.y()), ToFloat(sample.ramp_normal().y()),
+                0.002f);
+    sample.End();
+  }
+}
+
+// The solution programs are deterministic: a restart replays the same run
+TEST(TutorialSolutions, SameRunAfterRestart) {
+  std::vector<neko::SampleRegistry::Entry> samples;
+  samples.push_back({"single force", std::make_unique<SingleForceSample>()});
+  samples.push_back({"disk", std::make_unique<DiskSample>()});
+  samples.push_back({"half step", std::make_unique<HalfStepSample>()});
+  samples.push_back({"dumbbell", std::make_unique<DumbbellSample>()});
+  samples.push_back({"corner", std::make_unique<CornerSample>()});
+  samples.push_back({"tight bounds", std::make_unique<TightBoundsSample>()});
+  samples.push_back({"two ramps", std::make_unique<TwoRampsSample>()});
+  samples.push_back({"box on ramp", std::make_unique<BoxOnRampSample>()});
+  const std::size_t count = samples.size();
+  neko::SampleRegistry registry{std::move(samples)};
+  const neko::SampleContext context{neko::sample_config::kWorldBounds};
+  const auto run = [&registry] {
+    for (int step = 0; step < 120; ++step) {
+      registry.FixedUpdate();
+    }
+    return registry.current()->GenerateChecksum();
+  };
+  for (std::size_t i = 0; i < count; ++i) {
+    registry.Select(i, context);
+    const std::uint32_t first = run();
+    registry.Select(i, context);
+    EXPECT_EQ(run(), first) << i;
+  }
 }
 
 namespace {
