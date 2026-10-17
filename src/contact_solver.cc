@@ -55,8 +55,9 @@ Scalar EffectiveMass(Scalar inverse_mass_sum, Scalar inverse_inertia1,
 }
 
 // Applies an impulse at the point: +impulse to body 1, -impulse to body 2
-void ApplyImpulse(Contact& contact, const internal::ContactPointScratch& point,
-                  Vec2f impulse) {
+NEKO_HOT void ApplyImpulse(Contact& contact,
+                           const internal::ContactPointScratch& point,
+                           Vec2f impulse) {
   Body& body1 = *contact.bodies[0].body;
   Body& body2 = *contact.bodies[1].body;
   body1.velocity += impulse * point.inverse_mass1;

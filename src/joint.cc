@@ -31,7 +31,7 @@ Scalar SeparationVelocity(const internal::JointScratch& joint) {
 }
 
 // Applies -impulse at anchor A and +impulse at anchor B
-void ApplyImpulse(const internal::JointScratch& joint, Vec2f impulse) {
+NEKO_HOT void ApplyImpulse(const internal::JointScratch& joint, Vec2f impulse) {
   Body& body_a = *joint.body_a;
   Body& body_b = *joint.body_b;
   body_a.velocity -= impulse * joint.inverse_mass_a;
