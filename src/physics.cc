@@ -467,6 +467,10 @@ std::uint32_t GenerateChecksum(const Body& body) {
   checksum.Add(body.inertia_mode);
   checksum.Add(body.type);
   checksum.Add(body.is_active);
+  // Only when scaled: worlds that don't scale gravity keep their checksums
+  if (body.gravity_scale != Scalar{1}) {
+    checksum.Add(body.gravity_scale);
+  }
   return checksum.Get();
 }
 
@@ -1254,6 +1258,18 @@ bool PhysicsWorld::AreJointFiltered(BodyIndex body1, BodyIndex body2) const {
   return false;
 }
 
+void PhysicsWorld::ApplyForce(BodyIndex index, Vec2f force) {
+  bodies_[index.index()].force += force;
+}
+
+void PhysicsWorld::ApplyImpulse(BodyIndex index, Vec2f impulse) {
+  Body& body = bodies_[index.index()];
+  if (body.type != BodyType::kDynamic) {
+    return;
+  }
+  body.velocity += impulse * body.inverse_mass;
+}
+
 void PhysicsWorld::ApplyForceAtPoint(BodyIndex index, Vec2f force,
                                      Vec2f point) {
   Body& body = bodies_[index.index()];
@@ -1400,8 +1416,12 @@ NEKO_HOT void PhysicsWorld::Step() {
     if (!body.is_active || body.type != BodyType::kDynamic) {
       continue;
     }
-    // Gravity is an acceleration: no division by the inverse mass
-    body.velocity += (config_.gravity + body.force * body.inverse_mass) * dt;
+    // Gravity is an acceleration: no division by the inverse mass. A scale of
+    // 1 (most bodies) skips the multiplication.
+    const Vec2f gravity = body.gravity_scale == Scalar{1}
+                              ? config_.gravity
+                              : config_.gravity * body.gravity_scale;
+    body.velocity += (gravity + body.force * body.inverse_mass) * dt;
     // The same for the spin: torque / inertia is the angular acceleration
     if (body.torque != Scalar{0}) {
       body.angular_velocity += body.torque * body.inverse_inertia * dt;

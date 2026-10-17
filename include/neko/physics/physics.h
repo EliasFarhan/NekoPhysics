@@ -188,7 +188,7 @@ enum class InertiaMode : std::uint8_t {
 /// between the velocities and the positions:
 ///
 /// @code
-/// velocity += (gravity + force * inverse_mass) * dt;
+/// velocity += (gravity * gravity_scale + force * inverse_mass) * dt;
 /// angular_velocity += torque * inverse_inertia * dt;
 /// force = 0;
 /// torque = 0;
@@ -212,8 +212,9 @@ struct Body {
   Vec2f velocity{};
   /// Force accumulated for the next step only; cleared after each step.
   ///
-  /// Add to it to push a dynamic body (`body.force += push`): it is scaled by
-  /// `inverse_mass`, unlike gravity, which accelerates every body equally.
+  /// Add to it to push a dynamic body (`body.force += push`, or
+  /// @ref PhysicsWorld::ApplyForce): it is scaled by `inverse_mass`, unlike
+  /// gravity, which accelerates every body equally.
   Vec2f force{};
   /// One over the mass: 1 for a mass of 1, 0.5 for a mass of 2.
   ///
@@ -250,6 +251,15 @@ struct Body {
   Scalar inverse_inertia{};
   /// How the world sets `inverse_inertia`, see @ref InertiaMode.
   InertiaMode inertia_mode = InertiaMode::kFromColliders;
+  /// Multiplies the world's gravity for this body only: 1 by default, 0 for
+  /// a body that floats (a balloon, a hovering drone), 2 to fall twice as
+  /// fast (a heavier-feeling jump), negative to fall up.
+  ///
+  /// Gravity is an acceleration, the same for every mass, so scaling it
+  /// can't be done with a force without knowing the mass: a force
+  /// `m g (s - 1)` would do it, and that is what this field saves you.
+  /// Hashed by @ref GenerateChecksum only when it isn't 1.
+  Scalar gravity_scale{1};
   /// How the body moves, see @ref BodyType.
   BodyType type = BodyType::kDynamic;
   /// When `false` the body is frozen: not integrated and its colliders are
@@ -676,6 +686,45 @@ class PhysicsWorld {
     return bodies_[index.index()];
   }
 
+  /// Applies a force through the center of mass of a body, for the next
+  /// step: thrust, wind, a magnet.
+  ///
+  /// A force acts over time: it is added to @ref Body::force, and the next
+  /// @ref Step turns it into `velocity += force * inverse_mass * dt`, then
+  /// clears it. To push for a while, apply it every step: the velocity
+  /// change over one second is `force / mass` whatever the time step, which
+  /// is what makes forces the right tool for anything continuous.
+  ///
+  /// @code
+  /// // Jetpack: 30 N up while the button is held, applied every step
+  /// if (thrust_held) {
+  ///   world.ApplyForce(player, {neko::Scalar{0}, neko::Scalar{30}});
+  /// }
+  /// @endcode
+  ///
+  /// @param index @ref Body to push. Only dynamic bodies use forces.
+  /// @param force Force in newtons.
+  /// @see @ref ApplyImpulse for a push all at once.
+  void ApplyForce(BodyIndex index, Vec2f force);
+  /// Applies an impulse through the center of mass of a body, right now:
+  /// a kick, a jump, a knockback.
+  ///
+  /// An impulse is a force times the (short) time it acts, in N s: it
+  /// changes the velocity at once, `velocity += impulse * inverse_mass`, so
+  /// a heavier body gets a smaller kick. Apply it once per event, not every
+  /// step: applied every step its effect would grow with the step rate,
+  /// which is the frame-dependent behavior forces avoid.
+  ///
+  /// @code
+  /// // Knockback from a hit: 4 N s away from the attacker
+  /// world.ApplyImpulse(player, away_from_attacker * neko::Scalar{4});
+  /// @endcode
+  ///
+  /// @param index @ref Body to push. Kinematic and static bodies are left
+  /// unchanged.
+  /// @param impulse Impulse in N s (kg m/s).
+  /// @see @ref ApplyImpulseAtPoint to also make the body spin.
+  void ApplyImpulse(BodyIndex index, Vec2f impulse);
   /// Applies a force at a point of the world to a body, for the next step.
   ///
   /// A force through the center of mass only pushes the body; the same
