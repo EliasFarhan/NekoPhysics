@@ -46,7 +46,19 @@
 #include "tutorials/06_stacking/solutions/two_boxes_by_hand_sample.h"
 #include "tutorials/06_stacking/stacking_sample.h"
 #include "tutorials/07_pendulum/pendulum_sample.h"
+#include "tutorials/07_pendulum/solutions/energy_sample.h"
+#include "tutorials/07_pendulum/solutions/physical_pendulum_sample.h"
+#include "tutorials/07_pendulum/solutions/tension_sample.h"
+#include "tutorials/07_pendulum/solutions/where_slack_sample.h"
 #include "tutorials/08_chain/chain_sample.h"
+#include "tutorials/08_chain/solutions/hertz_sweep_sample.h"
+#include "tutorials/08_chain/solutions/joint_order_sample.h"
+#include "tutorials/08_chain/solutions/one_step_by_hand_sample.h"
+#include "tutorials/08_chain/solutions/per_link_stretch_sample.h"
+#include "tutorials/09_spring/solutions/critical_damping_sample.h"
+#include "tutorials/09_spring/solutions/soft_vs_explicit_sample.h"
+#include "tutorials/09_spring/solutions/stability_limit_sample.h"
+#include "tutorials/09_spring/solutions/substeps_sample.h"
 #include "tutorials/09_spring/spring_sample.h"
 #include "tutorials/10_explosion/explosion_sample.h"
 #include "tutorials/11_jetpack/jetpack_sample.h"
@@ -61,21 +73,28 @@ using neko::tutorial::BoxOnTiltedBoxSample;
 using neko::tutorial::ChainSample;
 using neko::tutorial::ContactManifoldSample;
 using neko::tutorial::CornerSample;
+using neko::tutorial::CriticalDampingSample;
 using neko::tutorial::DiskSample;
 using neko::tutorial::DumbbellSample;
 using neko::tutorial::EnergyBudgetSample;
+using neko::tutorial::EnergySample;
 using neko::tutorial::ExplosionSample;
 using neko::tutorial::FastestSpinSample;
 using neko::tutorial::FrictionSample;
 using neko::tutorial::HalfStepSample;
 using neko::tutorial::HeavyOnLightSample;
+using neko::tutorial::HertzSweepSample;
 using neko::tutorial::ImpulsePerBoxSample;
 using neko::tutorial::JetpackSample;
+using neko::tutorial::JointOrderSample;
 using neko::tutorial::MixedSurfacesSample;
 using neko::tutorial::NarrowPillarSample;
 using neko::tutorial::OffCenterImpactSample;
+using neko::tutorial::OneStepByHandSample;
 using neko::tutorial::PassesSample;
 using neko::tutorial::PendulumSample;
+using neko::tutorial::PerLinkStretchSample;
+using neko::tutorial::PhysicalPendulumSample;
 using neko::tutorial::PointsOverATurnSample;
 using neko::tutorial::PushToStartSample;
 using neko::tutorial::PyramidSample;
@@ -83,13 +102,18 @@ using neko::tutorial::RollingDiskSample;
 using neko::tutorial::RotatedBoxSample;
 using neko::tutorial::RotationSample;
 using neko::tutorial::SingleForceSample;
+using neko::tutorial::SoftVsExplicitSample;
 using neko::tutorial::SpringSample;
+using neko::tutorial::StabilityLimitSample;
 using neko::tutorial::StackingSample;
 using neko::tutorial::StoppingDistanceSample;
+using neko::tutorial::SubstepsSample;
+using neko::tutorial::TensionSample;
 using neko::tutorial::TightBoundsSample;
 using neko::tutorial::TwoAabbsSample;
 using neko::tutorial::TwoBoxesByHandSample;
 using neko::tutorial::TwoRampsSample;
+using neko::tutorial::WhereSlackSample;
 
 // static_cast<float> would be a useless cast when Scalar is float. A template
 // so that if constexpr discards the branch that doesn't compile for the type.
@@ -778,6 +802,24 @@ TEST(TutorialSolutions, SameRunAfterRestart) {
       {"two boxes by hand", std::make_unique<TwoBoxesByHandSample>()});
   samples.push_back({"heavy on light", std::make_unique<HeavyOnLightSample>()});
   samples.push_back({"pyramid", std::make_unique<PyramidSample>()});
+  samples.push_back({"where slack", std::make_unique<WhereSlackSample>()});
+  samples.push_back({"tension", std::make_unique<TensionSample>()});
+  samples.push_back(
+      {"physical pendulum", std::make_unique<PhysicalPendulumSample>()});
+  samples.push_back({"energy", std::make_unique<EnergySample>()});
+  samples.push_back(
+      {"one step by hand", std::make_unique<OneStepByHandSample>()});
+  samples.push_back(
+      {"per link stretch", std::make_unique<PerLinkStretchSample>()});
+  samples.push_back({"hertz sweep", std::make_unique<HertzSweepSample>()});
+  samples.push_back({"joint order", std::make_unique<JointOrderSample>()});
+  samples.push_back(
+      {"critical damping", std::make_unique<CriticalDampingSample>()});
+  samples.push_back(
+      {"stability limit", std::make_unique<StabilityLimitSample>()});
+  samples.push_back(
+      {"soft vs explicit", std::make_unique<SoftVsExplicitSample>()});
+  samples.push_back({"substeps", std::make_unique<SubstepsSample>()});
   const std::size_t count = samples.size();
   neko::SampleRegistry registry{std::move(samples)};
   const neko::SampleContext context{neko::sample_config::kWorldBounds};
@@ -1802,6 +1844,99 @@ TEST(PendulumTutorial, SameParametersSameRun) {
   EXPECT_EQ(first, restored);
 }
 
+// Chapter 07, exercise "where slack": launched from the bottom at v0, the
+// rope stops pulling at the height (v0^2 - 2 g L) / (3 g) above the pivot;
+// it never does below the horizontal or once the bob loops
+TEST(PendulumSolutions, RopeGoesSlackWhereTheTensionReachesZero) {
+  for (const auto& [length, speed] :
+       {std::pair{20, 70}, std::pair{20, 80}, std::pair{20, 90},
+        std::pair{30, 80}, std::pair{30, 90}, std::pair{10, 60}}) {
+    WhereSlackSample sample;
+    BeginWith(sample, {{WhereSlackSample::kLength, length},
+                       {WhereSlackSample::kSpeed, speed}});
+    RunSteps(sample, 600);
+    ASSERT_TRUE(sample.slack_height().has_value()) << length << " " << speed;
+    EXPECT_NEAR(ToFloat(*sample.slack_height()),
+                ToFloat(sample.predicted_slack_height()), 0.03f)
+        << length << " " << speed;
+    EXPECT_GT(sample.slack_steps(), 0);
+    sample.End();
+  }
+  for (const auto& [length, speed] : {std::pair{20, 60}, std::pair{10, 80}}) {
+    WhereSlackSample sample;
+    BeginWith(sample, {{WhereSlackSample::kLength, length},
+                       {WhereSlackSample::kSpeed, speed}});
+    RunSteps(sample, 600);
+    EXPECT_FALSE(sample.slack_height().has_value()) << length << " " << speed;
+    EXPECT_EQ(sample.slack_steps(), 0);
+    sample.End();
+  }
+}
+
+// Chapter 07, exercise "tension": -impulse / dt follows
+// m g (3 cos theta - 2 cos theta0), 3 m g at the bottom for 90 degrees; past
+// 90 degrees the rod pushes near the ends of the swing
+TEST(PendulumSolutions, TensionIsMgThreeCosMinusTwoCosAmplitude) {
+  for (const int amplitude : {10, 30, 60, 90}) {
+    TensionSample sample;
+    BeginWith(sample, {{TensionSample::kAmplitude, amplitude}});
+    RunSteps(sample, 600);
+    const float bottom = ToFloat(sample.predicted_bottom_tension());
+    EXPECT_NEAR(ToFloat(sample.max_tension()), bottom, 0.01f * bottom)
+        << amplitude;
+    EXPECT_LT(ToFloat(sample.max_error()), 0.06f * bottom) << amplitude;
+    sample.End();
+  }
+  TensionSample pushing;
+  BeginWith(pushing, {{TensionSample::kAmplitude, 120}});
+  RunSteps(pushing, 600);
+  // m g cos 120 degrees at the ends
+  EXPECT_NEAR(ToFloat(pushing.min_tension()), -4.905f, 0.1f);
+  pushing.End();
+}
+
+// Chapter 07, exercise "physical pendulum": a square hung from its corner
+// swings like a point mass on 4 d / 3
+TEST(PendulumSolutions, BoxSwingsOnFourThirdsOfTheCornerDistance) {
+  for (const int size : {5, 10, 20}) {
+    PhysicalPendulumSample sample;
+    BeginWith(sample, {{PhysicalPendulumSample::kSize, size},
+                       {PhysicalPendulumSample::kAmplitude, 10}});
+    RunSteps(sample, 600);
+    const float side = static_cast<float>(size) / 10.0f;
+    EXPECT_NEAR(ToFloat(sample.equivalent_length()),
+                4.0f / 3.0f * side / std::sqrt(2.0f), 0.001f);
+    ASSERT_TRUE(sample.measured_period().has_value());
+    const float predicted = ToFloat(sample.predicted_period());
+    EXPECT_NEAR(ToFloat(*sample.measured_period()), predicted,
+                0.005f * predicted)
+        << size;
+    EXPECT_LT(ToFloat(sample.max_pin_error()), 0.01f);
+    sample.End();
+  }
+}
+
+// Chapter 07, exercise "energy": the soft step takes a little energy each
+// swing, more for a softer joint and a faster swing
+TEST(PendulumSolutions, SofterJointLosesMoreEnergy) {
+  const auto loss = [](int amplitude, int hertz) {
+    EnergySample sample;
+    BeginWith(sample, {{EnergySample::kAmplitude, amplitude},
+                       {EnergySample::kJointHertz, hertz}});
+    RunSteps(sample, 600);
+    const float value = ToFloat(sample.loss_per_period().value_or(Scalar{0}));
+    sample.End();
+    return value;
+  };
+  EXPECT_GT(loss(90, 5), loss(90, 15));
+  EXPECT_GT(loss(90, 15), loss(90, 30));
+  EXPECT_GT(loss(90, 30), 0.0f);
+  EXPECT_LT(loss(90, 15), 1.0f) << "percent per period";
+  EXPECT_LT(loss(30, 15), loss(60, 15));
+  EXPECT_LT(loss(60, 15), loss(90, 15));
+  EXPECT_LT(loss(90, 15), loss(150, 15));
+}
+
 namespace {
 
 struct ChainRun {
@@ -1875,6 +2010,106 @@ TEST(ChainTutorial, SameParametersSameRun) {
   const std::uint32_t restored = run();
   EXPECT_NE(first, changed);
   EXPECT_EQ(first, restored);
+}
+
+// Chapter 08, exercise "one step by hand": the soft step's first step,
+// computed by hand, is the world's; a second pass changes nothing
+TEST(ChainSolutions, OneSoftStepByHandIsTheWorldsStep) {
+  for (const int offset : {10, -10, 50}) {
+    for (const int hertz : {5, 15, 30}) {
+      for (const int passes : {1, 4}) {
+        OneStepByHandSample sample;
+        BeginWith(sample, {{OneStepByHandSample::kOffset, offset},
+                           {OneStepByHandSample::kHertz, hertz},
+                           {OneStepByHandSample::kPasses, passes}});
+        sample.FixedUpdate();
+        ASSERT_TRUE(sample.measured().has_value());
+        const auto hand = sample.predicted();
+        const auto world = *sample.measured();
+        EXPECT_NEAR(ToFloat(world.impulse), ToFloat(hand.impulse), 0.0002f)
+            << offset << " " << hertz << " " << passes;
+        EXPECT_NEAR(ToFloat(world.velocity), ToFloat(hand.velocity), 0.0002f)
+            << offset << " " << hertz << " " << passes;
+        EXPECT_NEAR(ToFloat(world.error), ToFloat(hand.error), 0.00003f)
+            << offset << " " << hertz << " " << passes;
+        sample.End();
+      }
+    }
+  }
+}
+
+// Chapter 08, exercise "per link stretch": each joint of a hanging chain
+// stretches by its load times its inverse effective mass over w^2; the
+// second joint, between two moving links, the most
+TEST(ChainSolutions, EachJointStretchesByItsLoadOverTheSoftness) {
+  for (const int end_mass : {1, 10, 50}) {
+    PerLinkStretchSample sample;
+    BeginWith(sample, {{PerLinkStretchSample::kEndMass, end_mass},
+                       {PerLinkStretchSample::kPasses, 4}});
+    RunSteps(sample, 300);
+    const float tolerance = end_mass == 50 ? 0.002f : 0.0005f;
+    for (int joint = 1; joint <= sample.links(); ++joint) {
+      EXPECT_NEAR(ToFloat(sample.measured_stretch(joint)),
+                  ToFloat(sample.predicted_stretch(joint)), tolerance)
+          << end_mass << " " << joint;
+      if (joint != 2) {
+        EXPECT_LT(ToFloat(sample.predicted_stretch(joint)),
+                  ToFloat(sample.predicted_stretch(2)));
+      }
+    }
+    sample.End();
+  }
+}
+
+// Chapter 08, exercise "hertz sweep": the rest stretch scales as 1 / f^2,
+// and a stiffer soft step needs more passes
+TEST(ChainSolutions, StifferSoftStepNeedsMorePasses) {
+  const auto run = [](int hertz, int passes) {
+    auto sample = std::make_unique<HertzSweepSample>();
+    BeginWith(*sample, {{HertzSweepSample::kHertz, hertz},
+                        {HertzSweepSample::kPasses, passes}});
+    RunSteps(*sample, 300);
+    return sample;
+  };
+  const auto at_15 = run(15, 16);
+  const auto at_30 = run(30, 16);
+  for (const auto* sample : {at_15.get(), at_30.get()}) {
+    EXPECT_NEAR(ToFloat(sample->stretch()),
+                ToFloat(sample->predicted_rest_stretch()),
+                0.01f * ToFloat(sample->predicted_rest_stretch()));
+  }
+  EXPECT_NEAR(ToFloat(at_30->predicted_rest_stretch()),
+              ToFloat(at_15->predicted_rest_stretch()) / 4.0f, 0.0002f);
+  EXPECT_FALSE(run(15, 1)->diverged());
+  EXPECT_TRUE(run(30, 1)->diverged());
+  EXPECT_FALSE(run(30, 4)->diverged());
+  EXPECT_TRUE(run(60, 2)->diverged());
+  const auto stiff = run(60, 8);
+  EXPECT_NEAR(ToFloat(stiff->stretch()),
+              ToFloat(stiff->predicted_rest_stretch()), 0.0005f);
+}
+
+// Chapter 08, exercise "joint order": warm started, the order of the joint
+// table hardly matters; cold, the top-down order hangs closer to the rest
+// stretch, and both stay far from it
+TEST(ChainSolutions, JointOrderMattersWithoutWarmStarting) {
+  for (const int warm : {1, 0}) {
+    JointOrderSample sample;
+    BeginWith(sample, {{JointOrderSample::kPasses, 4},
+                       {JointOrderSample::kWarmStart, warm}});
+    RunSteps(sample, 300);
+    const float top_down = ToFloat(sample.top_down_stretch());
+    const float bottom_up = ToFloat(sample.bottom_up_stretch());
+    const float rest = ToFloat(sample.predicted_rest_stretch());
+    if (warm == 1) {
+      EXPECT_NEAR(top_down, bottom_up, 0.0005f);
+      EXPECT_NEAR(top_down, rest, 0.0005f);
+    } else {
+      EXPECT_LT(top_down, bottom_up - 0.005f);
+      EXPECT_GT(top_down, 1.5f * rest);
+    }
+    sample.End();
+  }
 }
 
 namespace {
@@ -1972,6 +2207,124 @@ TEST(SpringTutorial, SameParametersSameRun) {
   const std::uint32_t restored = run();
   EXPECT_NE(first, changed);
   EXPECT_EQ(first, restored);
+}
+
+// Chapter 09, exercise "critical damping": at zeta = 1 no overshoot; below,
+// the overshoot of the discrete motion (amplitude sqrt(1 - c dt / m) per
+// step, phase from the step's trace); the 1 % band is reached soonest a
+// little below 1
+TEST(SpringSolutions, CriticalDampingReturnsWithoutOvershoot) {
+  const auto run = [](int zeta_tenths) {
+    auto sample = std::make_unique<CriticalDampingSample>();
+    BeginWith(*sample, {{CriticalDampingSample::kDampingRatio, zeta_tenths}});
+    RunSteps(*sample, 600);
+    return sample;
+  };
+  const float omega_dt =
+      std::sqrt(40.0f) * ToFloat(neko::Sample::kFixedDeltaTime);
+  for (const int zeta_tenths : {2, 5, 7}) {
+    const float zeta = static_cast<float>(zeta_tenths) / 10.0f;
+    const float determinant = 1.0f - 2.0f * zeta * omega_dt;
+    const float trace = 2.0f - omega_dt * omega_dt - 2.0f * zeta * omega_dt;
+    const float shrink = std::sqrt(determinant);
+    const float turn = std::acos(trace / (2.0f * shrink));
+    const float overshoot = 0.5f * std::pow(shrink, 3.14159265f / turn);
+    EXPECT_NEAR(ToFloat(run(zeta_tenths)->overshoot()), overshoot,
+                0.02f * overshoot + 0.001f)
+        << zeta;
+  }
+  const auto critical = run(10);
+  EXPECT_LT(ToFloat(critical->overshoot()), 0.0001f);
+  EXPECT_LT(ToFloat(run(8)->settling_time()),
+            ToFloat(critical->settling_time()));
+  EXPECT_LT(ToFloat(critical->settling_time()),
+            ToFloat(run(20)->settling_time()));
+  EXPECT_LT(ToFloat(run(8)->settling_time()), ToFloat(run(5)->settling_time()));
+}
+
+// Chapter 09, exercise "stability limit": the stiffest stable spring is
+// 4 m / dt^2
+TEST(SpringSolutions, StiffestStableSpringIsFourMOverDtSquared) {
+  for (const int mass_tenths : {1, 5, 10}) {
+    StabilityLimitSample sample;
+    BeginWith(sample, {{StabilityLimitSample::kMass, mass_tenths}});
+    const float predicted = ToFloat(sample.predicted_limit());
+    const float dt = ToFloat(neko::Sample::kFixedDeltaTime);
+    EXPECT_NEAR(predicted, 0.4f * static_cast<float>(mass_tenths) / (dt * dt),
+                0.001f * predicted);
+    EXPECT_NEAR(ToFloat(sample.measured_limit()), predicted, 0.001f * predicted)
+        << mass_tenths;
+    EXPECT_TRUE(
+        sample.IsStable(sample.measured_limit() * neko::Ratio(95, 100)));
+    EXPECT_FALSE(
+        sample.IsStable(sample.measured_limit() * neko::Ratio(105, 100)));
+    RunSteps(sample, 120);
+    EXPECT_GT(std::abs(ToFloat(sample.above_displacement())), 1.0f);
+    sample.End();
+  }
+}
+
+// Chapter 09, exercise "soft vs explicit": the rod and an explicit spring
+// of the same stiffness sag alike; the explicit one explodes once
+// (w dt)^2 + 4 zeta w dt passes 4, the rod never does
+TEST(SpringSolutions, ExplicitSpringWithTheSoftStepConstantsExplodes) {
+  for (const int hertz : {5, 10, 15, 20}) {
+    for (const int zeta_tenths : {0, 1, 2, 3, 5, 10, 20}) {
+      SoftVsExplicitSample sample;
+      BeginWith(sample, {{SoftVsExplicitSample::kHertz, hertz},
+                         {SoftVsExplicitSample::kDampingRatio, zeta_tenths}});
+      RunSteps(sample, 600);
+      EXPECT_EQ(sample.exploded(), ToFloat(sample.stability_number()) > 4.0f)
+          << hertz << " " << zeta_tenths;
+      // The world stops stepping once the spring exploded
+      if (!sample.exploded()) {
+        EXPECT_NEAR(ToFloat(sample.rod_stretch()),
+                    ToFloat(sample.predicted_sag()),
+                    0.02f * ToFloat(sample.predicted_sag()))
+            << hertz << " " << zeta_tenths;
+      }
+      sample.End();
+    }
+  }
+  SoftVsExplicitSample ringing;
+  BeginWith(ringing, {});
+  RunSteps(ringing, 600);
+  EXPECT_FALSE(ringing.exploded());
+  EXPECT_NEAR(ToFloat(ringing.rod_stretch()), ToFloat(ringing.predicted_sag()),
+              0.00003f);
+  EXPECT_GT(ToFloat(ringing.spring_ringing()),
+            0.5f * ToFloat(ringing.predicted_sag()))
+      << "undamped, it rings around the sag";
+  ringing.End();
+}
+
+// Chapter 09, exercise "substeps": two substeps hold the spring that
+// explodes with one, and more substeps bring the period closer to
+// 2 pi sqrt(m / k)
+TEST(SpringSolutions, SubstepsHoldAStifferSpring) {
+  const auto run = [](int substeps) {
+    auto sample = std::make_unique<SubstepsSample>();
+    BeginWith(*sample, {{SubstepsSample::kSubsteps, substeps}});
+    RunSteps(*sample, 600);
+    return sample;
+  };
+  EXPECT_TRUE(run(1)->exploded());
+  const float exact = 2.0f * 3.14159265f * std::sqrt(0.1f / 2000.0f);
+  float previous_error = 1.0f;
+  for (const int substeps : {2, 3, 4, 6}) {
+    const auto sample = run(substeps);
+    EXPECT_FALSE(sample->exploded()) << substeps;
+    EXPECT_NEAR(ToFloat(sample->predicted_period()), exact, 0.0002f);
+    const float omega_dt = ToFloat(sample->omega_dt());
+    const float discrete = 2.0f * 3.14159265f * ToFloat(sample->substep()) /
+                           std::acos(1.0f - 0.5f * omega_dt * omega_dt);
+    ASSERT_TRUE(sample->measured_period().has_value());
+    const float measured = ToFloat(*sample->measured_period());
+    EXPECT_NEAR(measured, discrete, 0.003f * discrete) << substeps;
+    const float error = std::abs(measured - exact);
+    EXPECT_LT(error, previous_error) << substeps;
+    previous_error = error;
+  }
 }
 
 // The experiment of chapter 10: the blast finds the targets in its radius
