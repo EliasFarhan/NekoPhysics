@@ -36,6 +36,14 @@
 #include "tutorials/04_off_center_impact/solutions/fastest_spin_sample.h"
 #include "tutorials/04_off_center_impact/solutions/passes_sample.h"
 #include "tutorials/05_friction/friction_sample.h"
+#include "tutorials/05_friction/solutions/mixed_surfaces_sample.h"
+#include "tutorials/05_friction/solutions/push_to_start_sample.h"
+#include "tutorials/05_friction/solutions/rolling_disk_sample.h"
+#include "tutorials/05_friction/solutions/stopping_distance_sample.h"
+#include "tutorials/06_stacking/solutions/heavy_on_light_sample.h"
+#include "tutorials/06_stacking/solutions/impulse_per_box_sample.h"
+#include "tutorials/06_stacking/solutions/pyramid_sample.h"
+#include "tutorials/06_stacking/solutions/two_boxes_by_hand_sample.h"
 #include "tutorials/06_stacking/stacking_sample.h"
 #include "tutorials/07_pendulum/pendulum_sample.h"
 #include "tutorials/08_chain/chain_sample.h"
@@ -60,19 +68,27 @@ using neko::tutorial::ExplosionSample;
 using neko::tutorial::FastestSpinSample;
 using neko::tutorial::FrictionSample;
 using neko::tutorial::HalfStepSample;
+using neko::tutorial::HeavyOnLightSample;
+using neko::tutorial::ImpulsePerBoxSample;
 using neko::tutorial::JetpackSample;
+using neko::tutorial::MixedSurfacesSample;
 using neko::tutorial::NarrowPillarSample;
 using neko::tutorial::OffCenterImpactSample;
 using neko::tutorial::PassesSample;
 using neko::tutorial::PendulumSample;
 using neko::tutorial::PointsOverATurnSample;
+using neko::tutorial::PushToStartSample;
+using neko::tutorial::PyramidSample;
+using neko::tutorial::RollingDiskSample;
 using neko::tutorial::RotatedBoxSample;
 using neko::tutorial::RotationSample;
 using neko::tutorial::SingleForceSample;
 using neko::tutorial::SpringSample;
 using neko::tutorial::StackingSample;
+using neko::tutorial::StoppingDistanceSample;
 using neko::tutorial::TightBoundsSample;
 using neko::tutorial::TwoAabbsSample;
+using neko::tutorial::TwoBoxesByHandSample;
 using neko::tutorial::TwoRampsSample;
 
 // static_cast<float> would be a useless cast when Scalar is float. A template
@@ -750,6 +766,18 @@ TEST(TutorialSolutions, SameRunAfterRestart) {
   samples.push_back({"energy budget", std::make_unique<EnergyBudgetSample>()});
   samples.push_back({"ball hits box", std::make_unique<BallHitsBoxSample>()});
   samples.push_back({"passes", std::make_unique<PassesSample>()});
+  samples.push_back(
+      {"stopping distance", std::make_unique<StoppingDistanceSample>()});
+  samples.push_back({"rolling disk", std::make_unique<RollingDiskSample>()});
+  samples.push_back(
+      {"mixed surfaces", std::make_unique<MixedSurfacesSample>()});
+  samples.push_back({"push to start", std::make_unique<PushToStartSample>()});
+  samples.push_back(
+      {"impulse per box", std::make_unique<ImpulsePerBoxSample>()});
+  samples.push_back(
+      {"two boxes by hand", std::make_unique<TwoBoxesByHandSample>()});
+  samples.push_back({"heavy on light", std::make_unique<HeavyOnLightSample>()});
+  samples.push_back({"pyramid", std::make_unique<PyramidSample>()});
   const std::size_t count = samples.size();
   neko::SampleRegistry registry{std::move(samples)};
   const neko::SampleContext context{neko::sample_config::kWorldBounds};
@@ -1343,6 +1371,140 @@ TEST(FrictionTutorial, MoreFrictionSlowerSlide) {
   }
 }
 
+// Chapter 05, exercise "stopping distance": kinetic friction brakes at mu g,
+// so the box stops after v / (mu g) and v^2 / (2 mu g). The steps end on a
+// whole step, and semi-implicit Euler moves with the speed at the end of each
+// step: the distance comes out short by half a step's travel, v dt / 2
+TEST(FrictionSolutions, BoxStopsAfterVOverMuGAndVSquaredOverTwoMuG) {
+  constexpr float kDt = 1.0f / 60.0f;
+  for (const auto& [speed_cm, friction] :
+       {std::pair{300, 50}, std::pair{100, 20}, std::pair{500, 20},
+        std::pair{200, 75}, std::pair{500, 80}}) {
+    StoppingDistanceSample sample;
+    BeginWith(sample, {{StoppingDistanceSample::kSpeed, speed_cm},
+                       {StoppingDistanceSample::kFriction, friction}});
+    RunUntilImpact(sample,
+                   [&sample] { return sample.measured_time().has_value(); });
+    ASSERT_TRUE(sample.measured_time().has_value()) << speed_cm;
+    const float speed = static_cast<float>(speed_cm) / 100.0f;
+    const float deceleration = static_cast<float>(friction) / 100.0f * 9.81f;
+    const float time = speed / deceleration;
+    const float distance = speed * speed / (2.0f * deceleration);
+    EXPECT_NEAR(ToFloat(sample.predicted_time()), time, 0.001f);
+    EXPECT_NEAR(ToFloat(sample.predicted_distance()), distance, 0.002f);
+    const float measured_time = ToFloat(*sample.measured_time());
+    EXPECT_GE(measured_time, time - 0.001f) << speed_cm << " " << friction;
+    EXPECT_LE(measured_time, time + kDt + 0.001f)
+        << speed_cm << " " << friction;
+    EXPECT_NEAR(ToFloat(*sample.measured_distance()),
+                distance - speed * kDt / 2.0f, 0.01f)
+        << speed_cm << " " << friction;
+    sample.End();
+  }
+}
+
+// Chapter 05, exercise "rolling disk": friction at the bottom point slows the
+// center and spins the disk up until it rolls, at 2/3 of its speed whatever
+// the friction, with w = -v / r; then nothing slows it
+TEST(FrictionSolutions, SlidingDiskRollsAtTwoThirdsOfItsSpeed) {
+  constexpr float kDt = 1.0f / 60.0f;
+  for (const auto& [speed_cm, friction, radius_cm] :
+       {std::tuple{300, 30, 50}, std::tuple{300, 50, 50},
+        std::tuple{600, 10, 25}, std::tuple{200, 100, 100},
+        std::tuple{300, 30, 100}}) {
+    RollingDiskSample sample;
+    BeginWith(sample, {{RollingDiskSample::kSpeed, speed_cm},
+                       {RollingDiskSample::kFriction, friction},
+                       {RollingDiskSample::kRadius, radius_cm}});
+    RunUntilImpact(sample, [&sample] { return sample.measured().has_value(); });
+    ASSERT_TRUE(sample.measured().has_value()) << speed_cm;
+    const auto rolling = *sample.measured();
+    const float speed = static_cast<float>(speed_cm) / 100.0f;
+    const float radius = static_cast<float>(radius_cm) / 100.0f;
+    const float mu_g = static_cast<float>(friction) / 100.0f * 9.81f;
+    EXPECT_NEAR(ToFloat(sample.predicted_time()), speed / (3.0f * mu_g),
+                0.001f);
+    EXPECT_NEAR(ToFloat(sample.predicted_distance()),
+                5.0f * speed * speed / (18.0f * mu_g), 0.002f);
+    EXPECT_NEAR(ToFloat(rolling.speed), 2.0f * speed / 3.0f, 0.002f)
+        << speed_cm << " " << friction;
+    EXPECT_NEAR(ToFloat(rolling.spin) * radius, -ToFloat(rolling.speed), 0.01f);
+    const float time = ToFloat(rolling.time);
+    EXPECT_GE(time, ToFloat(sample.predicted_time()) - 0.001f);
+    EXPECT_LE(time, ToFloat(sample.predicted_time()) + kDt + 0.001f);
+    EXPECT_NEAR(ToFloat(rolling.distance), ToFloat(sample.predicted_distance()),
+                speed * kDt);
+    RunSteps(sample, 120);
+    EXPECT_NEAR(ToFloat(sample.disk().velocity.x()), ToFloat(rolling.speed),
+                0.002f)
+        << "rolls on";
+    sample.End();
+  }
+}
+
+// Chapter 05, exercise "mixed surfaces": a contact uses sqrt(mu_c mu_r), so
+// ice on rubber holds only up to atan(0.224) = 12.6 degrees
+TEST(FrictionSolutions, ContactUsesTheGeometricMeanOfTheTwoSurfaces) {
+  for (const auto& [angle, crate, ramp] :
+       {std::tuple{15, 5, 100}, std::tuple{12, 5, 100}, std::tuple{30, 20, 80},
+        std::tuple{30, 10, 100}, std::tuple{20, 50, 50},
+        std::tuple{40, 5, 5}}) {
+    MixedSurfacesSample sample;
+    BeginWith(sample, {{MixedSurfacesSample::kRampAngle, angle},
+                       {MixedSurfacesSample::kCrateFriction, crate},
+                       {MixedSurfacesSample::kRampFriction, ramp}});
+    RunSteps(sample, MixedSurfacesSample::kMeasureSteps);
+    const float mu = std::sqrt(static_cast<float>(crate * ramp)) / 100.0f;
+    EXPECT_NEAR(ToFloat(sample.contact_friction()), mu, 0.0005f);
+    const float steepest = std::atan(mu) * 180.0f / 3.14159265f;
+    EXPECT_EQ(sample.steepest_holding_angle(), static_cast<int>(steepest))
+        << crate << " " << ramp;
+    const float radians = static_cast<float>(angle) * 3.14159265f / 180.0f;
+    EXPECT_EQ(sample.predicted_holds(), std::tan(radians) <= mu);
+    const float measured = ToFloat(*sample.measured_acceleration());
+    if (sample.predicted_holds()) {
+      EXPECT_LT(std::abs(measured), 0.005f) << angle;
+    } else {
+      const float predicted =
+          9.81f * (std::sin(radians) - mu * std::cos(radians));
+      EXPECT_NEAR(ToFloat(sample.predicted_acceleration()), predicted, 0.005f);
+      // Within 0.001 with FIXED16; 3 % allows FLOAT's start (chapter 05)
+      EXPECT_NEAR(measured, predicted, std::max(0.005f, 0.03f * predicted))
+          << angle << " " << crate << " " << ramp;
+    }
+    sample.End();
+  }
+}
+
+// Chapter 05, exercise "push to start": static friction pushes back exactly
+// as hard as the push, up to mu m g; past it the box slides at F / m - mu g
+TEST(FrictionSolutions, StaticFrictionMatchesThePushUpToMuMG) {
+  for (const auto& [push_cn, friction] :
+       {std::pair{400, 50}, std::pair{0, 50}, std::pair{250, 30},
+        std::pair{600, 50}, std::pair{900, 50}, std::pair{300, 20},
+        std::pair{900, 80}}) {
+    PushToStartSample sample;
+    BeginWith(sample, {{PushToStartSample::kPush, push_cn},
+                       {PushToStartSample::kFriction, friction}});
+    RunSteps(sample, PushToStartSample::kMeasureSteps);
+    const float push = static_cast<float>(push_cn) / 100.0f;
+    const float limit = static_cast<float>(friction) / 100.0f * 9.81f;
+    EXPECT_NEAR(ToFloat(sample.static_limit()), limit, 0.002f);
+    EXPECT_EQ(sample.predicted_holds(), push <= limit);
+    const float measured = ToFloat(*sample.measured_acceleration());
+    const float friction_force = ToFloat(*sample.measured_friction());
+    if (push <= limit) {
+      EXPECT_LT(std::abs(measured), 0.005f) << push_cn << " " << friction;
+      EXPECT_NEAR(friction_force, push, 0.005f) << push_cn << " " << friction;
+    } else {
+      // 0.01 allows FLOAT's first steps (0.0051 at 9 N with 0.8)
+      EXPECT_NEAR(measured, push - limit, 0.01f) << push_cn << " " << friction;
+      EXPECT_NEAR(friction_force, limit, 0.01f) << push_cn << " " << friction;
+    }
+    sample.End();
+  }
+}
+
 namespace {
 
 struct StackRun {
@@ -1417,6 +1579,141 @@ TEST(StackingTutorial, SameParametersSameRun) {
   const std::uint32_t restored = run();
   EXPECT_NE(first, changed);
   EXPECT_EQ(first, restored);
+}
+
+// Chapter 06, exercise "impulse per box": at rest every contact carries the
+// weight above it, (n - k) m g dt, warm or cold (only the depth differs).
+// The first step, solved from zero, falls short, more so at the bottom of a
+// tall stack
+TEST(StackingSolutions, RestingContactsCarryTheWeightAbove) {
+  for (const int boxes : {4, 6, 10}) {
+    std::vector<float> first_cold;
+    for (const int warm : {0, 1}) {
+      ImpulsePerBoxSample sample;
+      BeginWith(sample, {{ImpulsePerBoxSample::kBoxes, boxes},
+                         {ImpulsePerBoxSample::kPasses, 8},
+                         {ImpulsePerBoxSample::kWarmStart, warm}});
+      RunSteps(sample, 300);
+      for (int k = 0; k < boxes; ++k) {
+        const float predicted = ToFloat(sample.predicted_impulse(k));
+        EXPECT_NEAR(predicted, static_cast<float>(boxes - k) * 9.81f / 60.0f,
+                    0.001f);
+        EXPECT_NEAR(ToFloat(sample.measured_impulse(k)), predicted, 0.001f)
+            << boxes << " " << warm << " " << k;
+        const float first = ToFloat(sample.first_step_impulse(k));
+        EXPECT_LT(first, predicted) << boxes << " " << k;
+        if (warm == 0) {
+          first_cold.push_back(first);
+        } else {
+          // Nothing to warm start from at the first step
+          EXPECT_EQ(first, first_cold[static_cast<std::size_t>(k)]);
+        }
+      }
+      if (boxes == 10) {
+        EXPECT_LT(ToFloat(sample.first_step_impulse(0)),
+                  0.4f * ToFloat(sample.predicted_impulse(0)));
+      }
+      sample.End();
+    }
+  }
+}
+
+// Chapter 06, exercise "two boxes by hand": the solver's loop by hand gives
+// the world's first step; each pass halves both velocities
+TEST(StackingSolutions, EachPassHalvesTheFirstStepError) {
+  for (const int passes : {1, 2, 3, 4, 8}) {
+    TwoBoxesByHandSample sample;
+    BeginWith(sample, {{TwoBoxesByHandSample::kPasses, passes}});
+    sample.FixedUpdate();
+    ASSERT_TRUE(sample.measured().has_value());
+    const auto hand = sample.predicted(passes);
+    const auto world = *sample.measured();
+    EXPECT_NEAR(ToFloat(world.bottom_velocity), ToFloat(hand.bottom_velocity),
+                0.0002f)
+        << passes;
+    EXPECT_NEAR(ToFloat(world.top_velocity), ToFloat(hand.top_velocity),
+                0.0002f)
+        << passes;
+    EXPECT_NEAR(ToFloat(world.bottom_impulse), ToFloat(hand.bottom_impulse),
+                0.0002f)
+        << passes;
+    EXPECT_NEAR(ToFloat(world.top_impulse), ToFloat(hand.top_impulse), 0.0002f)
+        << passes;
+    const float error =
+        -9.81f / 60.0f / static_cast<float>(1 << static_cast<unsigned>(passes));
+    EXPECT_NEAR(ToFloat(world.bottom_velocity), error, 0.0002f) << passes;
+    EXPECT_NEAR(ToFloat(world.top_velocity), error, 0.0002f) << passes;
+    sample.End();
+  }
+}
+
+// Chapter 06, exercise "heavy on light": without warm starting the stack
+// sinks deeper as the top box gets heavier; with it, a ratio of 10 holds
+// within the slops but a ratio of 20 bounces
+TEST(StackingSolutions, HeavyTopSinksTheStackDeeper) {
+  float previous = 0.0f;
+  for (const int mass : {1, 5, 10, 20}) {
+    HeavyOnLightSample sample;
+    BeginWith(sample, {{HeavyOnLightSample::kTopMass, mass},
+                       {HeavyOnLightSample::kPasses, 8},
+                       {HeavyOnLightSample::kWarmStart, 0}});
+    RunSteps(sample, 300);
+    const float sink = ToFloat(sample.top_sink());
+    if (mass == 1) {
+      EXPECT_EQ(sink, ToFloat(sample.reference_top_sink()));
+    } else {
+      EXPECT_GT(sink, previous) << mass;
+    }
+    previous = sink;
+    sample.End();
+  }
+  EXPECT_GT(previous, 4.0f * 0.02f) << "M = 20: four times the slops";
+
+  HeavyOnLightSample warm;
+  BeginWith(warm, {{HeavyOnLightSample::kTopMass, 10},
+                   {HeavyOnLightSample::kPasses, 8},
+                   {HeavyOnLightSample::kWarmStart, 1}});
+  RunSteps(warm, 300);
+  EXPECT_LT(ToFloat(warm.top_sink()), 4 * 0.005f);
+  warm.End();
+
+  HeavyOnLightSample bouncing;
+  BeginWith(bouncing, {{HeavyOnLightSample::kTopMass, 20},
+                       {HeavyOnLightSample::kPasses, 8},
+                       {HeavyOnLightSample::kWarmStart, 1}});
+  float largest = 0.0f;
+  for (int step = 0; step < 600; ++step) {
+    bouncing.FixedUpdate();
+    largest = std::max(largest, std::abs(ToFloat(bouncing.top_sink())));
+  }
+  EXPECT_GT(largest, 0.1f) << "the heavy box bounces";
+  bouncing.End();
+}
+
+// Chapter 06, exercise "pyramid": with warm starting four passes hold a
+// pyramid of turning boxes; without, the boxes creep apart
+TEST(StackingSolutions, WarmStartingHoldsThePyramid) {
+  PyramidSample warm;
+  BeginWith(warm, {{PyramidSample::kRows, 4},
+                   {PyramidSample::kPasses, 4},
+                   {PyramidSample::kWarmStart, 1}});
+  RunSteps(warm, 600);
+  EXPECT_LT(ToFloat(warm.top_sink()), 0.02f);
+  EXPECT_LT(ToFloat(warm.drift()), 0.01f);
+  EXPECT_EQ(warm.fallen(), 0);
+  warm.End();
+
+  PyramidSample cold;
+  BeginWith(cold, {{PyramidSample::kRows, 4},
+                   {PyramidSample::kPasses, 4},
+                   {PyramidSample::kWarmStart, 0}});
+  RunSteps(cold, 300);
+  const float drift_5s = ToFloat(cold.drift());
+  RunSteps(cold, 300);
+  const float drift_10s = ToFloat(cold.drift());
+  EXPECT_GT(drift_5s, 0.2f);
+  EXPECT_GT(drift_10s, drift_5s) << "still creeping";
+  cold.End();
 }
 
 namespace {
