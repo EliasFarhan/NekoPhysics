@@ -21,6 +21,7 @@
 #include "tutorials/07_pendulum/pendulum_sample.h"
 #include "tutorials/08_chain/chain_sample.h"
 #include "tutorials/09_spring/spring_sample.h"
+#include "tutorials/10_explosion/explosion_sample.h"
 
 namespace {
 
@@ -28,6 +29,7 @@ using neko::Scalar;
 using neko::tutorial::BounceSample;
 using neko::tutorial::ChainSample;
 using neko::tutorial::ContactManifoldSample;
+using neko::tutorial::ExplosionSample;
 using neko::tutorial::FrictionSample;
 using neko::tutorial::OffCenterImpactSample;
 using neko::tutorial::PendulumSample;
@@ -1056,6 +1058,152 @@ TEST(SpringTutorial, SameParametersSameRun) {
   registry.SetParameter(SpringSample::kStiffness, 100);
   const std::uint32_t changed = run();
   registry.SetParameter(SpringSample::kStiffness, 40);
+  const std::uint32_t restored = run();
+  EXPECT_NE(first, changed);
+  EXPECT_EQ(first, restored);
+}
+
+// The experiment of chapter 10: the blast finds the targets in its radius
+// whose category it affects, and pushes those the line of sight reaches
+struct ExplosionRun {
+  int in_radius = 0;
+  int visible = 0;
+  std::vector<bool> in_radius_targets;
+  std::vector<bool> visible_targets;
+};
+
+ExplosionRun RunExplosion(int radius_tenths, bool wall, bool hit_shielded) {
+  ExplosionSample sample;
+  auto values = sample.parameters();
+  values[ExplosionSample::kRadius].value = radius_tenths;
+  values[ExplosionSample::kWallOn].value = wall ? 1 : 0;
+  values[ExplosionSample::kHitShielded].value = hit_shielded ? 1 : 0;
+  sample.Begin(neko::SampleContext{neko::sample_config::kWorldBounds});
+  for (int step = 0; step < ExplosionSample::kBlastStep; ++step) {
+    sample.FixedUpdate();
+  }
+  ExplosionRun run;
+  EXPECT_TRUE(sample.exploded());
+  run.in_radius = sample.in_radius_count();
+  run.visible = sample.visible_count();
+  for (const auto& target : sample.targets()) {
+    run.in_radius_targets.push_back(target.in_radius);
+    run.visible_targets.push_back(target.visible);
+  }
+  sample.End();
+  return run;
+}
+
+// Speeds of the targets just after the blast
+std::vector<float> BlastSpeeds(int radius_tenths, bool wall,
+                               bool hit_shielded) {
+  ExplosionSample sample;
+  auto values = sample.parameters();
+  values[ExplosionSample::kRadius].value = radius_tenths;
+  values[ExplosionSample::kWallOn].value = wall ? 1 : 0;
+  values[ExplosionSample::kHitShielded].value = hit_shielded ? 1 : 0;
+  sample.Begin(neko::SampleContext{neko::sample_config::kWorldBounds});
+  for (int step = 0; step < ExplosionSample::kBlastStep; ++step) {
+    sample.FixedUpdate();
+  }
+  // Horizontal speed: the vertical one also holds the bounce off the ground
+  std::vector<float> speeds;
+  for (std::size_t i = 0; i < ExplosionSample::kTargetCount; ++i) {
+    speeds.push_back(std::abs(ToFloat(sample.target_velocity(i).x())));
+  }
+  return speeds;
+}
+
+TEST(ExplosionTutorial, DefaultBlast) {
+  const ExplosionRun run = RunExplosion(35, true, false);
+  // The crate, the barrel and the crate behind the wall are in the radius;
+  // the shielded crate is filtered out and the far crate is out of reach
+  EXPECT_EQ(run.in_radius, 3);
+  EXPECT_EQ(run.visible, 2);
+  EXPECT_EQ(run.in_radius_targets,
+            (std::vector<bool>{true, true, false, true, false}));
+  EXPECT_EQ(run.visible_targets,
+            (std::vector<bool>{true, true, false, false, false}));
+  const std::vector<float> speeds = BlastSpeeds(35, true, false);
+  EXPECT_GT(speeds[0], 0.5f);
+  EXPECT_GT(speeds[1], 0.5f);
+  EXPECT_LT(speeds[2], 1e-3f);  // not affected
+  EXPECT_LT(speeds[3], 1e-3f);  // behind the wall
+  EXPECT_LT(speeds[4], 1e-3f);  // out of reach
+}
+
+TEST(ExplosionTutorial, WallShieldedAndRadius) {
+  // Without the wall the crate behind it is seen
+  ExplosionRun run = RunExplosion(35, false, false);
+  EXPECT_EQ(run.in_radius, 3);
+  EXPECT_EQ(run.visible, 3);
+  // Asking for the shielded category adds the shielded crate
+  run = RunExplosion(35, true, true);
+  EXPECT_EQ(run.in_radius, 4);
+  EXPECT_EQ(run.visible, 3);
+  EXPECT_TRUE(run.visible_targets[2]);
+  EXPECT_GT(BlastSpeeds(35, true, true)[2], 0.5f);
+  // A wider blast reaches the far crate
+  run = RunExplosion(50, true, false);
+  EXPECT_EQ(run.in_radius, 4);
+  EXPECT_TRUE(run.visible_targets[4]);
+}
+
+// The laser before the blast: t and normal against the post, the plank's
+// top face and the ground, computed by hand
+TEST(ExplosionTutorial, LaserHits) {
+  constexpr float kPi = 3.14159265f;
+  struct Case {
+    int degrees;
+    float normal_x;
+    float normal_y;
+  };
+  const float plank = 15.0f * kPi / 180.0f;
+  for (const Case& c :
+       {Case{0, -1.0f, 0.0f}, Case{20, -std::sin(plank), std::cos(plank)},
+        Case{60, 0.0f, 1.0f}}) {
+    ExplosionSample sample;
+    sample.parameters()[ExplosionSample::kLaserAngle].value = c.degrees;
+    sample.Begin(neko::SampleContext{neko::sample_config::kWorldBounds});
+    sample.FixedUpdate();
+    const auto hit = sample.laser_hit();
+    ASSERT_TRUE(hit.has_value()) << c.degrees;
+    EXPECT_NEAR(ToFloat(hit->normal.x()), c.normal_x, 2e-3f) << c.degrees;
+    EXPECT_NEAR(ToFloat(hit->normal.y()), c.normal_y, 2e-3f) << c.degrees;
+    // The point is on the segment at the fraction
+    const auto start = sample.laser_start();
+    const auto end = sample.laser_end();
+    const float t = ToFloat(hit->fraction);
+    EXPECT_NEAR(ToFloat(hit->point.x()),
+                ToFloat(start.x()) + t * ToFloat(end.x() - start.x()), 2e-3f);
+    EXPECT_NEAR(ToFloat(hit->point.y()),
+                ToFloat(start.y()) + t * ToFloat(end.y() - start.y()), 2e-3f);
+    if (c.degrees == 0) {
+      // The post's left side, 8.7 m along 12 m
+      EXPECT_NEAR(t, 8.7f / 12.0f, 1e-3f);
+    } else if (c.degrees == 60) {
+      // The ground top, 5.9 m below, along 12 sin 60 m of drop
+      EXPECT_NEAR(t, 5.9f / (12.0f * std::sin(60.0f * kPi / 180.0f)), 1e-3f);
+    }
+  }
+}
+
+TEST(ExplosionTutorial, SameParametersSameRun) {
+  std::vector<neko::SampleRegistry::Entry> samples;
+  samples.push_back({"10 Explosion", std::make_unique<ExplosionSample>()});
+  neko::SampleRegistry registry{std::move(samples)};
+  const neko::SampleContext context{neko::sample_config::kWorldBounds};
+  const auto run = [&registry] {
+    for (int step = 0; step < 90; ++step) {
+      registry.FixedUpdate();
+    }
+    return registry.current()->GenerateChecksum();
+  };
+  registry.Select(0, context);
+  const std::uint32_t first = run();
+  registry.SetParameter(ExplosionSample::kWallOn, 0);
+  const std::uint32_t changed = run();
+  registry.SetParameter(ExplosionSample::kWallOn, 1);
   const std::uint32_t restored = run();
   EXPECT_NE(first, changed);
   EXPECT_EQ(first, restored);
