@@ -15,6 +15,10 @@
 #include "main/samples/sample.h"
 #include "main/samples/sample_config.h"
 #include "tutorials/00_bounce/bounce_sample.h"
+#include "tutorials/00_bounce/solutions/bounces_to_rest_sample.h"
+#include "tutorials/00_bounce/solutions/explicit_euler_sample.h"
+#include "tutorials/00_bounce/solutions/head_on_sample.h"
+#include "tutorials/00_bounce/solutions/tunneling_sample.h"
 #include "tutorials/01_rotation/rotation_sample.h"
 #include "tutorials/01_rotation/solutions/disk_sample.h"
 #include "tutorials/01_rotation/solutions/dumbbell_sample.h"
@@ -76,6 +80,7 @@ namespace {
 using neko::Scalar;
 using neko::tutorial::BallHitsBoxSample;
 using neko::tutorial::BounceSample;
+using neko::tutorial::BouncesToRestSample;
 using neko::tutorial::BoxOnRampSample;
 using neko::tutorial::BoxOnTiltedBoxSample;
 using neko::tutorial::ChainSample;
@@ -87,10 +92,12 @@ using neko::tutorial::DiskSample;
 using neko::tutorial::DumbbellSample;
 using neko::tutorial::EnergyBudgetSample;
 using neko::tutorial::EnergySample;
+using neko::tutorial::ExplicitEulerSample;
 using neko::tutorial::ExplosionSample;
 using neko::tutorial::FastestSpinSample;
 using neko::tutorial::FrictionSample;
 using neko::tutorial::HalfStepSample;
+using neko::tutorial::HeadOnSample;
 using neko::tutorial::HeavyOnLightSample;
 using neko::tutorial::HertzSweepSample;
 using neko::tutorial::HoverSample;
@@ -126,6 +133,7 @@ using neko::tutorial::SubstepsSample;
 using neko::tutorial::TensionSample;
 using neko::tutorial::TerminalVelocitySample;
 using neko::tutorial::TightBoundsSample;
+using neko::tutorial::TunnelingSample;
 using neko::tutorial::TwoAabbsSample;
 using neko::tutorial::TwoBoxesByHandSample;
 using neko::tutorial::TwoRampsSample;
@@ -405,6 +413,132 @@ void RunSteps(SampleType& sample, int steps) {
 }
 
 }  // namespace
+
+// Chapter 00, exercise "explicit Euler": after N steps from rest the engine
+// (semi-implicit) has fallen g dt^2 N (N + 1) / 2, explicit Euler
+// g dt^2 N (N - 1) / 2, the exact fall g (N dt)^2 / 2 is halfway, and all
+// three have the velocity N g dt
+TEST(BounceSolutions, SemiImplicitFallsAheadAndExplicitBehind) {
+  const float g = 9.81f;
+  const float dt = ToFloat(neko::Sample::kFixedDeltaTime);
+  for (const int fall_time : {25, 100, 300}) {
+    ExplicitEulerSample sample;
+    BeginWith(sample, {{ExplicitEulerSample::kFallTime, fall_time}});
+    RunSteps(sample, sample.fall_steps() + 10);
+    ASSERT_EQ(sample.steps(), fall_time * 60 / 100);
+    const auto n = static_cast<float>(sample.steps());
+    const float tolerance = 1e-3f + 2e-4f * n * n * g * dt * dt;
+    EXPECT_NEAR(ToFloat(sample.engine_drop()), g * dt * dt * n * (n + 1) / 2,
+                tolerance)
+        << fall_time;
+    EXPECT_NEAR(ToFloat(sample.explicit_drop()), g * dt * dt * n * (n - 1) / 2,
+                tolerance)
+        << fall_time;
+    EXPECT_NEAR(ToFloat(sample.exact_drop()), g * dt * dt * n * n / 2,
+                tolerance)
+        << fall_time;
+    // g dt is rounded to 10713/65536 m/s in Fixed16, 7e-6 above 9.81 dt
+    EXPECT_NEAR(ToFloat(sample.engine_velocity()), -n * g * dt,
+                1e-4f + 1e-5f * n);
+    EXPECT_EQ(sample.engine_velocity(), sample.explicit_velocity());
+    // v^2 - g dt v + 2 g y is kept up to rounding
+    EXPECT_NEAR(ToFloat(sample.shadow_energy_change()), 0.0f, 0.05f);
+    sample.End();
+  }
+}
+
+// Chapter 00, exercise "bounces to rest": the impacts don't fall like e^k.
+// Each bounce reflects one more step of gravity, so slow bounces lose less
+// than e: more bounces than predicted, and above e = 1 - g dt / (1 m/s), about
+// 0.84, the impacts settle near g dt / (1 - e) and never get below the
+// restitution threshold
+TEST(BounceSolutions, SlowBouncesKeepTheStepsGravity) {
+  const auto run = [](int restitution_percent, int steps) {
+    auto sample = std::make_unique<BouncesToRestSample>();
+    BeginWith(*sample,
+              {{BouncesToRestSample::kDropHeight, 400},
+               {BouncesToRestSample::kRestitution, restitution_percent}});
+    RunSteps(*sample, steps);
+    return sample;
+  };
+  const auto half = run(50, 600);
+  EXPECT_EQ(half->predicted_bounces(), 4);
+  EXPECT_EQ(half->bounces(), 4);
+
+  const auto three_quarters = run(75, 1800);
+  EXPECT_EQ(three_quarters->predicted_bounces(), 8);
+  EXPECT_GE(three_quarters->bounces(), 11);
+  EXPECT_LE(three_quarters->bounces(), 12);
+  ASSERT_TRUE(three_quarters->last_bounce().has_value());
+  EXPECT_GT(ToFloat(*three_quarters->last_bounce()),
+            ToFloat(three_quarters->predicted_last_bounce()) + 1.0f);
+
+  // Two minutes, still bouncing about three times a second
+  const auto bouncy = run(90, 7200);
+  EXPECT_GT(bouncy->bounces(), 300);
+  ASSERT_TRUE(bouncy->last_bounce().has_value());
+  EXPECT_GT(ToFloat(*bouncy->last_bounce()), 119.0f);
+}
+
+// Chapter 00, exercise "head on": the contact keeps the momentum and sets the
+// separating speed to e times the approach; with e = 0 or below the
+// restitution threshold, only the push-out of the overlap separates them
+TEST(BounceSolutions, HeadOnKeepsTheMomentum) {
+  struct Case {
+    int speed_tenths;
+    int mass_b_tenths;
+    int restitution_percent;
+  };
+  for (const Case& c : {Case{20, 10, 100}, Case{20, 30, 50}, Case{20, 5, 100},
+                        Case{20, 10, 0}, Case{8, 10, 100}}) {
+    HeadOnSample sample;
+    BeginWith(sample, {{HeadOnSample::kSpeed, c.speed_tenths},
+                       {HeadOnSample::kMassB, c.mass_b_tenths},
+                       {HeadOnSample::kRestitution, c.restitution_percent}});
+    RunSteps(sample, 400);
+    ASSERT_TRUE(sample.is_measured()) << c.speed_tenths;
+    EXPECT_NEAR(ToFloat(sample.momentum()), ToFloat(sample.initial_momentum()),
+                1e-4f);
+    const bool bounces = c.speed_tenths > 10 && c.restitution_percent > 0;
+    const float tolerance = bounces ? 1e-4f : 0.2f;
+    EXPECT_NEAR(ToFloat(sample.velocity_a()),
+                ToFloat(sample.predicted_velocity_a()), tolerance)
+        << c.speed_tenths << " " << c.restitution_percent;
+    EXPECT_NEAR(ToFloat(sample.velocity_b()),
+                ToFloat(sample.predicted_velocity_b()), tolerance)
+        << c.speed_tenths << " " << c.restitution_percent;
+    // The push-out separates the balls that should leave together
+    EXPECT_GT(sample.velocity_b(), sample.velocity_a());
+    sample.End();
+  }
+}
+
+// Chapter 00, exercise "tunneling": below (r + t / 2) / dt the ball is always
+// caught; above, it passes when the first overlap leaves its center below the
+// middle of the ground
+TEST(BounceSolutions, FastBallPassesThroughPastHalfTheGround) {
+  const auto first_pass = [](int thickness_cm) {
+    for (int speed = 5; speed <= 100; ++speed) {
+      TunnelingSample sample;
+      BeginWith(sample, {{TunnelingSample::kSpeed, speed},
+                         {TunnelingSample::kThickness, thickness_cm}});
+      RunSteps(sample, TunnelingSample::kMeasuredSteps);
+      const bool passed = sample.passed().value_or(false);
+      if (passed) {
+        EXPECT_GT(static_cast<float>(speed), ToFloat(sample.safe_speed()));
+        const float r = 0.25f;
+        const float half = static_cast<float>(thickness_cm) / 200.0f;
+        if (sample.first_depth().has_value()) {
+          EXPECT_GT(ToFloat(*sample.first_depth()), r + half - 1e-3f);
+        }
+        return speed;
+      }
+    }
+    return 0;
+  };
+  EXPECT_EQ(first_pass(50), 38);
+  EXPECT_EQ(first_pass(100), 56);
+}
 
 // Chapter 01, exercise "single force": one force F at the lever arm r moves
 // the center at F T / m and spins the box at r F T / I, half the couple's
@@ -788,6 +922,12 @@ TEST(RotatedBoxSolutions, BoxOnRampTakesTheAxisOfSmallestOverlap) {
 // The solution programs are deterministic: a restart replays the same run
 TEST(TutorialSolutions, SameRunAfterRestart) {
   std::vector<neko::SampleRegistry::Entry> samples;
+  samples.push_back(
+      {"explicit Euler", std::make_unique<ExplicitEulerSample>()});
+  samples.push_back(
+      {"bounces to rest", std::make_unique<BouncesToRestSample>()});
+  samples.push_back({"head on", std::make_unique<HeadOnSample>()});
+  samples.push_back({"tunneling", std::make_unique<TunnelingSample>()});
   samples.push_back({"single force", std::make_unique<SingleForceSample>()});
   samples.push_back({"disk", std::make_unique<DiskSample>()});
   samples.push_back({"half step", std::make_unique<HalfStepSample>()});
