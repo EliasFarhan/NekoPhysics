@@ -26,7 +26,15 @@
 #include "tutorials/02_rotated_box/solutions/tight_bounds_sample.h"
 #include "tutorials/02_rotated_box/solutions/two_ramps_sample.h"
 #include "tutorials/03_contact_manifold/contact_manifold_sample.h"
+#include "tutorials/03_contact_manifold/solutions/box_on_tilted_box_sample.h"
+#include "tutorials/03_contact_manifold/solutions/narrow_pillar_sample.h"
+#include "tutorials/03_contact_manifold/solutions/points_over_a_turn_sample.h"
+#include "tutorials/03_contact_manifold/solutions/two_aabbs_sample.h"
 #include "tutorials/04_off_center_impact/off_center_impact_sample.h"
+#include "tutorials/04_off_center_impact/solutions/ball_hits_box_sample.h"
+#include "tutorials/04_off_center_impact/solutions/energy_budget_sample.h"
+#include "tutorials/04_off_center_impact/solutions/fastest_spin_sample.h"
+#include "tutorials/04_off_center_impact/solutions/passes_sample.h"
 #include "tutorials/05_friction/friction_sample.h"
 #include "tutorials/06_stacking/stacking_sample.h"
 #include "tutorials/07_pendulum/pendulum_sample.h"
@@ -38,25 +46,33 @@
 namespace {
 
 using neko::Scalar;
+using neko::tutorial::BallHitsBoxSample;
 using neko::tutorial::BounceSample;
 using neko::tutorial::BoxOnRampSample;
+using neko::tutorial::BoxOnTiltedBoxSample;
 using neko::tutorial::ChainSample;
 using neko::tutorial::ContactManifoldSample;
 using neko::tutorial::CornerSample;
 using neko::tutorial::DiskSample;
 using neko::tutorial::DumbbellSample;
+using neko::tutorial::EnergyBudgetSample;
 using neko::tutorial::ExplosionSample;
+using neko::tutorial::FastestSpinSample;
 using neko::tutorial::FrictionSample;
 using neko::tutorial::HalfStepSample;
 using neko::tutorial::JetpackSample;
+using neko::tutorial::NarrowPillarSample;
 using neko::tutorial::OffCenterImpactSample;
+using neko::tutorial::PassesSample;
 using neko::tutorial::PendulumSample;
+using neko::tutorial::PointsOverATurnSample;
 using neko::tutorial::RotatedBoxSample;
 using neko::tutorial::RotationSample;
 using neko::tutorial::SingleForceSample;
 using neko::tutorial::SpringSample;
 using neko::tutorial::StackingSample;
 using neko::tutorial::TightBoundsSample;
+using neko::tutorial::TwoAabbsSample;
 using neko::tutorial::TwoRampsSample;
 
 // static_cast<float> would be a useless cast when Scalar is float. A template
@@ -724,6 +740,16 @@ TEST(TutorialSolutions, SameRunAfterRestart) {
   samples.push_back({"tight bounds", std::make_unique<TightBoundsSample>()});
   samples.push_back({"two ramps", std::make_unique<TwoRampsSample>()});
   samples.push_back({"box on ramp", std::make_unique<BoxOnRampSample>()});
+  samples.push_back({"narrow pillar", std::make_unique<NarrowPillarSample>()});
+  samples.push_back(
+      {"points over a turn", std::make_unique<PointsOverATurnSample>()});
+  samples.push_back({"two AABBs", std::make_unique<TwoAabbsSample>()});
+  samples.push_back(
+      {"box on a tilted box", std::make_unique<BoxOnTiltedBoxSample>()});
+  samples.push_back({"fastest spin", std::make_unique<FastestSpinSample>()});
+  samples.push_back({"energy budget", std::make_unique<EnergyBudgetSample>()});
+  samples.push_back({"ball hits box", std::make_unique<BallHitsBoxSample>()});
+  samples.push_back({"passes", std::make_unique<PassesSample>()});
   const std::size_t count = samples.size();
   neko::SampleRegistry registry{std::move(samples)};
   const neko::SampleContext context{neko::sample_config::kWorldBounds};
@@ -846,6 +872,132 @@ TEST(ContactManifoldTutorial, SameParametersSameRun) {
   const std::uint32_t restored = run();
   EXPECT_NE(first, changed);
   EXPECT_EQ(first, restored);
+}
+
+// Chapter 03, exercise "narrow pillar": with the pillar's top as the
+// reference face, the box's bottom edge is clipped to the pillar's side
+// planes; an end past a plane lands on the pillar's edge, its depth
+// interpolated along the box's edge
+TEST(ContactManifoldSolutions, NarrowPillarClipsTheEdgeToThePillar) {
+  for (const auto& [angle, offset_cm, sink_cm] :
+       {std::tuple{5, 120, 10}, std::tuple{0, 120, 10}, std::tuple{10, 120, 20},
+        std::tuple{0, 0, 10}}) {
+    NarrowPillarSample sample;
+    BeginWith(sample, {{NarrowPillarSample::kAngle, angle},
+                       {NarrowPillarSample::kOffset, offset_cm},
+                       {NarrowPillarSample::kSinkDepth, sink_cm}});
+    ASSERT_TRUE(sample.pillar_is_reference()) << angle << " " << offset_cm;
+    const auto predicted = sample.prediction();
+    const neko::Contact& contact = sample.contact();
+    ASSERT_EQ(static_cast<int>(contact.point_count), predicted.count);
+    for (std::size_t i = 0; i < contact.point_count; ++i) {
+      EXPECT_NEAR(ToFloat(contact.points[i].position.x()),
+                  ToFloat(predicted.points[i].position.x()), 0.002f)
+          << angle << " " << offset_cm << " " << i;
+      EXPECT_NEAR(ToFloat(contact.points[i].penetration),
+                  ToFloat(predicted.points[i].depth), 0.002f)
+          << angle << " " << offset_cm << " " << i;
+    }
+    // The box overhangs the pillar's right edge: the second point is on it
+    const float right_edge = ToFloat(sample.pillar_center().x()) + 0.5f;
+    const std::size_t last = std::size_t{contact.point_count} - 1;
+    EXPECT_NEAR(ToFloat(contact.points[last].position.x()), right_edge, 0.002f);
+    sample.End();
+  }
+}
+
+// Chapter 03, exercise "points over a turn": a face tilted by up to phi*
+// keeps both corners down, with c + L sin phi* = N cos phi*; the turn has
+// (4 phi*_bottom + 4 phi*_side) / 360 of its steps with two points, within
+// half a step at each of the eight window edges
+TEST(ContactManifoldSolutions, TwoPointsWhileTheFaceIsWithinPhiStar) {
+  for (const auto& [sink_cm, spin] :
+       {std::pair{30, 60}, std::pair{20, 60}, std::pair{45, 60},
+        std::pair{10, 60}, std::pair{30, 30}}) {
+    PointsOverATurnSample sample;
+    BeginWith(sample, {{PointsOverATurnSample::kSinkDepth, sink_cm},
+                       {PointsOverATurnSample::kSpin, spin}});
+    while (!sample.turn_done()) {
+      sample.FixedUpdate();
+    }
+    // phi* in closed form: sin(phi - beta) = -c / R, R = sqrt(L^2 + N^2),
+    // tan beta = N / L, for the bottom face (L = 1, N = 0.5)
+    const float c = 0.5f - static_cast<float>(sink_cm) / 100.0f;
+    const float degrees = 180.0f / 3.14159265f;
+    const float bottom =
+        (std::atan2(0.5f, 1.0f) + std::asin(-c / std::sqrt(1.25f))) * degrees;
+    EXPECT_NEAR(ToFloat(sample.bottom_threshold()), bottom, 0.01f) << sink_cm;
+    EXPECT_NEAR(static_cast<float>(sample.two_point_steps()),
+                ToFloat(sample.predicted_two_point_steps()), 4.0f)
+        << sink_cm << " " << spin;
+    EXPECT_EQ(sample.no_point_steps(), 0) << sink_cm;
+    EXPECT_EQ(sample.two_point_steps() + sample.one_point_steps(),
+              sample.steps_per_turn());
+    sample.End();
+  }
+}
+
+// Chapter 03, exercise "two AABBs": the smaller overlap gives the normal,
+// and the points are the ends of the overlap on the block's face, both at
+// the penetration. Ties are left out: an exact tie in Fixed16 can round
+// either way in float.
+TEST(ContactManifoldSolutions, TwoAabbsTouchAtTheEndsOfTheOverlap) {
+  for (const auto& [on_ledge_cm, sink_cm] :
+       {std::pair{60, 20}, std::pair{10, 20}, std::pair{100, 50},
+        std::pair{5, 50}, std::pair{30, 10}}) {
+    TwoAabbsSample sample;
+    BeginWith(sample, {{TwoAabbsSample::kOnLedge, on_ledge_cm},
+                       {TwoAabbsSample::kSinkDepth, sink_cm}});
+    const neko::Contact& contact = sample.contact();
+    ASSERT_EQ(contact.point_count, 2) << on_ledge_cm << " " << sink_cm;
+    EXPECT_EQ(contact.contact_normal, sample.predicted_normal());
+    EXPECT_NEAR(ToFloat(contact.penetration),
+                ToFloat(sample.predicted_penetration()), 0.001f);
+    const auto points = sample.predicted_points();
+    for (std::size_t i = 0; i < 2; ++i) {
+      EXPECT_NEAR(ToFloat(contact.points[i].position.x()),
+                  ToFloat(points[i].x()), 0.001f)
+          << on_ledge_cm << " " << sink_cm << " " << i;
+      EXPECT_NEAR(ToFloat(contact.points[i].position.y()),
+                  ToFloat(points[i].y()), 0.001f)
+          << on_ledge_cm << " " << sink_cm << " " << i;
+      EXPECT_EQ(contact.points[i].penetration, contact.penetration);
+    }
+    sample.End();
+  }
+}
+
+// Chapter 03, exercise "box on a tilted box": chapter 03's prediction, in the
+// ramp's frame, matches the manifold of two oriented boxes
+TEST(ContactManifoldSolutions, TiltedBoxManifoldIsChapter03InTheRampFrame) {
+  for (const auto& [ramp, tilt, slide_cm, sink_cm] :
+       {std::tuple{20, 3, 0, 20}, std::tuple{20, 0, 0, 20},
+        std::tuple{20, -5, 0, 20}, std::tuple{20, 15, 0, 20},
+        std::tuple{-30, 5, 200, 30}, std::tuple{10, -20, -300, 40}}) {
+    BoxOnTiltedBoxSample sample;
+    BeginWith(sample, {{BoxOnTiltedBoxSample::kRampAngle, ramp},
+                       {BoxOnTiltedBoxSample::kRelativeTilt, tilt},
+                       {BoxOnTiltedBoxSample::kSlide, slide_cm},
+                       {BoxOnTiltedBoxSample::kSinkDepth, sink_cm}});
+    EXPECT_EQ(static_cast<int>(sample.contact().point_count),
+              sample.predicted_point_count())
+        << ramp << " " << tilt;
+    for (std::size_t corner = 0; corner < 2; ++corner) {
+      const auto predicted = sample.predicted_depth(corner);
+      const auto measured = sample.measured_depth(corner);
+      ASSERT_EQ(measured.has_value(), predicted.has_value())
+          << ramp << " " << tilt << " " << corner;
+      if (predicted.has_value()) {
+        EXPECT_NEAR(ToFloat(*measured), ToFloat(*predicted), 0.002f)
+            << ramp << " " << tilt << " " << corner;
+      }
+    }
+    EXPECT_NEAR(ToFloat(sample.contact().contact_normal.x()),
+                ToFloat(sample.predicted_normal().x()), 0.002f);
+    EXPECT_NEAR(ToFloat(sample.contact().contact_normal.y()),
+                ToFloat(sample.predicted_normal().y()), 0.002f);
+    sample.End();
+  }
 }
 
 namespace {
@@ -980,6 +1132,146 @@ TEST(OffCenterImpactTutorial, SameParametersSameRun) {
   const std::uint32_t restored = run();
   EXPECT_NE(first, changed);
   EXPECT_EQ(first, restored);
+}
+
+namespace {
+
+// Runs a chapter 04 solution until its impact step (10 s at most)
+template <typename SampleType, typename Done>
+void RunUntilImpact(SampleType& sample, Done done) {
+  for (int step = 0; step < 600 && !done(); ++step) {
+    sample.FixedUpdate();
+  }
+}
+
+}  // namespace
+
+// Chapter 04, exercise "fastest spin": the measured spin over the integer
+// tilts peaks where the predicted one does, where the lever arm is closest
+// to the radius of gyration, at (1 + e) v / (2 k)
+TEST(OffCenterImpactSolutions, FastestSpinIsAtTheRadiusOfGyration) {
+  for (const int width_cm : {300, 200, 100}) {
+    int fastest_tilt = 0;
+    int predicted_tilt = 0;
+    float fastest_spin = 0.0f;
+    float bound = 0.0f;
+    for (int tilt = 5; tilt <= 40; ++tilt) {
+      FastestSpinSample sample;
+      BeginWith(sample, {{FastestSpinSample::kTilt, tilt},
+                         {FastestSpinSample::kWidth, width_cm}});
+      RunUntilImpact(sample,
+                     [&sample] { return sample.measured_spin().has_value(); });
+      ASSERT_TRUE(sample.measured_spin().has_value()) << tilt;
+      const float spin = -ToFloat(*sample.measured_spin());
+      EXPECT_NEAR(spin, -ToFloat(sample.predicted_spin(tilt)), 0.01f) << tilt;
+      if (spin > fastest_spin) {
+        fastest_spin = spin;
+        fastest_tilt = tilt;
+      }
+      predicted_tilt = sample.fastest_tilt();
+      bound = ToFloat(sample.spin_bound());
+      sample.End();
+    }
+    EXPECT_EQ(fastest_tilt, predicted_tilt) << width_cm;
+    EXPECT_NEAR(fastest_spin, bound, 0.002f * bound) << width_cm;
+    // hx cos a - hy sin a = k, solved in float
+    const float hx = static_cast<float>(width_cm) / 200.0f;
+    const float k = std::sqrt((4.0f * hx * hx + 1.0f) / 12.0f);
+    const float radius = std::sqrt(hx * hx + 0.25f);
+    const float best =
+        (std::acos(k / radius) - std::atan2(0.5f, hx)) * 180.0f / 3.14159265f;
+    EXPECT_NEAR(static_cast<float>(fastest_tilt), best, 1.0f) << width_cm;
+  }
+}
+
+// Chapter 04, exercise "energy budget": the hit loses (1 - e^2) vn^2 / (2 k),
+// less than a flat landing would, and nothing when it is elastic
+TEST(OffCenterImpactSolutions, CornerHitLosesOneMinusESquaredOverK) {
+  for (const auto& [tilt, restitution, width_cm] :
+       {std::tuple{20, 50, 200}, std::tuple{20, 100, 200},
+        std::tuple{40, 50, 200}, std::tuple{5, 20, 200},
+        std::tuple{10, 70, 300}, std::tuple{30, 50, 100}}) {
+    EnergyBudgetSample sample;
+    BeginWith(sample, {{EnergyBudgetSample::kTilt, tilt},
+                       {EnergyBudgetSample::kRestitution, restitution},
+                       {EnergyBudgetSample::kWidth, width_cm}});
+    RunUntilImpact(sample,
+                   [&sample] { return sample.measured_loss().has_value(); });
+    ASSERT_TRUE(sample.measured_loss().has_value()) << tilt;
+    const float loss = ToFloat(*sample.measured_loss());
+    EXPECT_NEAR(loss, ToFloat(*sample.predicted_loss()), 0.002f)
+        << tilt << " " << restitution;
+    if (restitution == 100) {
+      EXPECT_NEAR(loss, 0.0f, 0.002f) << tilt;
+    } else {
+      EXPECT_LT(loss, ToFloat(sample.flat_loss())) << tilt;
+    }
+    sample.End();
+  }
+}
+
+// Chapter 04, exercise "ball hits box": two moving bodies share the impulse
+// j = (1 + e) v / (1/M + 1/m + x^2 / I); only the box spins
+TEST(OffCenterImpactSolutions, BallAndBoxShareTheImpulse) {
+  for (const auto& [offset_cm, ball_mass, restitution, speed] :
+       {std::tuple{60, 50, 50, 300}, std::tuple{0, 50, 50, 300},
+        std::tuple{-90, 50, 100, 300}, std::tuple{60, 200, 50, 300},
+        std::tuple{30, 25, 20, 200}}) {
+    BallHitsBoxSample sample;
+    BeginWith(sample, {{BallHitsBoxSample::kOffset, offset_cm},
+                       {BallHitsBoxSample::kBallMass, ball_mass},
+                       {BallHitsBoxSample::kRestitution, restitution},
+                       {BallHitsBoxSample::kSpeed, speed}});
+    RunUntilImpact(
+        sample, [&sample] { return sample.measured_box_spin().has_value(); });
+    ASSERT_TRUE(sample.measured_box_spin().has_value()) << offset_cm;
+    EXPECT_NEAR(ToFloat(*sample.measured_ball_velocity()),
+                ToFloat(sample.predicted_ball_velocity()), 0.005f)
+        << offset_cm << " " << ball_mass;
+    EXPECT_NEAR(ToFloat(*sample.measured_box_velocity()),
+                ToFloat(sample.predicted_box_velocity()), 0.005f)
+        << offset_cm << " " << ball_mass;
+    EXPECT_NEAR(ToFloat(*sample.measured_box_spin()),
+                ToFloat(sample.predicted_box_spin()), 0.01f)
+        << offset_cm << " " << ball_mass;
+    EXPECT_NEAR(ToFloat(*sample.point_rebound()),
+                static_cast<float>(restitution) / 100.0f, 0.005f)
+        << offset_cm << " " << ball_mass;
+    EXPECT_NEAR(ToFloat(*sample.measured_box_drift()), 0.0f, 0.001f);
+    sample.End();
+  }
+}
+
+// Chapter 04, exercise "one pass vs eight": the solver's loop by hand gives
+// the world's velocity and spin after each number of passes; one pass leaves
+// the box spinning, eight reach the exact answer
+TEST(OffCenterImpactSolutions, PassesConvergeToTheSymmetricImpulse) {
+  for (const int restitution : {50, 100}) {
+    for (const int passes : {1, 2, 3, 4, 8}) {
+      PassesSample sample;
+      BeginWith(sample, {{PassesSample::kPasses, passes},
+                         {PassesSample::kRestitution, restitution}});
+      RunUntilImpact(sample,
+                     [&sample] { return sample.measured().has_value(); });
+      ASSERT_TRUE(sample.measured().has_value()) << passes;
+      const auto predicted = sample.predicted(passes);
+      EXPECT_NEAR(ToFloat(sample.measured()->velocity),
+                  ToFloat(predicted.velocity), 0.005f)
+          << restitution << " " << passes;
+      EXPECT_NEAR(ToFloat(sample.measured()->spin), ToFloat(predicted.spin),
+                  0.005f)
+          << restitution << " " << passes;
+      if (passes == 1) {
+        EXPECT_GT(ToFloat(sample.measured()->spin), 0.5f) << restitution;
+      }
+      if (passes == 8) {
+        EXPECT_NEAR(ToFloat(sample.measured()->velocity),
+                    ToFloat(sample.exact_velocity()), 0.002f);
+        EXPECT_NEAR(ToFloat(sample.measured()->spin), 0.0f, 0.002f);
+      }
+      sample.End();
+    }
+  }
 }
 
 namespace {
