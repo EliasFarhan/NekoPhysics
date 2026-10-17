@@ -89,6 +89,7 @@ NEKO_HOT void SolveContacts(std::span<Contact> contacts,
     const Scalar inverse_mass2 = InverseMass(*contact.bodies[1].body);
     const Scalar inverse_inertia1 = InverseInertia(contact.bodies[0]);
     const Scalar inverse_inertia2 = InverseInertia(contact.bodies[1]);
+    const Scalar inverse_mass_sum = inverse_mass1 + inverse_mass2;
     for (std::uint8_t i = 0; i < contact.point_count; ++i) {
       ContactPoint& point = contact.points[i];
       internal::ContactPointScratch& data = scratch[2 * c + i];
@@ -99,11 +100,16 @@ NEKO_HOT void SolveContacts(std::span<Contact> contacts,
       data.r1 = point.position - contact.bodies[0].body->position;
       data.r2 = point.position - contact.bodies[1].body->position;
       data.normal_mass =
-          EffectiveMass(inverse_mass1 + inverse_mass2, inverse_inertia1,
-                        inverse_inertia2, data, contact.contact_normal);
-      data.tangent_mass = EffectiveMass(
-          inverse_mass1 + inverse_mass2, inverse_inertia1, inverse_inertia2,
-          data, contact.contact_normal.Perpendicular());
+          EffectiveMass(inverse_mass_sum, inverse_inertia1, inverse_inertia2,
+                        data, contact.contact_normal);
+      // Without friction the tangent impulse is clamped to 0 whatever its
+      // mass: skip the second division
+      data.tangent_mass =
+          contact.friction > Scalar{0}
+              ? EffectiveMass(inverse_mass_sum, inverse_inertia1,
+                              inverse_inertia2, data,
+                              contact.contact_normal.Perpendicular())
+              : Scalar{0};
       const Scalar approach = NormalVelocity(contact, data);
       const Scalar bounce = approach < -settings.restitution_threshold
                                 ? -contact.restitution * approach
