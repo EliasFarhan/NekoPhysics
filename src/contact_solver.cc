@@ -74,9 +74,10 @@ Scalar Contact::CalculateSeparateVelocity() const {
   return Vec2f::Dot(relative_velocity, contact_normal);
 }
 
-NEKO_HOT void SolveContacts(std::span<Contact> contacts,
-                            std::span<internal::ContactPointScratch> scratch,
-                            const ContactSolverSettings& settings) {
+namespace internal {
+NEKO_HOT void PrepareContacts(std::span<Contact> contacts,
+                              std::span<ContactPointScratch> scratch,
+                              const ContactSolverSettings& settings) {
   assert(scratch.size() >= 2 * contacts.size());
   // Baumgarte: the push-out speed per meter of penetration beyond the slop
   const Scalar bias_factor = settings.baumgarte / settings.dt;
@@ -92,7 +93,7 @@ NEKO_HOT void SolveContacts(std::span<Contact> contacts,
     const Scalar inverse_mass_sum = inverse_mass1 + inverse_mass2;
     for (std::uint8_t i = 0; i < contact.point_count; ++i) {
       ContactPoint& point = contact.points[i];
-      internal::ContactPointScratch& data = scratch[2 * c + i];
+      ContactPointScratch& data = scratch[2 * c + i];
       data.inverse_mass1 = inverse_mass1;
       data.inverse_mass2 = inverse_mass2;
       data.inverse_inertia1 = inverse_inertia1;
@@ -125,62 +126,76 @@ NEKO_HOT void SolveContacts(std::span<Contact> contacts,
       }
     }
   }
+}
 
-  // Warm start: apply last step's impulses before the passes, once every
-  // target is computed (the targets use the velocities before any impulse)
-  if (settings.warm_starting) {
-    for (std::size_t c = 0; c < contacts.size(); ++c) {
-      Contact& contact = contacts[c];
-      const Vec2f tangent = contact.contact_normal.Perpendicular();
-      for (std::uint8_t i = 0; i < contact.point_count; ++i) {
-        const ContactPoint& point = contact.points[i];
-        if (point.normal_impulse == Scalar{0} &&
-            point.tangent_impulse == Scalar{0}) {
-          continue;
-        }
-        ApplyImpulse(contact, scratch[2 * c + i],
-                     contact.contact_normal * point.normal_impulse +
-                         tangent * point.tangent_impulse);
+NEKO_HOT void WarmStartContacts(std::span<Contact> contacts,
+                                std::span<const ContactPointScratch> scratch) {
+  for (std::size_t c = 0; c < contacts.size(); ++c) {
+    Contact& contact = contacts[c];
+    const Vec2f tangent = contact.contact_normal.Perpendicular();
+    for (std::uint8_t i = 0; i < contact.point_count; ++i) {
+      const ContactPoint& point = contact.points[i];
+      if (point.normal_impulse == Scalar{0} &&
+          point.tangent_impulse == Scalar{0}) {
+        continue;
+      }
+      ApplyImpulse(contact, scratch[2 * c + i],
+                   contact.contact_normal * point.normal_impulse +
+                       tangent * point.tangent_impulse);
+    }
+  }
+}
+
+NEKO_HOT void SolveContactPass(std::span<Contact> contacts,
+                               std::span<const ContactPointScratch> scratch) {
+  for (std::size_t c = 0; c < contacts.size(); ++c) {
+    Contact& contact = contacts[c];
+    const Vec2f tangent = contact.contact_normal.Perpendicular();
+    for (std::uint8_t i = 0; i < contact.point_count; ++i) {
+      ContactPoint& point = contact.points[i];
+      const ContactPointScratch& data = scratch[2 * c + i];
+
+      // Friction first: stop the sliding, within the Coulomb limit of the
+      // push accumulated so far
+      const Scalar max_friction = contact.friction * point.normal_impulse;
+      const Scalar tangent_change =
+          -Vec2f::Dot(RelativeVelocity(contact, data), tangent) *
+          data.tangent_mass;
+      const Scalar tangent_total = Clamp(point.tangent_impulse + tangent_change,
+                                         -max_friction, max_friction);
+      const Scalar friction_impulse = tangent_total - point.tangent_impulse;
+      point.tangent_impulse = tangent_total;
+      if (friction_impulse != Scalar{0}) {
+        ApplyImpulse(contact, data, tangent * friction_impulse);
+      }
+
+      const Scalar change =
+          (data.target_velocity - NormalVelocity(contact, data)) *
+          data.normal_mass;
+      // Clamp the total, not the change: a pass can take back part of an
+      // earlier push, but the contact never pulls
+      const Scalar total = Max(point.normal_impulse + change, Scalar{0});
+      const Scalar impulse = total - point.normal_impulse;
+      point.normal_impulse = total;
+      if (impulse != Scalar{0}) {
+        ApplyImpulse(contact, data, contact.contact_normal * impulse);
       }
     }
   }
+}
+}  // namespace internal
 
+void SolveContacts(std::span<Contact> contacts,
+                   std::span<internal::ContactPointScratch> scratch,
+                   const ContactSolverSettings& settings) {
+  internal::PrepareContacts(contacts, scratch, settings);
+  // Warm start: apply last step's impulses before the passes, once every
+  // target is computed (the targets use the velocities before any impulse)
+  if (settings.warm_starting) {
+    internal::WarmStartContacts(contacts, scratch);
+  }
   for (int pass = 0; pass < settings.velocity_iterations; ++pass) {
-    for (std::size_t c = 0; c < contacts.size(); ++c) {
-      Contact& contact = contacts[c];
-      const Vec2f tangent = contact.contact_normal.Perpendicular();
-      for (std::uint8_t i = 0; i < contact.point_count; ++i) {
-        ContactPoint& point = contact.points[i];
-        const internal::ContactPointScratch& data = scratch[2 * c + i];
-
-        // Friction first: stop the sliding, within the Coulomb limit of the
-        // push accumulated so far
-        const Scalar max_friction = contact.friction * point.normal_impulse;
-        const Scalar tangent_change =
-            -Vec2f::Dot(RelativeVelocity(contact, data), tangent) *
-            data.tangent_mass;
-        const Scalar tangent_total =
-            Clamp(point.tangent_impulse + tangent_change, -max_friction,
-                  max_friction);
-        const Scalar friction_impulse = tangent_total - point.tangent_impulse;
-        point.tangent_impulse = tangent_total;
-        if (friction_impulse != Scalar{0}) {
-          ApplyImpulse(contact, data, tangent * friction_impulse);
-        }
-
-        const Scalar change =
-            (data.target_velocity - NormalVelocity(contact, data)) *
-            data.normal_mass;
-        // Clamp the total, not the change: a pass can take back part of an
-        // earlier push, but the contact never pulls
-        const Scalar total = Max(point.normal_impulse + change, Scalar{0});
-        const Scalar impulse = total - point.normal_impulse;
-        point.normal_impulse = total;
-        if (impulse != Scalar{0}) {
-          ApplyImpulse(contact, data, contact.contact_normal * impulse);
-        }
-      }
-    }
+    internal::SolveContactPass(contacts, scratch);
   }
 }
 }  // namespace neko

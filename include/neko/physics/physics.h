@@ -13,6 +13,7 @@
 #include "neko/math/vec2.h"
 #include "neko/physics/contact_listener.h"
 #include "neko/physics/contact_solver.h"
+#include "neko/physics/joint.h"
 #include "neko/physics/physics_type.h"
 
 /// NekoPhysics: a small deterministic 2D physics library for games.
@@ -53,6 +54,8 @@
 ///   @ref AabbCollider stays axis-aligned. Contacts find where shapes touch
 ///   but don't make bodies spin yet: the contact impulse goes through the
 ///   center of mass.
+/// - @ref DistanceJoint links two bodies: a rod, a rope or a spring (see
+///   @ref PhysicsWorld::AddDistanceJoint).
 /// - @ref ContactListener is the interface your game implements to receive
 ///   trigger and collision enter/exit events.
 /// - Collision detection runs in two phases. The broadphase, a
@@ -447,6 +450,11 @@ struct PhysicsWorldConfig {
   /// Maximum number of pairs whose bounding boxes overlap, for the default
   /// broadphase (@ref SweepAndPrune).
   std::size_t max_broadphase_pairs = 2048;
+  /// Maximum number of joints alive at once (see @ref DistanceJoint).
+  ///
+  /// A joint and its solver data take about 100 bytes; 0 for a world
+  /// without joints.
+  std::size_t max_joints = 64;
   /// Passes of the contact solver over all the contacts of a step, see
   /// @ref ContactSolverSettings::velocity_iterations.
   ///
@@ -461,15 +469,22 @@ struct PhysicsWorldConfig {
   /// Slowest approach speed that bounces, in m/s, see
   /// @ref ContactSolverSettings::restitution_threshold. The default is 1.
   Scalar restitution_threshold{1};
-  /// Whether the contact solver starts from last step's impulses, see
-  /// @ref ContactSolverSettings::warm_starting.
+  /// Whether the contact and joint solver starts from last step's impulses,
+  /// see @ref ContactSolverSettings::warm_starting.
   ///
   /// The world keeps the impulses of every touching solid pair in a contact
-  /// cache, matched by @ref ContactPoint::id. The cache is simulation state:
+  /// cache, matched by @ref ContactPoint::id, and each joint keeps its own in
+  /// @ref DistanceJoint::impulse. Both are simulation state:
   /// @ref PhysicsWorld::CopyFrom copies it and
   /// @ref PhysicsWorld::GenerateChecksum hashes it, so rollback replays stay
   /// exact.
   bool warm_starting = true;
+  /// Frequency of the length correction of rigid and rope joints, in Hz, see
+  /// @ref ContactSolverSettings::joint_hertz. The default is 15.
+  Scalar joint_hertz{15};
+  /// Damping ratio of the length correction of rigid and rope joints, see
+  /// @ref ContactSolverSettings::joint_damping_ratio. The default is 2.
+  Scalar joint_damping_ratio{2};
   /// @ref Allocator for all tables; `nullptr` means @ref DefaultAllocator.
   ///
   /// @warning Must outlive the world.
@@ -487,12 +502,14 @@ struct PhysicsWorldConfig {
 /// Each @ref Step runs four phases:
 ///
 /// - **Velocities**: the inertia of dynamic bodies is computed from their
-///   colliders, then dynamic bodies get gravity, forces and torques.
+///   colliders, springs add their forces, then dynamic bodies get gravity,
+///   forces and torques.
 /// - **Broadphase**: a fast, approximate pass that finds the pairs of
 ///   colliders whose bounding boxes overlap, to avoid testing every collider
 ///   against every other one.
 /// - **Narrowphase**: the exact shape test of each candidate pair, the
-///   contact solver for the solid pairs and the enter/exit events.
+///   solver for the solid pairs and the rigid and rope joints
+///   (@ref SolveConstraints), and the enter/exit events.
 /// - **Positions**: dynamic and kinematic bodies move and turn at their
 ///   (corrected) velocities.
 ///
@@ -514,8 +531,8 @@ class PhysicsWorld {
   /// Builds an empty world and allocates all its tables.
   ///
   /// @param config Gravity, time step, capacities and allocator.
-  /// @pre `config.max_bodies` and `config.max_colliders` fit in an
-  /// @ref Index.
+  /// @pre `config.max_bodies`, `config.max_colliders` and
+  /// `config.max_joints` fit in an @ref Index.
   explicit PhysicsWorld(const PhysicsWorldConfig& config = {});
   /// Deleted: a copy would allocate. Rollback snapshots use @ref CopyFrom
   /// into an existing world instead.
@@ -536,7 +553,8 @@ class PhysicsWorld {
   /// @return The new body's index, or @ref kInvalidBodyIndex when
   /// `max_bodies` bodies are in use.
   BodyIndex AddBody();
-  /// Removes the body and all its colliders, freeing their slots.
+  /// Removes the body, all its colliders and all its joints, freeing their
+  /// slots.
   ///
   /// @param index @ref Body to remove.
   void RemoveBody(BodyIndex index);
@@ -707,6 +725,59 @@ class PhysicsWorld {
   /// @param index @ref Collider to remove.
   void RemoveCollider(ColliderIndex index);
 
+  /// Adds a rigid distance joint between the positions of two bodies.
+  ///
+  /// The joint is a @ref DistanceJointType::kRigid rod with both anchors at
+  /// the bodies' positions and a `length` equal to their current distance:
+  /// it holds them where they are. Change its type, anchors, length or
+  /// spring constants through @ref joint afterwards. Reuses the first free
+  /// slot.
+  ///
+  /// @code
+  /// // A pendulum: a bob hanging 2 m below a static pivot
+  /// const neko::JointIndex rod = world.AddDistanceJoint(pivot, bob);
+  /// // world.joint(rod).length is 2: the bob swings on a circle of radius 2
+  /// world.joint(rod).type = neko::DistanceJointType::kRope;  // or a rope
+  /// @endcode
+  ///
+  /// @param body_a First body.
+  /// @param body_b Second body, different from `body_a`.
+  /// @return The new joint's index, or @ref kInvalidJointIndex when
+  /// `max_joints` joints are in use.
+  JointIndex AddDistanceJoint(BodyIndex body_a, BodyIndex body_b);
+  /// Removes a joint, freeing its slot.
+  ///
+  /// @param index @ref DistanceJoint to remove.
+  void RemoveJoint(JointIndex index);
+  /// Returns the joint at `index`.
+  ///
+  /// @param index A valid joint index.
+  /// @return The joint, which can be edited in place.
+  [[nodiscard]] DistanceJoint& joint(JointIndex index) {
+    return joints_[index.index()];
+  }
+  /// Returns the joint at @p index (read-only).
+  ///
+  /// @param index A valid joint index.
+  /// @return The joint.
+  [[nodiscard]] const DistanceJoint& joint(JointIndex index) const {
+    return joints_[index.index()];
+  }
+  /// Returns the world-space positions of a joint's two anchors:
+  /// `position + rotation.Rotate(local_anchor)` of each body.
+  ///
+  /// @param index A valid joint index.
+  /// @return Anchor A then anchor B, in meters.
+  [[nodiscard]] std::array<Vec2f, 2> JointAnchors(JointIndex index) const;
+  /// Returns the current distance between a joint's two anchors, in meters.
+  ///
+  /// Compare it with @ref DistanceJoint::length to measure how well a rigid
+  /// joint holds (the length error) or how far a spring is stretched.
+  ///
+  /// @param index A valid joint index.
+  /// @return The distance between the anchors.
+  [[nodiscard]] Scalar JointDistance(JointIndex index) const;
+
   /// Returns the collider at `collider_index`.
   ///
   /// @param collider_index A valid collider index.
@@ -820,8 +891,9 @@ class PhysicsWorld {
   /// This is how rollback netcode saves and restores the world: keep a
   /// snapshot world, `snapshot.CopyFrom(world)` to save and
   /// `world.CopyFrom(snapshot)` to roll back, then resimulate. Copies bodies,
-  /// colliders, shapes and touching pairs (so enter/exit events stay
-  /// consistent after a rollback), not the listener nor the BSH.
+  /// colliders, shapes, joints, touching pairs (so enter/exit events stay
+  /// consistent after a rollback) and the contact cache, not the listener nor
+  /// the BSH.
   ///
   /// @param physics_world World to copy from.
   /// @note Doesn't allocate when both worlds were built with the same
@@ -831,7 +903,8 @@ class PhysicsWorld {
   ///
   /// Peers of a networked game exchange checksums of the same frame: a
   /// mismatch means their simulations diverged (a desync). Covers bodies,
-  /// colliders, shapes and touching pairs, but not @ref Collider::user_data.
+  /// colliders, shapes, touching pairs, the contact cache and joints, but not
+  /// @ref Collider::user_data.
   ///
   /// @return FNV-1a hash of the world state.
   [[nodiscard]] std::uint32_t GenerateChecksum() const;
@@ -858,6 +931,13 @@ class PhysicsWorld {
   // Copies the cached impulses into this step's contacts, and back
   void WarmStartContacts();
   void CacheContactImpulses();
+  // Adds the Hooke and damping forces of the springs to their bodies
+  void ApplySpringForces();
+  // Marks the bodies of joints that filter their collisions, returns whether
+  // there is any
+  [[nodiscard]] bool UpdateJointFilter();
+  // Whether a joint without collide_connected links the two bodies
+  [[nodiscard]] bool AreJointFiltered(BodyIndex body1, BodyIndex body2) const;
 
   PhysicsWorldConfig config_;
   SweepAndPrune default_broadphase_;
@@ -905,6 +985,13 @@ class PhysicsWorld {
   };
   ArrayList<CachedContact> contact_cache_;
   ArrayList<CachedContact> new_contact_cache_;
+  // Joints (simulation state, copied and hashed) and the solver's per-joint
+  // working memory
+  ArrayList<DistanceJoint> joints_;
+  ArrayList<internal::JointScratch> joint_scratch_;
+  // Scratch, one entry per body: 1 when it belongs to a joint that filters
+  // its collisions
+  ArrayList<std::uint8_t> body_joint_filter_;
 
   ContactListener* contact_listener_ = nullptr;
   BoundingSurfaceHierarchy* bsh_ = nullptr;

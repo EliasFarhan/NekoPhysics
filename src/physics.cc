@@ -103,6 +103,9 @@ constexpr bool IsFreeAabb(const AabbCollider& aabb) {
 constexpr bool IsFreeOrientedBox(const OrientedBoxCollider& box) {
   return box.half_size.x() < Scalar{0};
 }
+constexpr bool IsFreeJoint(const DistanceJoint& joint) {
+  return joint.type == DistanceJointType::kNone;
+}
 
 // A box in the world for the narrowphase: center, unit axes (its local x and y
 // in world space) and half size along them. An AabbCollider is the same with
@@ -423,6 +426,21 @@ std::uint32_t GenerateChecksum(const Collider& collider) {
   return checksum.Get();
 }
 
+std::uint32_t GenerateChecksum(const DistanceJoint& joint) {
+  Checksum checksum;
+  checksum.Add(joint.body_a);
+  checksum.Add(joint.body_b);
+  checksum.Add(joint.local_anchor_a);
+  checksum.Add(joint.local_anchor_b);
+  checksum.Add(joint.length);
+  checksum.Add(joint.stiffness);
+  checksum.Add(joint.damping);
+  checksum.Add(joint.impulse);
+  checksum.Add(joint.type);
+  checksum.Add(joint.collide_connected);
+  return checksum.Get();
+}
+
 std::uint32_t GenerateChecksum(const CircleCollider& collider) {
   Checksum checksum;
   checksum.Add(collider.radius);
@@ -480,9 +498,16 @@ PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config)
       contact_cache_(MakeList<CachedContact>(ConfigAllocator(config),
                                              config.max_touching_pairs)),
       new_contact_cache_(MakeList<CachedContact>(ConfigAllocator(config),
-                                                 config.max_touching_pairs)) {
+                                                 config.max_touching_pairs)),
+      joints_(
+          MakeList<DistanceJoint>(ConfigAllocator(config), config.max_joints)),
+      joint_scratch_(MakeList<internal::JointScratch>(ConfigAllocator(config),
+                                                      config.max_joints)),
+      body_joint_filter_(
+          MakeList<std::uint8_t>(ConfigAllocator(config), config.max_bodies)) {
   assert(config.max_bodies <= std::numeric_limits<Index>::max() &&
-         config.max_colliders <= std::numeric_limits<Index>::max());
+         config.max_colliders <= std::numeric_limits<Index>::max() &&
+         config.max_joints <= std::numeric_limits<Index>::max());
   // Fixed size from here on: SortNewTouchingPairs indexes these two directly
   // instead of push_back-ing every step
   touching_pair_bucket_count_.resize(config.max_colliders);
@@ -490,6 +515,8 @@ PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config)
   body_area_.resize(config.max_bodies);
   contact_scratch_.resize(2 * config.max_touching_pairs);
   body_unit_inertia_.resize(config.max_bodies);
+  joint_scratch_.resize(config.max_joints);
+  body_joint_filter_.resize(config.max_bodies);
 }
 
 BodyIndex PhysicsWorld::AddBody() {
@@ -499,6 +526,12 @@ BodyIndex PhysicsWorld::AddBody() {
 
 void PhysicsWorld::RemoveBody(BodyIndex index) {
   bodies_[index.index()].type = BodyType::kNone;
+  for (auto& joint : joints_) {
+    if (joint.type != DistanceJointType::kNone &&
+        (joint.body_a == index || joint.body_b == index)) {
+      joint = DistanceJoint{};
+    }
+  }
   for (const auto& collider : colliders_) {
     if (collider.body_index == index && collider.type != ShapeType::kNone) {
       RemoveCollider(collider.collider_index);
@@ -719,6 +752,7 @@ NEKO_HOT void PhysicsWorld::ResolveNarrowphase() {
   new_touching_pairs_.clear();
   contacts_.clear();
   contact_pairs_.clear();
+  const bool has_joint_filter = UpdateJointFilter();
   for (const auto& pair : Broadphase().GetPossiblePairs()) {
     auto& collider1 = colliders_[pair.c1().index()];
     auto& collider2 = colliders_[pair.c2().index()];
@@ -735,6 +769,10 @@ NEKO_HOT void PhysicsWorld::ResolveNarrowphase() {
       continue;
     }
     const bool is_trigger = collider1.is_trigger || collider2.is_trigger;
+    if (has_joint_filter && !is_trigger &&
+        AreJointFiltered(collider1.body_index, collider2.body_index)) {
+      continue;
+    }
     // Contacts only live during this step, so their pointers never outlive the
     // containers
     Contact contact{};
@@ -764,13 +802,16 @@ NEKO_HOT void PhysicsWorld::ResolveNarrowphase() {
   if (config_.warm_starting) {
     WarmStartContacts();
   }
-  SolveContacts(contacts_, {contact_scratch_.data(), 2 * contacts_.size()},
-                {.dt = config_.dt,
-                 .velocity_iterations = config_.velocity_iterations,
-                 .baumgarte = config_.baumgarte,
-                 .penetration_slop = config_.penetration_slop,
-                 .restitution_threshold = config_.restitution_threshold,
-                 .warm_starting = config_.warm_starting});
+  SolveConstraints(contacts_, {contact_scratch_.data(), 2 * contacts_.size()},
+                   joints_, bodies_, joint_scratch_,
+                   {.dt = config_.dt,
+                    .velocity_iterations = config_.velocity_iterations,
+                    .baumgarte = config_.baumgarte,
+                    .penetration_slop = config_.penetration_slop,
+                    .restitution_threshold = config_.restitution_threshold,
+                    .warm_starting = config_.warm_starting,
+                    .joint_hertz = config_.joint_hertz,
+                    .joint_damping_ratio = config_.joint_damping_ratio});
   if (config_.warm_starting) {
     CacheContactImpulses();
   }
@@ -1043,6 +1084,110 @@ void PhysicsWorld::RemoveCollider(ColliderIndex index) {
   collider = Collider{};
 }
 
+JointIndex PhysicsWorld::AddDistanceJoint(BodyIndex body_a, BodyIndex body_b) {
+  const auto slot = AcquireSlot(joints_, config_.max_joints, IsFreeJoint);
+  if (!slot.has_value()) {
+    return kInvalidJointIndex;
+  }
+  DistanceJoint& joint = joints_[*slot];
+  joint.body_a = body_a;
+  joint.body_b = body_b;
+  joint.type = DistanceJointType::kRigid;
+  joint.length =
+      (bodies_[body_b.index()].position - bodies_[body_a.index()].position)
+          .Length();
+  return JointIndex{*slot};
+}
+
+void PhysicsWorld::RemoveJoint(JointIndex index) {
+  joints_[index.index()] = DistanceJoint{};
+}
+
+std::array<Vec2f, 2> PhysicsWorld::JointAnchors(JointIndex index) const {
+  const DistanceJoint& joint = joints_[index.index()];
+  const Body& body_a = bodies_[joint.body_a.index()];
+  const Body& body_b = bodies_[joint.body_b.index()];
+  return {body_a.position + body_a.rotation.Rotate(joint.local_anchor_a),
+          body_b.position + body_b.rotation.Rotate(joint.local_anchor_b)};
+}
+
+Scalar PhysicsWorld::JointDistance(JointIndex index) const {
+  const auto anchors = JointAnchors(index);
+  return (anchors[1] - anchors[0]).Length();
+}
+
+void PhysicsWorld::ApplySpringForces() {
+  for (const DistanceJoint& joint : joints_) {
+    if (joint.type != DistanceJointType::kSpring) {
+      continue;
+    }
+    Body& body_a = bodies_[joint.body_a.index()];
+    Body& body_b = bodies_[joint.body_b.index()];
+    if (!body_a.is_active || !body_b.is_active) {
+      continue;
+    }
+    const Vec2f r_a = body_a.rotation.Rotate(joint.local_anchor_a);
+    const Vec2f r_b = body_b.rotation.Rotate(joint.local_anchor_b);
+    const Vec2f delta = (body_b.position + r_b) - (body_a.position + r_a);
+    const Scalar distance = delta.Length();
+    // No direction to pull along when the anchors meet: no force
+    if (distance == Scalar{0}) {
+      continue;
+    }
+    const Vec2f axis{delta.x() / distance, delta.y() / distance};
+    // Separation speed of the anchors, v + w x r of each
+    const Vec2f velocity_a =
+        body_a.velocity + r_a.Perpendicular2() * body_a.angular_velocity;
+    const Vec2f velocity_b =
+        body_b.velocity + r_b.Perpendicular2() * body_b.angular_velocity;
+    const Scalar separation = Vec2f::Dot(velocity_b - velocity_a, axis);
+    // Hooke's law plus damping: positive pulls the anchors together
+    const Vec2f pull = axis * (joint.stiffness * (distance - joint.length) +
+                               joint.damping * separation);
+    // Static and kinematic bodies ignore forces: leave theirs untouched
+    if (body_a.type == BodyType::kDynamic) {
+      body_a.force += pull;
+      body_a.torque += Vec2f::Cross(r_a, pull);
+    }
+    if (body_b.type == BodyType::kDynamic) {
+      body_b.force -= pull;
+      body_b.torque -= Vec2f::Cross(r_b, pull);
+    }
+  }
+}
+
+bool PhysicsWorld::UpdateJointFilter() {
+  bool has_filter = false;
+  for (const DistanceJoint& joint : joints_) {
+    if (joint.type != DistanceJointType::kNone && !joint.collide_connected) {
+      if (!has_filter) {
+        std::fill(body_joint_filter_.begin(), body_joint_filter_.end(),
+                  std::uint8_t{0});
+        has_filter = true;
+      }
+      body_joint_filter_[joint.body_a.index()] = 1;
+      body_joint_filter_[joint.body_b.index()] = 1;
+    }
+  }
+  return has_filter;
+}
+
+bool PhysicsWorld::AreJointFiltered(BodyIndex body1, BodyIndex body2) const {
+  // Most pairs have a body without joints: one lookup each, no scan
+  if (body_joint_filter_[body1.index()] == 0 ||
+      body_joint_filter_[body2.index()] == 0) {
+    return false;
+  }
+  for (const DistanceJoint& joint : joints_) {
+    if (joint.type != DistanceJointType::kNone && !joint.collide_connected &&
+        ((joint.body_a == body1 && joint.body_b == body2) ||
+         (joint.body_a == body2 && joint.body_b == body1))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void PhysicsWorld::ApplyForceAtPoint(BodyIndex index, Vec2f force,
                                      Vec2f point) {
   Body& body = bodies_[index.index()];
@@ -1184,6 +1329,7 @@ NEKO_HOT void PhysicsWorld::Step() {
   // with the corrected velocities. A resting body ends the step at rest
   // instead of sinking by one step of gravity and being pushed back.
   auto t_integration_start = StepProfileNow();
+  ApplySpringForces();
   for (auto& body : bodies_) {
     if (!body.is_active || body.type != BodyType::kDynamic) {
       continue;
@@ -1223,6 +1369,7 @@ void PhysicsWorld::Clear() {
   touching_pairs_.clear();
   new_touching_pairs_.clear();
   contact_cache_.clear();
+  joints_.clear();
 }
 
 NEKO_HOT Aabbf PhysicsWorld::GetAabb(const Collider& collider) const {
@@ -1307,6 +1454,7 @@ void PhysicsWorld::CopyFrom(const PhysicsWorld& physics_world) {
   touching_pairs_ = physics_world.touching_pairs_;
   // Warm starting reads it next step: part of the simulation state
   contact_cache_ = physics_world.contact_cache_;
+  joints_ = physics_world.joints_;
 }
 
 std::uint32_t PhysicsWorld::GenerateChecksum() const {
@@ -1341,6 +1489,10 @@ std::uint32_t PhysicsWorld::GenerateChecksum() const {
       checksum.Add(entry.points[i].normal_impulse);
       checksum.Add(entry.points[i].tangent_impulse);
     }
+  }
+  // Empty in worlds without joints, which keep their old checksums
+  for (const auto& joint : joints_) {
+    checksum.Add(neko::GenerateChecksum(joint));
   }
   return checksum.Get();
 }

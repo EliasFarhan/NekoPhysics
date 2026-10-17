@@ -154,6 +154,19 @@ struct ContactSolverSettings {
   /// find, so a stack settles with fewer passes. The world fills them in from
   /// its contact cache; a contact built by hand has zero impulses either way.
   bool warm_starting = true;
+  /// Frequency of the length correction of rigid and rope joints, in Hz; 0
+  /// for none (the length then drifts).
+  ///
+  /// A joint pulls its length error back like a spring of this frequency
+  /// with `joint_damping_ratio`, solved implicitly (the soft step): stable
+  /// at any number of passes and with warm starting, where a Baumgarte
+  /// correction would feed last step's push back every step. Keep it at
+  /// most a quarter of the step rate (15 Hz at 60 steps per second).
+  Scalar joint_hertz{15};
+  /// Damping ratio of the length correction of rigid and rope joints: 1 is
+  /// critical damping (the fastest return without overshoot), more returns
+  /// slower but never rings.
+  Scalar joint_damping_ratio{2};
 };
 
 namespace internal {
@@ -173,6 +186,21 @@ struct ContactPointScratch {
   Scalar tangent_mass{};
   Scalar target_velocity{};
 };
+
+// The three parts of SolveContacts, so SolveConstraints can interleave the
+// joints with them. Same arithmetic in the same order: a step without joints
+// is bit-identical to SolveContacts.
+//
+// Once per step: lever arms, effective masses and target speeds
+void PrepareContacts(std::span<Contact> contacts,
+                     std::span<ContactPointScratch> scratch,
+                     const ContactSolverSettings& settings);
+// Applies the impulses already in the points (last step's) once
+void WarmStartContacts(std::span<Contact> contacts,
+                       std::span<const ContactPointScratch> scratch);
+// One pass over every point: friction, then the normal
+void SolveContactPass(std::span<Contact> contacts,
+                      std::span<const ContactPointScratch> scratch);
 }  // namespace internal
 
 /// Solves all the contacts of a step together with accumulated impulses,

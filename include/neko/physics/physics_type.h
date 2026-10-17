@@ -129,6 +129,40 @@ static_assert(std::is_trivially_copyable_v<ColliderIndex>);
 /// It is a default-constructed @ref ColliderIndex.
 constexpr auto kInvalidColliderIndex = ColliderIndex{};
 
+/// Strongly typed index of a @ref DistanceJoint in a @ref PhysicsWorld.
+///
+/// Like the other indices, it stays valid when the world is copied for a
+/// rollback snapshot. A default-constructed index is invalid (see
+/// @ref kInvalidJointIndex).
+class JointIndex {
+ public:
+  /// Constructs an invalid index, equal to @ref kInvalidJointIndex.
+  constexpr JointIndex() noexcept = default;
+  /// Wraps a raw slot number.
+  ///
+  /// @param index_value Slot of the joint in the world's joint table.
+  explicit constexpr JointIndex(Index index_value) noexcept
+      : index_(index_value) {}
+
+  /// Returns the raw slot number.
+  [[nodiscard]] constexpr Index index() const noexcept { return index_; }
+
+  /// Compares two indices for equality.
+  constexpr bool operator==(const JointIndex& rhs) const noexcept = default;
+
+ private:
+  Index index_ = std::numeric_limits<Index>::max();
+};
+
+static_assert(sizeof(JointIndex) == sizeof(Index));
+static_assert(std::is_trivially_copyable_v<JointIndex>);
+
+/// Invalid joint index, returned by @ref PhysicsWorld::AddDistanceJoint when
+/// the world is full.
+///
+/// It is a default-constructed @ref JointIndex.
+constexpr auto kInvalidJointIndex = JointIndex{};
+
 /// Unordered pair of colliders, stored with `c1 < c2` so that it can be
 /// compared and sorted.
 ///
