@@ -76,10 +76,10 @@ struct Pendulum {
       : world({.gravity = gravity}) {
     const float angle = angle_degrees * kPi / 180.0f;
     pivot = AddStatic(world, Vec2f::Zero());
-    bob = AddPoint(world,
-                   {length * static_cast<Scalar>(std::sin(angle)),
-                    -length * static_cast<Scalar>(std::cos(angle))},
-                   Scalar{1});
+    bob = AddPoint(
+        world,
+        {length * Scalar{std::sin(angle)}, -length * Scalar{std::cos(angle)}},
+        Scalar{1});
     rod = world.AddDistanceJoint(pivot, bob);
     world.joint(rod).type = type;
     world.joint(rod).length = length;

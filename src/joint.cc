@@ -176,21 +176,30 @@ NEKO_HOT void SolveJointPass(std::span<DistanceJoint> joints,
 }
 }  // namespace
 
-void SolveConstraints(std::span<Contact> contacts,
-                      std::span<internal::ContactPointScratch> contact_scratch,
-                      std::span<DistanceJoint> joints, std::span<Body> bodies,
-                      std::span<internal::JointScratch> joint_scratch,
-                      const ContactSolverSettings& settings) {
+NEKO_HOT void SolveConstraints(
+    std::span<Contact> contacts,
+    std::span<internal::ContactPointScratch> contact_scratch,
+    std::span<DistanceJoint> joints, std::span<Body> bodies,
+    std::span<internal::JointScratch> joint_scratch,
+    const ContactSolverSettings& settings) {
   // The contact targets use the velocities before any impulse, joints' or
   // contacts': prepare them first, then warm start both
   internal::PrepareContacts(contacts, contact_scratch, settings);
-  PrepareJoints(joints, bodies, joint_scratch, settings);
+  // Without joints this is SolveContacts: no joint call in the passes
+  const bool has_joints = !joints.empty();
+  if (has_joints) {
+    PrepareJoints(joints, bodies, joint_scratch, settings);
+  }
   if (settings.warm_starting) {
-    WarmStartJoints(joints, joint_scratch);
+    if (has_joints) {
+      WarmStartJoints(joints, joint_scratch);
+    }
     internal::WarmStartContacts(contacts, contact_scratch);
   }
   for (int pass = 0; pass < settings.velocity_iterations; ++pass) {
-    SolveJointPass(joints, joint_scratch);
+    if (has_joints) {
+      SolveJointPass(joints, joint_scratch);
+    }
     internal::SolveContactPass(contacts, contact_scratch);
   }
 }
