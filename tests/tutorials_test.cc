@@ -1152,10 +1152,11 @@ TEST(ExplosionTutorial, WallShieldedAndRadius) {
   EXPECT_TRUE(run.visible_targets[4]);
 }
 
+constexpr float kPi = 3.14159265f;
+
 // The laser before the blast: t and normal against the post, the plank's
 // top face and the ground, computed by hand
 TEST(ExplosionTutorial, LaserHits) {
-  constexpr float kPi = 3.14159265f;
   struct Case {
     int degrees;
     float normal_x;
