@@ -949,8 +949,19 @@ class PhysicsWorld {
   /// - When more colliders are hit than `hits` holds, the nearest
   ///   `hits.size()` are kept, and the return value still counts them all.
   ///
-  /// @note With @ref Fixed16 keep the segment under about 100 m: the circle
-  /// test squares distances of the order of its length.
+  /// @note With @ref Fixed16 a box (@ref AabbCollider or
+  /// @ref OrientedBoxCollider) is missed when the segment spans 16384 m or
+  /// more along one of the box's axes: the slab test doubles that span, which
+  /// overflows past 32767. A circle is found for any segment shorter than
+  /// 32768 m. Below these limits only precision changes with the length.
+  /// @ref RaycastHit::fraction is a multiple of 1/65536 rounded down, so a
+  /// box's hit point, computed from it, can stop up to `length / 65536`
+  /// before the surface: 1.5 mm for a 100 m segment, 15 mm for 1 km, 0.25 m
+  /// near 16 km. A circle's hit point comes from the distance along the
+  /// segment instead: exact along an axis, and on a diagonal off by an amount
+  /// that grows with the circle's distance from `start` (measured 2.7 mm at
+  /// 100 m, 23 mm at 1 km, 0.23 m at 10 km). Up to about 300 m both stay
+  /// under a centimeter.
   /// @param start Start of the segment, in meters.
   /// @param end End of the segment, in meters.
   /// @param hits Output buffer, nearest hits first; a buffer of one keeps
