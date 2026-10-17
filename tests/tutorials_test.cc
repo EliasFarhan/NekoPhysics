@@ -18,15 +18,22 @@
 #include "tutorials/04_off_center_impact/off_center_impact_sample.h"
 #include "tutorials/05_friction/friction_sample.h"
 #include "tutorials/06_stacking/stacking_sample.h"
+#include "tutorials/07_pendulum/pendulum_sample.h"
+#include "tutorials/08_chain/chain_sample.h"
+#include "tutorials/09_spring/spring_sample.h"
 
 namespace {
 
+using neko::Scalar;
 using neko::tutorial::BounceSample;
+using neko::tutorial::ChainSample;
 using neko::tutorial::ContactManifoldSample;
 using neko::tutorial::FrictionSample;
 using neko::tutorial::OffCenterImpactSample;
+using neko::tutorial::PendulumSample;
 using neko::tutorial::RotatedBoxSample;
 using neko::tutorial::RotationSample;
+using neko::tutorial::SpringSample;
 using neko::tutorial::StackingSample;
 
 // static_cast<float> would be a useless cast when Scalar is float. A template
@@ -790,6 +797,265 @@ TEST(StackingTutorial, SameParametersSameRun) {
   registry.SetParameter(StackingSample::kPasses, 3);
   const std::uint32_t changed = run();
   registry.SetParameter(StackingSample::kPasses, 8);
+  const std::uint32_t restored = run();
+  EXPECT_NE(first, changed);
+  EXPECT_EQ(first, restored);
+}
+
+namespace {
+
+struct PendulumRun {
+  float predicted_period = 0.0f;
+  float measured_period = 0.0f;
+  float max_length_error = 0.0f;
+  float predicted_max_stretch = 0.0f;
+  int slack_steps = 0;
+};
+
+// Runs the pendulum for 10 s; length in tenths of a meter, amplitude in
+// degrees
+PendulumRun RunPendulum(int length_tenths, int amplitude, bool rope) {
+  PendulumSample sample;
+  auto values = sample.parameters();
+  values[PendulumSample::kLength].value = length_tenths;
+  values[PendulumSample::kAmplitude].value = amplitude;
+  values[PendulumSample::kRope].value = rope ? 1 : 0;
+  sample.Begin(neko::SampleContext{neko::sample_config::kWorldBounds});
+  for (int step = 0; step < 600; ++step) {
+    sample.FixedUpdate();
+  }
+  PendulumRun run;
+  run.predicted_period = ToFloat(sample.predicted_period());
+  run.measured_period = ToFloat(sample.measured_period().value_or(Scalar{0}));
+  run.max_length_error = ToFloat(sample.max_length_error());
+  run.predicted_max_stretch = ToFloat(sample.predicted_max_stretch());
+  run.slack_steps = sample.slack_steps();
+  sample.End();
+  return run;
+}
+
+class PendulumTest : public ::testing::TestWithParam<std::pair<int, int>> {};
+
+}  // namespace
+
+// The experiment of chapter 07: the period is 2 pi sqrt(L / g) with the
+// amplitude series, and the rod stretches by its tension sag plus the swing
+// drift
+TEST_P(PendulumTest, PeriodIsTwoPiSqrtLOverG) {
+  const auto [length_tenths, amplitude] = GetParam();
+  const auto run = RunPendulum(length_tenths, amplitude, false);
+  EXPECT_NEAR(run.measured_period, run.predicted_period,
+              0.005f * run.predicted_period);
+  EXPECT_GT(run.max_length_error, 0.7f * run.predicted_max_stretch);
+  EXPECT_LT(run.max_length_error, 1.3f * run.predicted_max_stretch);
+  EXPECT_EQ(run.slack_steps, 0);
+}
+
+INSTANTIATE_TEST_SUITE_P(LengthsAndAmplitudes, PendulumTest,
+                         ::testing::Values(std::pair{10, 10}, std::pair{20, 10},
+                                           std::pair{40, 10}, std::pair{20, 30},
+                                           std::pair{20, 60}));
+
+// Past 90 degrees a rope goes slack near the top and the bob falls inside
+// the circle; a rod holds it on the circle
+TEST(PendulumTutorial, RopeGoesSlackPastNinetyDegrees) {
+  EXPECT_GT(RunPendulum(20, 150, true).slack_steps, 0);
+  EXPECT_EQ(RunPendulum(20, 150, false).slack_steps, 0);
+  // Below 90 degrees the rope stays taut: it swings like the rod
+  const auto rope = RunPendulum(20, 30, true);
+  const auto rod = RunPendulum(20, 30, false);
+  EXPECT_EQ(rope.slack_steps, 0);
+  EXPECT_NEAR(rope.measured_period, rod.measured_period, 0.01f);
+}
+
+TEST(PendulumTutorial, SameParametersSameRun) {
+  std::vector<neko::SampleRegistry::Entry> samples;
+  samples.push_back({"07 Pendulum", std::make_unique<PendulumSample>()});
+  neko::SampleRegistry registry{std::move(samples)};
+  const neko::SampleContext context{neko::sample_config::kWorldBounds};
+  const auto run = [&registry] {
+    for (int step = 0; step < 120; ++step) {
+      registry.FixedUpdate();
+    }
+    return registry.current()->GenerateChecksum();
+  };
+  registry.Select(0, context);
+  const std::uint32_t first = run();
+  registry.SetParameter(PendulumSample::kAmplitude, 40);
+  const std::uint32_t changed = run();
+  registry.SetParameter(PendulumSample::kAmplitude, 10);
+  const std::uint32_t restored = run();
+  EXPECT_NE(first, changed);
+  EXPECT_EQ(first, restored);
+}
+
+namespace {
+
+struct ChainRun {
+  float predicted = 0.0f;
+  float stretch = 0.0f;
+  float max_stretch = 0.0f;
+};
+
+// Runs the chain for 5 s
+ChainRun RunChain(int links, int end_mass, int passes, bool horizontal) {
+  ChainSample sample;
+  auto values = sample.parameters();
+  values[ChainSample::kLinks].value = links;
+  values[ChainSample::kEndMass].value = end_mass;
+  values[ChainSample::kPasses].value = passes;
+  values[ChainSample::kStart].value = horizontal ? 1 : 0;
+  sample.Begin(neko::SampleContext{neko::sample_config::kWorldBounds});
+  for (int step = 0; step < 300; ++step) {
+    sample.FixedUpdate();
+  }
+  ChainRun run{ToFloat(sample.predicted_rest_stretch()),
+               ToFloat(sample.stretch()), ToFloat(sample.max_stretch())};
+  sample.End();
+  return run;
+}
+
+}  // namespace
+
+// The experiment of chapter 08: a hanging chain settles at the soft-step
+// prediction sum g (N - i + M) k_i / w^2, also with a heavy end, from 4
+// passes on
+TEST(ChainTutorial, HangingChainSettlesAtThePredictedStretch) {
+  for (const int end_mass : {1, 10}) {
+    for (const int passes : {4, 8}) {
+      const auto run = RunChain(8, end_mass, passes, false);
+      EXPECT_NEAR(run.stretch, run.predicted, 0.03f * run.predicted)
+          << "end mass " << end_mass << ", " << passes << " passes";
+    }
+  }
+  // 8 links of 1 kg: 64 g / (2 pi 15)^2
+  EXPECT_NEAR(RunChain(8, 1, 8, false).predicted,
+              64.0f * 9.81f / (900.0f * 3.14159265f * 3.14159265f), 1e-4f);
+}
+
+// A swinging chain stretches more with a heavy end, and less with more
+// passes
+TEST(ChainTutorial, HeavyEndStretchesASwingingChain) {
+  const auto light = RunChain(8, 1, 4, true);
+  const auto heavy = RunChain(8, 20, 4, true);
+  EXPECT_GT(heavy.max_stretch, 2.0f * light.max_stretch);
+  const auto heavy_more_passes = RunChain(8, 20, 16, true);
+  EXPECT_LT(heavy_more_passes.max_stretch, heavy.max_stretch);
+}
+
+TEST(ChainTutorial, SameParametersSameRun) {
+  std::vector<neko::SampleRegistry::Entry> samples;
+  samples.push_back({"08 Chain", std::make_unique<ChainSample>()});
+  neko::SampleRegistry registry{std::move(samples)};
+  const neko::SampleContext context{neko::sample_config::kWorldBounds};
+  const auto run = [&registry] {
+    for (int step = 0; step < 120; ++step) {
+      registry.FixedUpdate();
+    }
+    return registry.current()->GenerateChecksum();
+  };
+  registry.Select(0, context);
+  const std::uint32_t first = run();
+  registry.SetParameter(ChainSample::kEndMass, 10);
+  const std::uint32_t changed = run();
+  registry.SetParameter(ChainSample::kEndMass, 1);
+  const std::uint32_t restored = run();
+  EXPECT_NE(first, changed);
+  EXPECT_EQ(first, restored);
+}
+
+namespace {
+
+struct SpringRun {
+  float predicted_period = 0.0f;
+  float measured_period = 0.0f;
+  float omega_dt = 0.0f;
+  float displacement = 0.0f;
+  bool exploded = false;
+};
+
+// Runs the spring for the given steps; mass in tenths of a kilogram, damping
+// in tenths of N s/m
+SpringRun RunSpring(int stiffness, int mass_tenths, int damping_tenths,
+                    int steps = 600) {
+  SpringSample sample;
+  auto values = sample.parameters();
+  values[SpringSample::kStiffness].value = stiffness;
+  values[SpringSample::kMass].value = mass_tenths;
+  values[SpringSample::kDamping].value = damping_tenths;
+  sample.Begin(neko::SampleContext{neko::sample_config::kWorldBounds});
+  for (int step = 0; step < steps; ++step) {
+    sample.FixedUpdate();
+  }
+  SpringRun run;
+  run.predicted_period = ToFloat(sample.predicted_period());
+  run.measured_period = ToFloat(sample.measured_period().value_or(Scalar{0}));
+  run.omega_dt = ToFloat(sample.omega_dt());
+  run.displacement = ToFloat(sample.displacement());
+  run.exploded = sample.exploded();
+  sample.End();
+  return run;
+}
+
+class SpringTest : public ::testing::TestWithParam<std::pair<int, int>> {};
+
+}  // namespace
+
+// The experiment of chapter 09: T = 2 pi sqrt(m / k), and more exactly the
+// discrete period 2 pi dt / acos(1 - (w dt)^2 / 2) of semi-implicit Euler,
+// shorter by about (w dt)^2 / 24
+TEST_P(SpringTest, PeriodIsTwoPiSqrtMOverK) {
+  const auto [stiffness, mass_tenths] = GetParam();
+  const auto run = RunSpring(stiffness, mass_tenths, 0);
+  const float dt = ToFloat(neko::Sample::kFixedDeltaTime);
+  const float discrete = 2.0f * 3.14159265f * dt /
+                         std::acos(1.0f - 0.5f * run.omega_dt * run.omega_dt);
+  EXPECT_FALSE(run.exploded);
+  EXPECT_NEAR(run.measured_period, discrete, 0.003f * run.predicted_period);
+  const float shortening = run.omega_dt * run.omega_dt / 24.0f;
+  EXPECT_NEAR(run.measured_period, run.predicted_period * (1.0f - shortening),
+              0.01f * run.predicted_period);
+  EXPECT_LT(run.measured_period, run.predicted_period);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    StiffnessesAndMasses, SpringTest,
+    ::testing::Values(std::pair{40, 10}, std::pair{160, 10}, std::pair{40, 20},
+                      std::pair{1000, 10}, std::pair{1000, 2}));
+
+// Damped, it settles at the equilibrium stretch m g / k
+TEST(SpringTutorial, DampedSpringSettlesAtTheEquilibrium) {
+  // Damping ratio c / (2 sqrt(k m)) = 4 / (2 sqrt(40)) = 0.32
+  const auto run = RunSpring(40, 10, 40, 900);
+  EXPECT_NEAR(run.displacement, 0.0f, 1e-3f);
+}
+
+// The explicit spring is stable only while w dt < 2
+TEST(SpringTutorial, ExplodesPastOmegaDtOfTwo) {
+  const auto stable = RunSpring(1000, 1, 0);    // w dt = 1.67
+  const auto unstable = RunSpring(2000, 1, 0);  // w dt = 2.36
+  EXPECT_LT(stable.omega_dt, 2.0f);
+  EXPECT_FALSE(stable.exploded);
+  EXPECT_GT(unstable.omega_dt, 2.0f);
+  EXPECT_TRUE(unstable.exploded);
+}
+
+TEST(SpringTutorial, SameParametersSameRun) {
+  std::vector<neko::SampleRegistry::Entry> samples;
+  samples.push_back({"09 Spring", std::make_unique<SpringSample>()});
+  neko::SampleRegistry registry{std::move(samples)};
+  const neko::SampleContext context{neko::sample_config::kWorldBounds};
+  const auto run = [&registry] {
+    for (int step = 0; step < 120; ++step) {
+      registry.FixedUpdate();
+    }
+    return registry.current()->GenerateChecksum();
+  };
+  registry.Select(0, context);
+  const std::uint32_t first = run();
+  registry.SetParameter(SpringSample::kStiffness, 100);
+  const std::uint32_t changed = run();
+  registry.SetParameter(SpringSample::kStiffness, 40);
   const std::uint32_t restored = run();
   EXPECT_NE(first, changed);
   EXPECT_EQ(first, restored);
