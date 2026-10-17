@@ -1376,7 +1376,7 @@ TEST(FrictionTutorial, MoreFrictionSlowerSlide) {
 // whole step, and semi-implicit Euler moves with the speed at the end of each
 // step: the distance comes out short by half a step's travel, v dt / 2
 TEST(FrictionSolutions, BoxStopsAfterVOverMuGAndVSquaredOverTwoMuG) {
-  constexpr float kDt = 1.0f / 60.0f;
+  constexpr float dt = 1.0f / 60.0f;
   for (const auto& [speed_cm, friction] :
        {std::pair{300, 50}, std::pair{100, 20}, std::pair{500, 20},
         std::pair{200, 75}, std::pair{500, 80}}) {
@@ -1394,10 +1394,9 @@ TEST(FrictionSolutions, BoxStopsAfterVOverMuGAndVSquaredOverTwoMuG) {
     EXPECT_NEAR(ToFloat(sample.predicted_distance()), distance, 0.002f);
     const float measured_time = ToFloat(*sample.measured_time());
     EXPECT_GE(measured_time, time - 0.001f) << speed_cm << " " << friction;
-    EXPECT_LE(measured_time, time + kDt + 0.001f)
-        << speed_cm << " " << friction;
+    EXPECT_LE(measured_time, time + dt + 0.001f) << speed_cm << " " << friction;
     EXPECT_NEAR(ToFloat(*sample.measured_distance()),
-                distance - speed * kDt / 2.0f, 0.01f)
+                distance - speed * dt / 2.0f, 0.01f)
         << speed_cm << " " << friction;
     sample.End();
   }
@@ -1407,7 +1406,7 @@ TEST(FrictionSolutions, BoxStopsAfterVOverMuGAndVSquaredOverTwoMuG) {
 // center and spins the disk up until it rolls, at 2/3 of its speed whatever
 // the friction, with w = -v / r; then nothing slows it
 TEST(FrictionSolutions, SlidingDiskRollsAtTwoThirdsOfItsSpeed) {
-  constexpr float kDt = 1.0f / 60.0f;
+  constexpr float dt = 1.0f / 60.0f;
   for (const auto& [speed_cm, friction, radius_cm] :
        {std::tuple{300, 30, 50}, std::tuple{300, 50, 50},
         std::tuple{600, 10, 25}, std::tuple{200, 100, 100},
@@ -1431,9 +1430,9 @@ TEST(FrictionSolutions, SlidingDiskRollsAtTwoThirdsOfItsSpeed) {
     EXPECT_NEAR(ToFloat(rolling.spin) * radius, -ToFloat(rolling.speed), 0.01f);
     const float time = ToFloat(rolling.time);
     EXPECT_GE(time, ToFloat(sample.predicted_time()) - 0.001f);
-    EXPECT_LE(time, ToFloat(sample.predicted_time()) + kDt + 0.001f);
+    EXPECT_LE(time, ToFloat(sample.predicted_time()) + dt + 0.001f);
     EXPECT_NEAR(ToFloat(rolling.distance), ToFloat(sample.predicted_distance()),
-                speed * kDt);
+                speed * dt);
     RunSteps(sample, 120);
     EXPECT_NEAR(ToFloat(sample.disk().velocity.x()), ToFloat(rolling.speed),
                 0.002f)
