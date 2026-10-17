@@ -24,11 +24,12 @@ namespace neko::tutorial {
 // chapter does, the right one from the end up. A pass solves the joints in
 // table order, each with its neighbors' latest velocities, so a correction
 // travels down the whole chain in one top-down pass, and up it in one
-// bottom-up pass. With warm starting each step starts from last step's
-// answer and the order hardly matters. Without it the passes start from
-// zero every step and don't finish: the chain hangs longer than the soft
-// step's rest stretch, and less so in the order that carries the weight's
-// correction from the end to the pivot in fewer passes.
+// bottom-up pass. Only the top joint holds against something that doesn't
+// move: a top-down pass carries that hold down the whole chain, a bottom-up
+// pass one joint further. With warm starting each step starts from last
+// step's answer and the order hardly matters. Without it the passes start
+// from zero every step and don't finish: the chain hangs longer than the
+// soft step's rest stretch, and the bottom-up chain longer still.
 //
 // Readouts: the predicted rest stretch, then for each chain the stretch now
 // (the sum of the length errors) and its largest value since the start.
