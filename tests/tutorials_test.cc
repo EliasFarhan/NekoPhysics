@@ -1,6 +1,8 @@
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <tuple>
@@ -14,6 +16,10 @@
 #include "main/samples/sample_config.h"
 #include "tutorials/00_bounce/bounce_sample.h"
 #include "tutorials/01_rotation/rotation_sample.h"
+#include "tutorials/01_rotation/solutions/disk_sample.h"
+#include "tutorials/01_rotation/solutions/dumbbell_sample.h"
+#include "tutorials/01_rotation/solutions/half_step_sample.h"
+#include "tutorials/01_rotation/solutions/single_force_sample.h"
 #include "tutorials/02_rotated_box/rotated_box_sample.h"
 #include "tutorials/03_contact_manifold/contact_manifold_sample.h"
 #include "tutorials/04_off_center_impact/off_center_impact_sample.h"
@@ -31,13 +37,17 @@ using neko::Scalar;
 using neko::tutorial::BounceSample;
 using neko::tutorial::ChainSample;
 using neko::tutorial::ContactManifoldSample;
+using neko::tutorial::DiskSample;
+using neko::tutorial::DumbbellSample;
 using neko::tutorial::ExplosionSample;
 using neko::tutorial::FrictionSample;
+using neko::tutorial::HalfStepSample;
 using neko::tutorial::JetpackSample;
 using neko::tutorial::OffCenterImpactSample;
 using neko::tutorial::PendulumSample;
 using neko::tutorial::RotatedBoxSample;
 using neko::tutorial::RotationSample;
+using neko::tutorial::SingleForceSample;
 using neko::tutorial::SpringSample;
 using neko::tutorial::StackingSample;
 
@@ -293,6 +303,138 @@ TEST(RotationTutorial, SameParametersSameRun) {
   const std::uint32_t restored = run();
   EXPECT_NE(first, changed);
   EXPECT_EQ(first, restored);
+}
+
+namespace {
+
+// Starts a solution sample with the given parameter values (index, value)
+template <typename SampleType>
+void BeginWith(SampleType& sample,
+               std::initializer_list<std::pair<std::size_t, int>> values) {
+  for (const auto& [index, value] : values) {
+    sample.parameters()[index].value = value;
+  }
+  sample.Begin(neko::SampleContext{neko::sample_config::kWorldBounds});
+}
+
+template <typename SampleType>
+void RunSteps(SampleType& sample, int steps) {
+  for (int step = 0; step < steps; ++step) {
+    sample.FixedUpdate();
+  }
+}
+
+}  // namespace
+
+// Chapter 01, exercise "single force": one force F at the lever arm r moves
+// the center at F T / m and spins the box at r F T / I, half the couple's
+// spin with the same F and r
+TEST(RotationSolutions, SingleForceMovesTheCenterAndSpinsAtHalfTheCouple) {
+  SingleForceSample sample;
+  BeginWith(sample, {});
+  RunSteps(sample, sample.push_steps());
+  const float speed = ToFloat(sample.box().velocity.y());
+  const float spin = ToFloat(sample.box().angular_velocity);
+  const float predicted_speed = ToFloat(sample.predicted_speed());
+  const float predicted_spin = ToFloat(sample.predicted_spin());
+  EXPECT_EQ(ToFloat(sample.box().velocity.x()), 0.0f);
+  EXPECT_NEAR(predicted_speed, 2.0f, 0.002f);
+  EXPECT_NEAR(speed, predicted_speed, predicted_speed * 0.002f);
+  EXPECT_NEAR(predicted_spin, 2.4f, 0.005f);
+  EXPECT_NEAR(spin, predicted_spin, predicted_spin * 0.005f);
+  const auto couple = RunRotation({});
+  EXPECT_NEAR(spin / couple.spin, 0.5f, 0.003f);
+  RunSteps(sample, 60);
+  EXPECT_EQ(ToFloat(sample.box().velocity.y()), speed) << "coasting";
+  EXPECT_EQ(ToFloat(sample.box().angular_velocity), spin) << "coasting";
+  sample.End();
+
+  // No lever arm: the force only moves the center
+  BeginWith(sample, {{SingleForceSample::kLeverArm, 0}});
+  RunSteps(sample, sample.push_steps());
+  EXPECT_EQ(ToFloat(sample.box().angular_velocity), 0.0f);
+  EXPECT_NEAR(ToFloat(sample.box().velocity.y()), predicted_speed,
+              predicted_speed * 0.002f);
+  sample.End();
+}
+
+// Chapter 01, exercise "disk": I = m R^2 / 2, and a disk of radius
+// sqrt((w^2 + h^2) / 6) spins like the 2 x 1 m box
+TEST(RotationSolutions, DiskInertiaIsHalfMassTimesRadiusSquared) {
+  for (const int radius_cm : {25, 50, 91, 150}) {
+    DiskSample sample;
+    BeginWith(sample, {{DiskSample::kRadius, radius_cm}});
+    const float radius = static_cast<float>(radius_cm) / 100.0f;
+    const float inertia = radius * radius / 2.0f;
+    EXPECT_NEAR(ToFloat(sample.predicted_inertia()), inertia, inertia * 0.002f)
+        << radius_cm;
+    EXPECT_NEAR(ToFloat(sample.measured_inertia()), inertia, inertia * 0.005f)
+        << radius_cm;
+    RunSteps(sample, sample.push_steps());
+    const float spin = ToFloat(sample.disk().angular_velocity);
+    const float predicted = ToFloat(sample.predicted_spin());
+    EXPECT_NEAR(spin, predicted, predicted * 0.01f) << radius_cm;
+    if (radius_cm == 91) {
+      EXPECT_NEAR(spin, ToFloat(sample.box_spin()),
+                  ToFloat(sample.box_spin()) * 0.01f);
+    }
+    sample.End();
+  }
+  EXPECT_NEAR(ToFloat(DiskSample::matching_radius()), 0.9129f, 0.001f);
+}
+
+// Chapter 01, exercise "half step": the spin is alpha T for any dt, and the
+// angle's excess alpha T dt / 2 shrinks with dt
+TEST(RotationSolutions, HalfStepShrinksTheAngleErrorWithTheTimeStep) {
+  std::vector<float> excesses;
+  for (const int substeps : {1, 2, 3, 4}) {
+    HalfStepSample sample;
+    BeginWith(sample, {{HalfStepSample::kSubsteps, substeps}});
+    EXPECT_EQ(ToFloat(sample.dt() * static_cast<Scalar>(substeps)),
+              ToFloat(neko::Sample::kFixedDeltaTime))
+        << "exact substeps";
+    RunSteps(sample, sample.push_frames());
+    ASSERT_TRUE(sample.measured_turn().has_value());
+    const float alpha = ToFloat(sample.angular_acceleration());
+    const float time = ToFloat(sample.push_time());
+    EXPECT_NEAR(ToFloat(sample.spin()), alpha * time, alpha * time * 0.01f)
+        << substeps;
+    const float excess =
+        ToFloat(*sample.measured_turn()) - ToFloat(sample.predicted_turn());
+    const float predicted = ToFloat(sample.predicted_excess());
+    EXPECT_NEAR(excess, predicted, predicted * 0.1f + 0.002f) << substeps;
+    excesses.push_back(excess);
+    sample.End();
+  }
+  EXPECT_NEAR(excesses[0] / excesses[1], 2.0f, 0.2f);
+  EXPECT_NEAR(excesses[0] / excesses[3], 4.0f, 0.6f);
+}
+
+// Chapter 01, exercise "dumbbell": each box adds (m / 2) d^2 to the inertia
+// (parallel axis theorem), I = m (s^2 / 6 + d^2)
+TEST(RotationSolutions, DumbbellFollowsTheParallelAxisTheorem) {
+  std::vector<float> inertias;
+  for (const int offset_cm : {50, 100, 200}) {
+    DumbbellSample sample;
+    BeginWith(sample, {{DumbbellSample::kOffset, offset_cm}});
+    const float offset = static_cast<float>(offset_cm) / 100.0f;
+    const float inertia = 0.25f / 6.0f + offset * offset;
+    EXPECT_NEAR(ToFloat(sample.predicted_inertia()), inertia, inertia * 0.002f)
+        << offset_cm;
+    EXPECT_NEAR(ToFloat(sample.offset_inertia()), offset * offset, 0.001f)
+        << offset_cm;
+    EXPECT_NEAR(ToFloat(sample.measured_inertia()), inertia, inertia * 0.005f)
+        << offset_cm;
+    RunSteps(sample, sample.push_steps());
+    const float predicted = ToFloat(sample.predicted_spin());
+    EXPECT_NEAR(ToFloat(sample.dumbbell().angular_velocity), predicted,
+                predicted * 0.01f)
+        << offset_cm;
+    inertias.push_back(ToFloat(sample.measured_inertia()));
+    sample.End();
+  }
+  EXPECT_GT(inertias[1], inertias[0]);
+  EXPECT_GT(inertias[2], inertias[1]);
 }
 
 namespace {

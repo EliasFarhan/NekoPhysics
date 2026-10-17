@@ -1,7 +1,9 @@
 # Tutorial chapters of the NekoPhysics articles (GPR_SAE_Slides/nekophysics/). Each chapter folder NN_<slug>/ holds a
 # platform-neutral Sample (<slug>_sample.h/.cc, in NekoPhysicsTutorials, tested by tests/tutorials_test.cc) and a
-# main.cc running it on the PC SDL host as course_NN_<slug>. Exercise solutions will be course_NN_<slug>_<name>.
-file(GLOB TUTORIAL_SAMPLE_FILES CONFIGURE_DEPENDS */*_sample.cc */*_sample.h)
+# main.cc running it on the PC SDL host as course_NN_<slug>. Exercise solutions are NN_<slug>/solutions/<name>_sample.h/.cc
+# (in NekoPhysicsTutorials, also tested) and <name>_main.cc, the program course_NN_<slug>_<name>.
+file(GLOB TUTORIAL_SAMPLE_FILES CONFIGURE_DEPENDS */*_sample.cc */*_sample.h */solutions/*_sample.cc
+     */solutions/*_sample.h)
 add_library(NekoPhysicsTutorials STATIC ${TUTORIAL_SAMPLE_FILES})
 target_include_directories(NekoPhysicsTutorials PUBLIC ${PROJECT_SOURCE_DIR})
 target_link_libraries(NekoPhysicsTutorials PUBLIC NekoPhysicsSamples)
@@ -16,9 +18,22 @@ function(neko_add_tutorial chapter)
     set_target_properties(course_${chapter} PROPERTIES FOLDER Tutorials/)
 endfunction()
 
+# neko_add_tutorial_solution(<NN_slug> <name>): the exercise solution course_<NN_slug>_<name>, from
+# <NN_slug>/solutions/<name>_main.cc
+function(neko_add_tutorial_solution chapter name)
+    add_executable(course_${chapter}_${name} ${chapter}/solutions/${name}_main.cc)
+    target_link_libraries(course_${chapter}_${name} PRIVATE NekoPhysicsTutorials NekoPhysicsSdlHost)
+    neko_set_project_warnings(course_${chapter}_${name})
+    set_target_properties(course_${chapter}_${name} PROPERTIES FOLDER Tutorials/Solutions/)
+endfunction()
+
 if(USE_SAMPLES)
     neko_add_tutorial(00_bounce)
     neko_add_tutorial(01_rotation)
+    neko_add_tutorial_solution(01_rotation single_force)
+    neko_add_tutorial_solution(01_rotation disk)
+    neko_add_tutorial_solution(01_rotation half_step)
+    neko_add_tutorial_solution(01_rotation dumbbell)
     neko_add_tutorial(02_rotated_box)
     neko_add_tutorial(03_contact_manifold)
     neko_add_tutorial(04_off_center_impact)
