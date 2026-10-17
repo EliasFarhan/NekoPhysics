@@ -61,7 +61,15 @@
 #include "tutorials/09_spring/solutions/substeps_sample.h"
 #include "tutorials/09_spring/spring_sample.h"
 #include "tutorials/10_explosion/explosion_sample.h"
+#include "tutorials/10_explosion/solutions/laser_bounce_sample.h"
+#include "tutorials/10_explosion/solutions/long_laser_sample.h"
+#include "tutorials/10_explosion/solutions/one_hit_sample.h"
+#include "tutorials/10_explosion/solutions/reach_sample.h"
 #include "tutorials/11_jetpack/jetpack_sample.h"
+#include "tutorials/11_jetpack/solutions/decaying_thrust_sample.h"
+#include "tutorials/11_jetpack/solutions/hover_sample.h"
+#include "tutorials/11_jetpack/solutions/step_rate_sample.h"
+#include "tutorials/11_jetpack/solutions/terminal_velocity_sample.h"
 
 namespace {
 
@@ -74,6 +82,7 @@ using neko::tutorial::ChainSample;
 using neko::tutorial::ContactManifoldSample;
 using neko::tutorial::CornerSample;
 using neko::tutorial::CriticalDampingSample;
+using neko::tutorial::DecayingThrustSample;
 using neko::tutorial::DiskSample;
 using neko::tutorial::DumbbellSample;
 using neko::tutorial::EnergyBudgetSample;
@@ -84,12 +93,16 @@ using neko::tutorial::FrictionSample;
 using neko::tutorial::HalfStepSample;
 using neko::tutorial::HeavyOnLightSample;
 using neko::tutorial::HertzSweepSample;
+using neko::tutorial::HoverSample;
 using neko::tutorial::ImpulsePerBoxSample;
 using neko::tutorial::JetpackSample;
 using neko::tutorial::JointOrderSample;
+using neko::tutorial::LaserBounceSample;
+using neko::tutorial::LongLaserSample;
 using neko::tutorial::MixedSurfacesSample;
 using neko::tutorial::NarrowPillarSample;
 using neko::tutorial::OffCenterImpactSample;
+using neko::tutorial::OneHitSample;
 using neko::tutorial::OneStepByHandSample;
 using neko::tutorial::PassesSample;
 using neko::tutorial::PendulumSample;
@@ -98,6 +111,7 @@ using neko::tutorial::PhysicalPendulumSample;
 using neko::tutorial::PointsOverATurnSample;
 using neko::tutorial::PushToStartSample;
 using neko::tutorial::PyramidSample;
+using neko::tutorial::ReachSample;
 using neko::tutorial::RollingDiskSample;
 using neko::tutorial::RotatedBoxSample;
 using neko::tutorial::RotationSample;
@@ -106,9 +120,11 @@ using neko::tutorial::SoftVsExplicitSample;
 using neko::tutorial::SpringSample;
 using neko::tutorial::StabilityLimitSample;
 using neko::tutorial::StackingSample;
+using neko::tutorial::StepRateSample;
 using neko::tutorial::StoppingDistanceSample;
 using neko::tutorial::SubstepsSample;
 using neko::tutorial::TensionSample;
+using neko::tutorial::TerminalVelocitySample;
 using neko::tutorial::TightBoundsSample;
 using neko::tutorial::TwoAabbsSample;
 using neko::tutorial::TwoBoxesByHandSample;
@@ -820,6 +836,16 @@ TEST(TutorialSolutions, SameRunAfterRestart) {
   samples.push_back(
       {"soft vs explicit", std::make_unique<SoftVsExplicitSample>()});
   samples.push_back({"substeps", std::make_unique<SubstepsSample>()});
+  samples.push_back({"reach", std::make_unique<ReachSample>()});
+  samples.push_back({"laser bounce", std::make_unique<LaserBounceSample>()});
+  samples.push_back({"one hit", std::make_unique<OneHitSample>()});
+  samples.push_back({"long laser", std::make_unique<LongLaserSample>()});
+  samples.push_back({"step rate", std::make_unique<StepRateSample>()});
+  samples.push_back({"hover", std::make_unique<HoverSample>()});
+  samples.push_back(
+      {"decaying thrust", std::make_unique<DecayingThrustSample>()});
+  samples.push_back(
+      {"terminal velocity", std::make_unique<TerminalVelocitySample>()});
   const std::size_t count = samples.size();
   neko::SampleRegistry registry{std::move(samples)};
   const neko::SampleContext context{neko::sample_config::kWorldBounds};
@@ -2578,6 +2604,232 @@ TEST(JetpackTutorial, SameParametersSameRun) {
   const std::uint32_t restored = run();
   EXPECT_NE(first, changed);
   EXPECT_EQ(first, restored);
+}
+
+// Chapter 10, exercise "reach": the smallest radius that finds a target is
+// the distance to the closest point of its shape, not to its center
+TEST(ExplosionSolutions, ReachIsTheDistanceToTheClosestPoint) {
+  ReachSample sample;
+  BeginWith(sample, {});
+  for (std::size_t i = 0; i < ReachSample::kTargetCount; ++i) {
+    const float measured = ToFloat(sample.measured_reach(i));
+    const float predicted = ToFloat(sample.predicted_reach(i));
+    // The bisection stops less than 1 mm above the reach
+    EXPECT_GE(measured, predicted - 1e-4f) << i;
+    EXPECT_LE(measured, predicted + 1.1e-3f) << i;
+    EXPECT_LT(measured, ToFloat(sample.center_distance(i)) - 0.2f) << i;
+    EXPECT_EQ(sample.queries(i), 13) << i;
+  }
+  // The crate behind the chapter's wall: its corner at 3.132 m, its center
+  // at 3.473 m
+  EXPECT_NEAR(ToFloat(sample.predicted_reach(3)), 3.1325f, 1e-3f);
+  EXPECT_NEAR(ToFloat(sample.center_distance(3)), 3.4731f, 1e-3f);
+  sample.End();
+}
+
+// Chapter 10, exercise "laser bounce": the first two hits by hand, and a
+// segment that starts on the shape it left stops there
+TEST(ExplosionSolutions, LaserBouncesOffEachHit) {
+  LaserBounceSample sample;
+  BeginWith(sample, {});
+  const auto bounces = sample.bounces();
+  ASSERT_EQ(bounces.size(), 6u);
+  // Down 3.5 m at 30 degrees to the floor, then up to the wall at 12.5 m
+  const float tan30 = std::tan(30.0f * kPi / 180.0f);
+  const float floor_x = 1.0f + 3.5f / tan30;
+  EXPECT_NEAR(ToFloat(bounces[0].point.x()), floor_x, 2e-3f);
+  EXPECT_NEAR(ToFloat(bounces[0].point.y()), 0.5f, 2e-3f);
+  EXPECT_NEAR(ToFloat(bounces[0].normal.y()), 1.0f, 1e-3f);
+  EXPECT_NEAR(ToFloat(bounces[1].point.x()), 12.5f, 2e-3f);
+  EXPECT_NEAR(ToFloat(bounces[1].point.y()), 0.5f + (12.5f - floor_x) * tan30,
+              2e-3f);
+  EXPECT_NEAR(ToFloat(bounces[1].normal.x()), -1.0f, 1e-3f);
+  for (const auto& bounce : bounces) {
+    EXPECT_GT(ToFloat(bounce.fraction), 0.0f);
+  }
+  sample.End();
+
+  LaserBounceSample stalled;
+  BeginWith(stalled, {{LaserBounceSample::kAngle, 60},
+                      {LaserBounceSample::kBounces, 10},
+                      {LaserBounceSample::kPushOff, 0}});
+  const auto stuck = stalled.bounces();
+  ASSERT_EQ(stuck.size(), 10u);
+  const auto first = std::find_if(stuck.begin(), stuck.end(), [](auto b) {
+    return b.fraction == Scalar{0} && b.normal == neko::Vec2f::Zero();
+  });
+  ASSERT_NE(first, stuck.end());
+  for (auto it = first; it != stuck.end(); ++it) {
+    EXPECT_EQ(it->point, first->point);
+    EXPECT_EQ(it->normal, neko::Vec2f::Zero());
+  }
+  stalled.End();
+}
+
+// Chapter 10, exercise "one hit": the overlap lists a body once per
+// collider; the blast pushes it once
+TEST(ExplosionSolutions, OneImpulsePerBody) {
+  const auto run = [](int one_per_body) {
+    auto sample = std::make_unique<OneHitSample>();
+    BeginWith(*sample, {{OneHitSample::kOnePerBody, one_per_body}});
+    RunSteps(*sample, OneHitSample::kBlastStep);
+    return sample;
+  };
+  // 2 m to the side and 1.75 m down from the bomb, radius 3.5 m, J = 8 N s
+  const float distance = std::sqrt(2.0f * 2.0f + 1.75f * 1.75f);
+  const float speed = 8.0f * (1.0f - distance / 3.5f) * 2.0f / distance;
+  const auto once = run(1);
+  EXPECT_EQ(once->colliders_found(), 3);
+  EXPECT_EQ(once->bodies_pushed(), 2);
+  EXPECT_EQ(once->impulses(), 2);
+  EXPECT_NEAR(-ToFloat(once->plain_velocity().x()), speed, 1e-3f);
+  EXPECT_NEAR(ToFloat(once->lidded_velocity().x()), speed, 1e-3f);
+  const auto twice = run(0);
+  EXPECT_EQ(twice->impulses(), 3);
+  EXPECT_NEAR(ToFloat(twice->lidded_velocity().x()), 2.0f * speed, 2e-3f);
+}
+
+// Chapter 10, exercise "long laser": the fraction is known to 1/65536, so
+// a hit computed from it is known to L / 65536
+TEST(ExplosionSolutions, LongLaserKeepsTheFractionsResolution) {
+  for (const int length : {12, 100, 1000, 3000}) {
+    LongLaserSample sample;
+    BeginWith(sample, {{LongLaserSample::kLength, length}});
+    const auto circle = sample.circle_hit();
+    const auto box = sample.box_hit();
+    ASSERT_TRUE(circle.has_value() && box.has_value()) << length;
+    const float face = ToFloat(sample.face_x());
+    const float distance = face - ToFloat(LongLaserSample::kStartX);
+    const float resolution = static_cast<float>(length) / 65536.0f + 1e-4f;
+    // From the distance along the segment: as exact as a position
+    EXPECT_NEAR(ToFloat(circle->point.x()), face, 1e-4f) << length;
+    // From the fraction
+    EXPECT_NEAR(ToFloat(box->point.x()), face, resolution) << length;
+    EXPECT_NEAR(ToFloat(circle->fraction) * static_cast<float>(length),
+                distance, resolution)
+        << length;
+    EXPECT_NEAR(ToFloat(box->fraction) * static_cast<float>(length), distance,
+                resolution)
+        << length;
+    sample.End();
+  }
+}
+
+// Chapter 11, exercise "step rate": a force and a single impulse give the
+// same velocity at every step rate; a one-step force and an impulse every
+// step don't
+TEST(JetpackSolutions, ForcesAndImpulsesAtEveryStepRate) {
+  for (const int rate : {30, 60, 120}) {
+    StepRateSample sample;
+    BeginWith(sample, {{StepRateSample::kRate, rate}});
+    RunSteps(sample, 60);
+    ASSERT_TRUE(sample.done()) << rate;
+    ASSERT_EQ(sample.steps(), rate);
+    const float dt = ToFloat(sample.dt());
+    // 0.99976 s in Fixed16: 65520/65536 at every rate
+    const float seconds = static_cast<float>(rate) * dt;
+    EXPECT_NEAR(seconds, 1.0f, 3e-4f);
+    EXPECT_NEAR(ToFloat(sample.velocity(StepRateSample::kThrustBody).x()),
+                10.0f * seconds, 1e-3f)
+        << rate;
+    EXPECT_NEAR(
+        ToFloat(sample.distance(StepRateSample::kThrustBody)),
+        5.0f * seconds * seconds * (1.0f + 1.0f / static_cast<float>(rate)),
+        2e-3f)
+        << rate;
+    EXPECT_NEAR(ToFloat(sample.velocity(StepRateSample::kImpulseBody).x()),
+                4.0f, 1e-4f);
+    EXPECT_NEAR(ToFloat(sample.velocity(StepRateSample::kBurstBody).x()),
+                320.0f * dt, 1e-3f)
+        << rate;
+    EXPECT_NEAR(ToFloat(sample.velocity(StepRateSample::kEveryStepBody).x()),
+                4.0f * static_cast<float>(rate), 0.01f)
+        << rate;
+    sample.End();
+  }
+}
+
+// Chapter 11, exercise "hover": critically damped, the controller reaches
+// the height without overshooting; under-damped, it overshoots by the
+// discrete step's turn and shrink, a little less than the continuous
+// exp(-z pi / sqrt(1 - z^2))
+TEST(JetpackSolutions, HoverControllerHoldsTheHeight) {
+  const auto run = [](int damping_tenths) {
+    auto sample = std::make_unique<HoverSample>();
+    BeginWith(*sample, {{HoverSample::kDampingRatio, damping_tenths}});
+    RunSteps(*sample, HoverSample::kMeasuredSteps);
+    return sample;
+  };
+  const auto critical = run(10);
+  EXPECT_LT(ToFloat(critical->overshoot()), 1e-3f);
+  EXPECT_NEAR(ToFloat(critical->height()), 3.0f, 0.01f);
+  EXPECT_NEAR(ToFloat(critical->settling_time()), 1.97f, 0.02f);
+
+  const auto under = run(7);
+  const float error = ToFloat(under->target() - under->start_height());
+  const float zeta = 0.7f;
+  const float s = 4.0f * ToFloat(neko::Sample::kFixedDeltaTime);
+  const float det = 1.0f - 2.0f * zeta * s;
+  const float phi =
+      std::acos((2.0f - s * s - 2.0f * zeta * s) / (2.0f * std::sqrt(det)));
+  const float discrete = error * std::pow(std::sqrt(det), kPi / phi);
+  const float continuous =
+      error * std::exp(-zeta * kPi / std::sqrt(1.0f - zeta * zeta));
+  EXPECT_NEAR(ToFloat(under->overshoot()), discrete, 2e-3f);
+  EXPECT_LT(ToFloat(under->overshoot()), continuous - 0.01f);
+}
+
+// Chapter 11, exercise "decaying thrust": the engine's apex is about 5 cm
+// above the slide's continuous curve, the thrust being held at its value at
+// the start of each step
+TEST(JetpackSolutions, DecayingThrustApexNearTheSlideCurve) {
+  DecayingThrustSample sample;
+  BeginWith(sample, {});
+  RunSteps(sample, 120);
+  const float dt = ToFloat(neko::Sample::kFixedDeltaTime);
+  EXPECT_NEAR(ToFloat(sample.decay_per_step()), std::exp(-5.0f * dt), 1e-5f);
+  EXPECT_NEAR(ToFloat(sample.burst_speed()), 320.0f * dt, 1e-3f);
+  ASSERT_TRUE(sample.apex_step().has_value());
+  EXPECT_EQ(*sample.apex_step(), 54);
+  const float above =
+      ToFloat(sample.apex_height()) - ToFloat(sample.slide_height());
+  EXPECT_GT(above, 0.045f);
+  EXPECT_LT(above, 0.06f);
+}
+
+// Chapter 11, exercise "terminal velocity": the fall settles where the drag
+// equals the weight, a little sooner than the continuous fall
+TEST(JetpackSolutions, DragReachesTheTerminalVelocity) {
+  struct Case {
+    int k1_hundredths;
+    int k2_thousandths;
+    float terminal;
+    float time_to_99;
+  };
+  const float g = 9.81f;
+  // atanh(0.99) for the quadratic drag, ln(100) for the linear one
+  const float quadratic_terminal = std::sqrt(g / 0.1f);
+  for (const Case& c :
+       {Case{0, 100, quadratic_terminal,
+             quadratic_terminal / g * std::atanh(0.99f)},
+        Case{100, 0, g, std::log(100.0f)},
+        Case{50, 50, (std::sqrt(0.25f + 4.0f * 0.05f * g) - 0.5f) / 0.1f,
+             0.0f}}) {
+    TerminalVelocitySample sample;
+    BeginWith(sample, {{TerminalVelocitySample::kLinear, c.k1_hundredths},
+                       {TerminalVelocitySample::kQuadratic, c.k2_thousandths}});
+    RunSteps(sample, TerminalVelocitySample::kMeasuredSteps);
+    EXPECT_NEAR(ToFloat(sample.predicted_terminal()), c.terminal,
+                1e-3f * c.terminal);
+    EXPECT_NEAR(ToFloat(sample.speed()), c.terminal, 1e-3f * c.terminal);
+    ASSERT_TRUE(sample.time_to_99().has_value());
+    if (c.time_to_99 > 0.0f) {
+      EXPECT_NEAR(ToFloat(*sample.time_to_99()), c.time_to_99,
+                  0.02f * c.time_to_99);
+      EXPECT_LT(ToFloat(*sample.time_to_99()), c.time_to_99);
+    }
+    sample.End();
+  }
 }
 
 int main(int argc, char** argv) {
