@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -22,6 +23,7 @@
 #include "tutorials/08_chain/chain_sample.h"
 #include "tutorials/09_spring/spring_sample.h"
 #include "tutorials/10_explosion/explosion_sample.h"
+#include "tutorials/11_jetpack/jetpack_sample.h"
 
 namespace {
 
@@ -31,6 +33,7 @@ using neko::tutorial::ChainSample;
 using neko::tutorial::ContactManifoldSample;
 using neko::tutorial::ExplosionSample;
 using neko::tutorial::FrictionSample;
+using neko::tutorial::JetpackSample;
 using neko::tutorial::OffCenterImpactSample;
 using neko::tutorial::PendulumSample;
 using neko::tutorial::RotatedBoxSample;
@@ -1204,6 +1207,112 @@ TEST(ExplosionTutorial, SameParametersSameRun) {
   registry.SetParameter(ExplosionSample::kWallOn, 0);
   const std::uint32_t changed = run();
   registry.SetParameter(ExplosionSample::kWallOn, 1);
+  const std::uint32_t restored = run();
+  EXPECT_NE(first, changed);
+  EXPECT_EQ(first, restored);
+}
+
+// The experiment of chapter 11: thrust gives T / m - g s, the wind closes
+// the gap to its speed by (1 - c dt / m) per step, the knockback jumps the
+// velocity by J / m
+struct JetpackRun {
+  float predicted_acceleration = 0.0f;
+  float measured_acceleration = 0.0f;
+  float predicted_drift = 0.0f;
+  float measured_drift = 0.0f;
+  float predicted_kick = 0.0f;
+  float measured_kick = 0.0f;
+  float hover_thrust = 0.0f;
+  int wind_steps = 0;
+};
+
+JetpackRun RunJetpack(int thrust, int mass_tenths, int gravity_scale_tenths,
+                      int wind_tenths, int knockback_tenths,
+                      int steps = JetpackSample::kKnockbackStep) {
+  JetpackSample sample;
+  auto values = sample.parameters();
+  values[JetpackSample::kThrust].value = thrust;
+  values[JetpackSample::kMass].value = mass_tenths;
+  values[JetpackSample::kGravityScale].value = gravity_scale_tenths;
+  values[JetpackSample::kWind].value = wind_tenths;
+  values[JetpackSample::kKnockback].value = knockback_tenths;
+  sample.Begin(neko::SampleContext{neko::sample_config::kWorldBounds});
+  for (int step = 0; step < steps; ++step) {
+    sample.FixedUpdate();
+  }
+  JetpackRun run;
+  run.predicted_acceleration = ToFloat(sample.predicted_acceleration());
+  run.measured_acceleration =
+      ToFloat(sample.measured_acceleration().value_or(Scalar{0}));
+  run.predicted_drift = ToFloat(sample.predicted_drift());
+  run.measured_drift = ToFloat(sample.measured_drift().value_or(Scalar{0}));
+  run.predicted_kick = ToFloat(sample.predicted_kick());
+  run.measured_kick = ToFloat(sample.measured_kick().value_or(Scalar{0}));
+  run.hover_thrust = ToFloat(sample.hover_thrust());
+  run.wind_steps = sample.wind_steps();
+  return run;
+}
+
+class JetpackTest
+    : public ::testing::TestWithParam<std::tuple<int, int, int, int, int>> {};
+
+TEST_P(JetpackTest, MatchesThePredictions) {
+  const auto [thrust, mass, scale, wind, knockback] = GetParam();
+  const JetpackRun run = RunJetpack(thrust, mass, scale, wind, knockback);
+  EXPECT_NEAR(run.measured_acceleration, run.predicted_acceleration,
+              0.01f * std::abs(run.predicted_acceleration) + 0.02f);
+  ASSERT_GT(run.wind_steps, 0);
+  EXPECT_NEAR(run.measured_drift, run.predicted_drift,
+              0.002f * std::abs(run.predicted_drift) + 2e-3f);
+  EXPECT_NEAR(run.measured_kick, run.predicted_kick,
+              0.002f * std::abs(run.predicted_kick) + 1e-3f);
+}
+
+INSTANTIATE_TEST_SUITE_P(Chapter11, JetpackTest,
+                         ::testing::Values(std::make_tuple(30, 10, 10, 30, 40),
+                                           std::make_tuple(30, 20, 10, 30, 40),
+                                           std::make_tuple(20, 10, 5, -20, 40),
+                                           std::make_tuple(60, 40, 10, 50, 100),
+                                           std::make_tuple(10, 5, 0, 30, 20)));
+
+// Doubling the mass halves the kick and the thrust's share of the
+// acceleration; the hover thrust is m g s
+TEST(JetpackTutorial, MassAndGravityScale) {
+  const JetpackRun light = RunJetpack(30, 10, 10, 30, 40);
+  const JetpackRun heavy = RunJetpack(30, 20, 10, 30, 40);
+  EXPECT_NEAR(heavy.measured_kick, 0.5f * light.measured_kick, 1e-3f);
+  EXPECT_NEAR(light.hover_thrust, 9.81f, 0.01f);
+  EXPECT_NEAR(heavy.hover_thrust, 2.0f * 9.81f, 0.02f);
+  EXPECT_NEAR(RunJetpack(30, 10, 0, 30, 40).hover_thrust, 0.0f, 1e-3f);
+  // Half gravity: the same thrust lifts faster
+  const JetpackRun floaty = RunJetpack(30, 10, 5, 30, 40);
+  EXPECT_NEAR(floaty.measured_acceleration - light.measured_acceleration,
+              0.5f * 9.81f, 0.05f);
+}
+
+// Below the hover thrust the player stays on the ground: no wind, no drift
+TEST(JetpackTutorial, TooWeakStaysDown) {
+  const JetpackRun run = RunJetpack(9, 10, 10, 30, 40);
+  EXPECT_EQ(run.wind_steps, 0);
+  EXPECT_NEAR(run.measured_acceleration, 0.0f, 0.02f);
+}
+
+TEST(JetpackTutorial, SameParametersSameRun) {
+  std::vector<neko::SampleRegistry::Entry> samples;
+  samples.push_back({"11 Jetpack", std::make_unique<JetpackSample>()});
+  neko::SampleRegistry registry{std::move(samples)};
+  const neko::SampleContext context{neko::sample_config::kWorldBounds};
+  const auto run = [&registry] {
+    for (int step = 0; step < 240; ++step) {
+      registry.FixedUpdate();
+    }
+    return registry.current()->GenerateChecksum();
+  };
+  registry.Select(0, context);
+  const std::uint32_t first = run();
+  registry.SetParameter(JetpackSample::kWind, -30);
+  const std::uint32_t changed = run();
+  registry.SetParameter(JetpackSample::kWind, 30);
   const std::uint32_t restored = run();
   EXPECT_NE(first, changed);
   EXPECT_EQ(first, restored);
