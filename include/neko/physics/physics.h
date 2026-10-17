@@ -4,6 +4,8 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <span>
 
 #include "neko/bsh/bsh.h"
 #include "neko/bsh/sweep_and_prune.h"
@@ -15,6 +17,7 @@
 #include "neko/physics/contact_solver.h"
 #include "neko/physics/joint.h"
 #include "neko/physics/physics_type.h"
+#include "neko/physics/query.h"
 
 /// NekoPhysics: a small deterministic 2D physics library for games.
 ///
@@ -58,6 +61,11 @@
 ///   @ref PhysicsWorld::AddDistanceJoint).
 /// - @ref ContactListener is the interface your game implements to receive
 ///   trigger and collision enter/exit events.
+/// - @ref Collider::category and @ref Collider::mask choose which colliders
+///   meet at all (@ref ShouldCollide), and world queries ask what is at a
+///   place without stepping: @ref PhysicsWorld::OverlapCircle,
+///   @ref PhysicsWorld::OverlapAabb and @ref PhysicsWorld::Raycast, seen
+///   through a @ref QueryFilter.
 /// - Collision detection runs in two phases. The broadphase, a
 ///   @ref BoundingSurfaceHierarchy (@ref SweepAndPrune by default, or a
 ///   @ref QuadTree), cheaply finds pairs whose bounding boxes overlap. The
@@ -275,6 +283,11 @@ struct Body {
 ///   are reported through the `OnCollision*` events.
 ///
 /// A pair is a trigger pair as soon as one of its two colliders is a trigger.
+///
+/// `category` and `mask` filter pairs before any of that: two colliders meet
+/// only when each one's category is in the other's mask (see
+/// @ref ShouldCollide). The defaults (category 1, every bit of the mask) let
+/// everything meet.
 struct Collider {
   /// Free pointer for your game (e.g. the entity that owns the collider).
   ///
@@ -309,13 +322,52 @@ struct Collider {
   ShapeIndex shape_index{};
   /// Kind of shape; @ref ShapeType::kNone marks a free slot.
   ShapeType type = ShapeType::kNone;
+  /// What the collider is, as one bit (or several) of 16: player, enemy,
+  /// wall, bullet... Your game picks the meaning of each bit. 1 by default.
+  ///
+  /// World queries see it through @ref QueryFilter::mask.
+  std::uint16_t category = 1;
+  /// The categories this collider meets, one bit each. Every bit by default:
+  /// it meets everything.
+  ///
+  /// The test is symmetric (see @ref ShouldCollide): a bullet whose mask
+  /// leaves out the bullet bit ignores other bullets, whatever their own
+  /// mask says.
+  std::uint16_t mask = 0xFFFF;
   /// `true` for a trigger (detects overlaps only), `false` for a solid
   /// collider. Colliders are triggers by default.
   bool is_trigger = true;
 };
+
+/// Returns whether two colliders meet: each one's category is in the other's
+/// mask.
+///
+/// The test runs on every broadphase pair before the shapes are compared. A
+/// pair that fails it does nothing at all: no contact, no push, no trigger or
+/// collision event. Because both directions must agree, either collider can
+/// refuse the other.
+///
+/// @code
+/// constexpr std::uint16_t kPlayer = 1 << 1;
+/// constexpr std::uint16_t kBullet = 1 << 2;
+/// // Players' bullets fly through players and through each other
+/// bullet.category = kBullet;
+/// bullet.mask = 0xFFFF & ~(kPlayer | kBullet);
+/// @endcode
+///
+/// @param a First collider.
+/// @param b Second collider.
+/// @return `true` when `(a.category & b.mask) != 0` and
+/// `(b.category & a.mask) != 0`.
+[[nodiscard]] constexpr bool ShouldCollide(const Collider& a,
+                                           const Collider& b) {
+  return (a.category & b.mask) != 0 && (b.category & a.mask) != 0;
+}
 /// Returns a hash of the simulation fields of `collider`.
 ///
 /// `user_data` is left out: it is game data, not simulation state.
+/// `category` and `mask` are hashed only when they differ from their
+/// defaults, so worlds that don't filter keep their checksums.
 ///
 /// @param collider @ref Collider to hash.
 /// @return FNV-1a hash of the collider's fields.
@@ -595,8 +647,10 @@ class PhysicsWorld {
   /// Runs the narrowphase on the broadphase pairs: exact tests, contact
   /// resolution for solid pairs and enter/exit events.
   ///
-  /// Skips pairs where a body is inactive, both bodies are static, or both
-  /// colliders belong to the same body. Called by @ref Step after
+  /// Skips pairs where a body is inactive, both bodies are static, both
+  /// colliders belong to the same body, @ref ShouldCollide refuses the pair,
+  /// or a joint links two solid colliders' bodies (see
+  /// @ref DistanceJoint::collide_connected). Called by @ref Step after
   /// @ref ResolveBroadphase; public for tests and profiling.
   void ResolveNarrowphase();
   /// Sorts this step's touching pairs by @ref ColliderPair (c1, then c2).
@@ -778,6 +832,102 @@ class PhysicsWorld {
   /// @return The distance between the anchors.
   [[nodiscard]] Scalar JointDistance(JointIndex index) const;
 
+  /// Finds the colliders that overlap a circle: an explosion radius, an
+  /// area of effect, "is anything here?".
+  ///
+  /// Queries read the bodies as they are now (positions you just set
+  /// included), not the last step's broadphase, and change nothing. They
+  /// test every collider in table order (a scan, simple and exact; fine for
+  /// a few hundred colliders and a few queries per step). Touching counts as
+  /// overlapping, like contacts.
+  ///
+  /// Results go in a buffer you own, in collider index order; the return
+  /// value counts every overlap, so a count above `hits.size()` means the
+  /// buffer was too small and only the first `hits.size()` were written.
+  ///
+  /// @code
+  /// std::array<neko::ColliderIndex, 16> hits;
+  /// const std::size_t count = world.OverlapCircle(center, radius, hits);
+  /// for (std::size_t i = 0; i < std::min(count, hits.size()); ++i) {
+  ///   const neko::BodyIndex body = world.collider(hits[i]).body_index;
+  ///   // ...
+  /// }
+  /// @endcode
+  ///
+  /// @note A body with several colliders can appear several times: your game
+  /// decides whether that is one hit or several (one damage event per body,
+  /// usually).
+  /// @param center Center of the circle, in meters.
+  /// @param radius Radius, in meters.
+  /// @param hits Output buffer, can be empty to only count.
+  /// @param filter Which colliders count, see @ref QueryFilter.
+  /// @return The number of overlapping colliders, which can exceed
+  /// `hits.size()`.
+  std::size_t OverlapCircle(Vec2f center, Scalar radius,
+                            std::span<ColliderIndex> hits,
+                            QueryFilter filter = {}) const;
+  /// Finds the colliders that overlap an axis-aligned box.
+  ///
+  /// Same rules as @ref OverlapCircle: current positions, table order,
+  /// touching counts, total count returned.
+  ///
+  /// @param box The box, in world coordinates.
+  /// @param hits Output buffer, can be empty to only count.
+  /// @param filter Which colliders count, see @ref QueryFilter.
+  /// @return The number of overlapping colliders, which can exceed
+  /// `hits.size()`.
+  std::size_t OverlapAabb(const Aabbf& box, std::span<ColliderIndex> hits,
+                          QueryFilter filter = {}) const;
+  /// Casts a segment from `start` to `end` and finds the colliders it
+  /// touches, nearest first: line of sight, bullets, lasers, ground probes.
+  ///
+  /// For each shape the hit is where the segment first enters it (see
+  /// @ref RaycastHit). A circle is solved as a quadratic: the segment's
+  /// closest approach to the center, then back by
+  /// `sqrt(radius^2 - distance^2)`. A box is clipped against its two slabs
+  /// (between its left and right sides, between its bottom and top): the
+  /// segment is inside the box between the latest entry and the earliest
+  /// exit. An oriented box is the same in its own frame.
+  ///
+  /// The rules:
+  /// - Hits are sorted by @ref RaycastHit::fraction, and equal fractions by
+  ///   collider index, so the order never depends on the platform.
+  /// - A segment that starts inside a shape (or on its boundary) hits it at
+  ///   fraction 0, with a zero normal.
+  /// - A segment that only grazes a shape (tangent to a circle, along a box
+  ///   side) hits it: touching counts.
+  /// - A segment of length zero hits the shapes that contain its start.
+  /// - When more colliders are hit than `hits` holds, the nearest
+  ///   `hits.size()` are kept, and the return value still counts them all.
+  ///
+  /// @note With @ref Fixed16 keep the segment under about 100 m: the circle
+  /// test squares distances of the order of its length.
+  /// @param start Start of the segment, in meters.
+  /// @param end End of the segment, in meters.
+  /// @param hits Output buffer, nearest hits first; a buffer of one keeps
+  /// the nearest (see @ref RaycastClosest).
+  /// @param filter Which colliders count, see @ref QueryFilter.
+  /// @return The number of colliders hit, which can exceed `hits.size()`.
+  std::size_t Raycast(Vec2f start, Vec2f end, std::span<RaycastHit> hits,
+                      QueryFilter filter = {}) const;
+  /// Returns the nearest hit of a segment, if any: @ref Raycast with a
+  /// buffer of one.
+  ///
+  /// @code
+  /// // Can the guard see the player? Only walls block the view
+  /// const auto hit = world.RaycastClosest(guard_eye, player_center,
+  ///                                       {.mask = kWall | kPlayer});
+  /// const bool sees = hit.has_value() &&
+  ///                   world.collider(hit->collider).category == kPlayer;
+  /// @endcode
+  ///
+  /// @param start Start of the segment, in meters.
+  /// @param end End of the segment, in meters.
+  /// @param filter Which colliders count, see @ref QueryFilter.
+  /// @return The nearest @ref RaycastHit, or no value when nothing is hit.
+  [[nodiscard]] std::optional<RaycastHit> RaycastClosest(
+      Vec2f start, Vec2f end, QueryFilter filter = {}) const;
+
   /// Returns the collider at `collider_index`.
   ///
   /// @param collider_index A valid collider index.
@@ -938,6 +1088,13 @@ class PhysicsWorld {
   [[nodiscard]] bool UpdateJointFilter();
   // Whether a joint without collide_connected links the two bodies
   [[nodiscard]] bool AreJointFiltered(BodyIndex body1, BodyIndex body2) const;
+  // Whether a query sees the collider: a live shape on an active body, in the
+  // filter's mask, and solid unless the filter takes triggers
+  [[nodiscard]] bool IsQueried(const Collider& collider,
+                               QueryFilter filter) const;
+  // Where the segment from start by delta (end - start) enters the collider
+  [[nodiscard]] std::optional<RaycastHit> RaycastCollider(
+      const Collider& collider, Vec2f start, Vec2f delta) const;
 
   PhysicsWorldConfig config_;
   SweepAndPrune default_broadphase_;

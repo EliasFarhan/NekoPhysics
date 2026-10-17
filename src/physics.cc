@@ -384,6 +384,63 @@ Scalar InverseInertia(Scalar inverse_mass, Scalar unit_inertia) {
   return unit_inertia > Scalar{0} ? inverse_mass / unit_inertia : Scalar{0};
 }
 
+// num / den for a ray parameter, den != 0. Only fractions between 0 and 1
+// matter, so a quotient beyond 2 is returned as +-2: dividing by a tiny
+// component of the ray direction would overflow Fixed16 otherwise.
+Scalar RayFraction(Scalar num, Scalar den) {
+  if (Abs(num) >= Scalar{2} * Abs(den)) {
+    return (num < Scalar{0}) != (den < Scalar{0}) ? Scalar{-2} : Scalar{2};
+  }
+  return num / den;
+}
+
+// Where the segment start + t delta, t from 0 to 1, enters the box centered
+// at the origin with that half size (all in the box's frame). Slab method:
+// along each axis the segment is between the two sides for t in an interval;
+// it is in the box on the overlap of both intervals, which begins at the
+// latest entry. The entry axis gives the normal (x wins a tie). A start
+// inside the box (boundary included) hits at t = 0 with a zero normal.
+struct LocalHit {
+  Scalar fraction;
+  Vec2f normal;
+};
+std::optional<LocalHit> RaycastLocalBox(Vec2f start, Vec2f delta,
+                                        Vec2f half_size) {
+  if (Abs(start.x()) <= half_size.x() && Abs(start.y()) <= half_size.y()) {
+    return LocalHit{Scalar{0}, Vec2f::Zero()};
+  }
+  Scalar enter{-2};
+  Scalar exit{2};
+  Vec2f normal{};
+  const std::array<Vec2f, 2> axes = {Vec2f::Right(), Vec2f::Up()};
+  for (std::size_t axis = 0; axis < 2; ++axis) {
+    const Scalar origin = axis == 0 ? start.x() : start.y();
+    const Scalar direction = axis == 0 ? delta.x() : delta.y();
+    const Scalar half = axis == 0 ? half_size.x() : half_size.y();
+    if (direction == Scalar{0}) {
+      // Parallel to these sides: inside the slab for every t, or never
+      if (Abs(origin) > half) {
+        return std::nullopt;
+      }
+      continue;
+    }
+    const Scalar to_low = RayFraction(-half - origin, direction);
+    const Scalar to_high = RayFraction(half - origin, direction);
+    const bool forward = direction > Scalar{0};
+    const Scalar axis_enter = forward ? to_low : to_high;
+    const Scalar axis_exit = forward ? to_high : to_low;
+    if (axis_enter > enter) {
+      enter = axis_enter;
+      normal = forward ? -axes[axis] : axes[axis];
+    }
+    exit = Min(exit, axis_exit);
+  }
+  if (enter > exit || enter < Scalar{0} || enter > Scalar{1}) {
+    return std::nullopt;
+  }
+  return LocalHit{enter, normal};
+}
+
 // Turns the body by angular_velocity * dt. A body that doesn't turn keeps its
 // rotation without recomputing the sine and cosine.
 void Turn(Body& body, Scalar dt) {
@@ -423,6 +480,12 @@ std::uint32_t GenerateChecksum(const Collider& collider) {
   checksum.Add(collider.shape_index);
   checksum.Add(collider.type);
   checksum.Add(collider.is_trigger);
+  // Only when filtering: worlds that don't filter keep their checksums
+  if (collider.category != Collider{}.category ||
+      collider.mask != Collider{}.mask) {
+    checksum.Add(static_cast<std::uint32_t>(collider.category));
+    checksum.Add(static_cast<std::uint32_t>(collider.mask));
+  }
   return checksum.Get();
 }
 
@@ -766,6 +829,9 @@ NEKO_HOT void PhysicsWorld::ResolveNarrowphase() {
       continue;
     }
     if (collider1.body_index == collider2.body_index) {
+      continue;
+    }
+    if (!ShouldCollide(collider1, collider2)) {
       continue;
     }
     const bool is_trigger = collider1.is_trigger || collider2.is_trigger;
@@ -1392,6 +1458,217 @@ NEKO_HOT Aabbf PhysicsWorld::GetAabb(const Collider& collider) const {
   }
   return Circlef{center, circles_[collider.shape_index.index()].radius}
       .GetAabb();
+}
+
+bool PhysicsWorld::IsQueried(const Collider& collider,
+                             QueryFilter filter) const {
+  return collider.type != ShapeType::kNone &&
+         bodies_[collider.body_index.index()].is_active &&
+         (collider.category & filter.mask) != 0 &&
+         (filter.include_triggers || !collider.is_trigger);
+}
+
+std::size_t PhysicsWorld::OverlapCircle(Vec2f center, Scalar radius,
+                                        std::span<ColliderIndex> hits,
+                                        QueryFilter filter) const {
+  const Circlef query{center, radius};
+  std::size_t count = 0;
+  for (const Collider& collider : colliders_) {
+    if (!IsQueried(collider, filter)) {
+      continue;
+    }
+    const Body& body = bodies_[collider.body_index.index()];
+    const Vec2f shape_center = WorldCenter(body, collider);
+    bool overlaps = false;
+    switch (collider.type) {
+      case ShapeType::kCircle:
+        overlaps = Intersect(
+            query, Circlef{shape_center,
+                           circles_[collider.shape_index.index()].radius});
+        break;
+      case ShapeType::kAabb:
+        overlaps = Intersect(
+            query,
+            Aabbf::FromCenter(shape_center,
+                              aabbs_[collider.shape_index.index()].half_size));
+        break;
+      case ShapeType::kOrientedBox:
+        overlaps = CollideBoxCircle(
+            BoxShape{shape_center, body.rotation.x_axis(),
+                     body.rotation.y_axis(),
+                     oriented_boxes_[collider.shape_index.index()].half_size},
+            center, radius, nullptr);
+        break;
+      default:
+        break;
+    }
+    if (overlaps) {
+      if (count < hits.size()) {
+        hits[count] = collider.collider_index;
+      }
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::size_t PhysicsWorld::OverlapAabb(const Aabbf& box,
+                                      std::span<ColliderIndex> hits,
+                                      QueryFilter filter) const {
+  const BoxShape query{box.GetCenter(), Vec2f::Right(), Vec2f::Up(),
+                       box.GetHalfSize()};
+  std::size_t count = 0;
+  for (const Collider& collider : colliders_) {
+    if (!IsQueried(collider, filter)) {
+      continue;
+    }
+    const Body& body = bodies_[collider.body_index.index()];
+    const Vec2f shape_center = WorldCenter(body, collider);
+    bool overlaps = false;
+    switch (collider.type) {
+      case ShapeType::kCircle:
+        overlaps = Intersect(
+            box, Circlef{shape_center,
+                         circles_[collider.shape_index.index()].radius});
+        break;
+      case ShapeType::kAabb:
+        overlaps = Intersect(
+            box,
+            Aabbf::FromCenter(shape_center,
+                              aabbs_[collider.shape_index.index()].half_size));
+        break;
+      case ShapeType::kOrientedBox:
+        overlaps = CollideBoxes(
+            query,
+            BoxShape{shape_center, body.rotation.x_axis(),
+                     body.rotation.y_axis(),
+                     oriented_boxes_[collider.shape_index.index()].half_size},
+            nullptr);
+        break;
+      default:
+        break;
+    }
+    if (overlaps) {
+      if (count < hits.size()) {
+        hits[count] = collider.collider_index;
+      }
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::optional<RaycastHit> PhysicsWorld::RaycastCollider(
+    const Collider& collider, Vec2f start, Vec2f delta) const {
+  const Body& body = bodies_[collider.body_index.index()];
+  const Vec2f center = WorldCenter(body, collider);
+  RaycastHit hit{.collider = collider.collider_index,
+                 .body = collider.body_index};
+  switch (collider.type) {
+    case ShapeType::kCircle: {
+      const Scalar radius = circles_[collider.shape_index.index()].radius;
+      const Vec2f to_start = start - center;
+      if (CompareLength(to_start, radius) <= 0) {
+        hit.point = start;
+        return hit;
+      }
+      const Scalar length = delta.Length();
+      if (length == Scalar{0}) {
+        return std::nullopt;
+      }
+      // Unit direction, component by component like the joints: a tiny
+      // segment doesn't overflow a reciprocal
+      const Vec2f direction{delta.x() / length, delta.y() / length};
+      // Distance along the segment to the closest approach of the center, and
+      // the distance of the center from the line there. Using the distance to
+      // the line instead of |to_start|^2 - along^2 keeps the squares small.
+      const Scalar along = -Vec2f::Dot(to_start, direction);
+      const Scalar off_line = Abs(Vec2f::Cross(to_start, direction));
+      if (off_line > radius) {
+        return std::nullopt;
+      }
+      const Scalar distance =
+          along - Sqrt((radius - off_line) * (radius + off_line));
+      if (distance < Scalar{0} || distance > length) {
+        return std::nullopt;
+      }
+      hit.fraction = distance / length;
+      hit.point = start + direction * distance;
+      const Vec2f outward = hit.point - center;
+      hit.normal = radius > Scalar{0}
+                       ? Vec2f{outward.x() / radius, outward.y() / radius}
+                       : -direction;
+      return hit;
+    }
+    case ShapeType::kAabb:
+    case ShapeType::kOrientedBox: {
+      // An AabbCollider is an oriented box along the world axes
+      const bool is_aabb = collider.type == ShapeType::kAabb;
+      const Vec2f axis_x = is_aabb ? Vec2f::Right() : body.rotation.x_axis();
+      const Vec2f axis_y = is_aabb ? Vec2f::Up() : body.rotation.y_axis();
+      const Vec2f half_size =
+          is_aabb ? aabbs_[collider.shape_index.index()].half_size
+                  : oriented_boxes_[collider.shape_index.index()].half_size;
+      const Vec2f to_start = start - center;
+      const auto local = RaycastLocalBox(
+          {Vec2f::Dot(to_start, axis_x), Vec2f::Dot(to_start, axis_y)},
+          {Vec2f::Dot(delta, axis_x), Vec2f::Dot(delta, axis_y)}, half_size);
+      if (!local.has_value()) {
+        return std::nullopt;
+      }
+      hit.fraction = local->fraction;
+      hit.point = start + delta * local->fraction;
+      hit.normal = axis_x * local->normal.x() + axis_y * local->normal.y();
+      return hit;
+    }
+    default:
+      return std::nullopt;
+  }
+}
+
+std::size_t PhysicsWorld::Raycast(Vec2f start, Vec2f end,
+                                  std::span<RaycastHit> hits,
+                                  QueryFilter filter) const {
+  const Vec2f delta = end - start;
+  // The segment's box: shapes whose box misses it can't be hit
+  const Aabbf segment_box{
+      Vec2f{Min(start.x(), end.x()), Min(start.y(), end.y())},
+      Vec2f{Max(start.x(), end.x()), Max(start.y(), end.y())}};
+  std::size_t count = 0;
+  for (const Collider& collider : colliders_) {
+    if (!IsQueried(collider, filter) ||
+        !Intersect(segment_box, GetAabb(collider))) {
+      continue;
+    }
+    const auto hit = RaycastCollider(collider, start, delta);
+    if (!hit.has_value()) {
+      continue;
+    }
+    // Keep the nearest hits.size() in order. Colliders come in index order
+    // and only a strictly smaller fraction moves a hit up, so equal
+    // fractions stay in index order.
+    const std::size_t kept = std::min(count, hits.size());
+    if (kept < hits.size() ||
+        (kept > 0 && hit->fraction < hits[kept - 1].fraction)) {
+      std::size_t slot = kept < hits.size() ? kept : kept - 1;
+      while (slot > 0 && hit->fraction < hits[slot - 1].fraction) {
+        hits[slot] = hits[slot - 1];
+        --slot;
+      }
+      hits[slot] = *hit;
+    }
+    ++count;
+  }
+  return count;
+}
+
+std::optional<RaycastHit> PhysicsWorld::RaycastClosest(
+    Vec2f start, Vec2f end, QueryFilter filter) const {
+  std::array<RaycastHit, 1> hit{};
+  if (Raycast(start, end, hit, filter) == 0) {
+    return std::nullopt;
+  }
+  return hit[0];
 }
 
 NEKO_HOT void PhysicsWorld::ResolveBroadphase() {
