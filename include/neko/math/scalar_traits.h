@@ -319,11 +319,24 @@ struct ScalarTraits<Fixed<T, Exp, MulT>> {
   /// The ratio `num / den`, without floating point (truncated toward
   /// zero).
   ///
+  /// Computed as `num * 2^Exp / den` in 64 bits, so `num` and `den` may be
+  /// any `int` (`FromRatio(100000, 1000)` is 100); only the quotient must
+  /// fit in the integer part. Same bits as `Type{num, den}` wherever that one
+  /// doesn't overflow.
+  ///
   /// @param num The numerator.
   /// @param den The denominator, not 0.
   /// @return `num / den`.
   [[nodiscard]] static constexpr Type FromRatio(int num, int den) noexcept {
-    return Type{static_cast<T>(num), static_cast<T>(den)};
+    const auto numerator =
+        static_cast<std::int64_t>(num) * (std::int64_t{1} << Exp);
+    if constexpr (sizeof(T) == sizeof(std::int32_t)) {
+      // Hardware divider on the DS
+      return Type::FromUnderlyingValue(
+          static_cast<T>(internal::Div64(numerator, den)));
+    } else {
+      return Type::FromUnderlyingValue(static_cast<T>(numerator / den));
+    }
   }
   /// Converts @p value to `float`, for display only.
   ///
@@ -335,6 +348,20 @@ struct ScalarTraits<Fixed<T, Exp, MulT>> {
     return static_cast<float>(value);
   }
 };
+
+namespace internal {
+// True when ScalarTraits<T> exists and says fixed point, false for any other
+// type, including those without traits (double, int, the sixit float): generic
+// code such as Vec2<double>::Length() keeps compiling
+template <typename T>
+inline constexpr bool kIsFixedPointScalar = [] {
+  if constexpr (requires { ScalarTraits<T>::kIsFixedPoint; }) {
+    return ScalarTraits<T>::kIsFixedPoint;
+  } else {
+    return false;
+  }
+}();
+}  // namespace internal
 
 }  // namespace neko
 

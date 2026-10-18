@@ -14,6 +14,7 @@
 #include "neko/math/angle.h"
 #include "neko/math/const.h"
 #include "neko/math/fixed.h"
+#include "neko/math/vec2.h"
 
 namespace {
 
@@ -269,6 +270,67 @@ TEST(Angle, AsinAndAtan2ReturnRadians) {
   // Sin(Asin(x)) and the direction of Atan2 come back
   const auto x = Traits::FromRatio(3, 5);
   EXPECT_NEAR(Traits::ToFloat(neko::Sin(neko::Asin(x))), 0.6f, 1e-4f);
+}
+
+// The float tolerance is checked against the exact angle of the float input
+TEST(FloatTraits, AngleToleranceHolds) {
+  const double tolerance = FloatTraits::AngleTolerance();
+  double worst = 0.0;
+  for (int i = -20000; i <= 20000; ++i) {
+    const float x = static_cast<float>(i) / 20000.0f;
+    worst = std::max(worst, std::abs(static_cast<double>(FloatTraits::Asin(x)) -
+                                     std::asin(static_cast<double>(x))));
+  }
+  for (int iy = -100; iy <= 100; ++iy) {
+    for (int ix = -100; ix <= 100; ++ix) {
+      const float y = static_cast<float>(iy) / 7.0f;
+      const float x = static_cast<float>(ix) / 7.0f;
+      worst = std::max(
+          worst,
+          std::abs(static_cast<double>(FloatTraits::Atan2(y, x)) -
+                   std::atan2(static_cast<double>(y), static_cast<double>(x))));
+    }
+  }
+  std::cout << "float inverse trig worst error " << worst << " rad\n";
+  EXPECT_LE(worst, tolerance);
+}
+
+// Large numerators no longer go through the integer part
+TEST(ScalarTraits, FromRatioWideNumerators) {
+  EXPECT_EQ(Fixed16Traits::FromRatio(100000, 1000), neko::Fixed16{100});
+  EXPECT_EQ(Fixed16Traits::FromRatio(-1000000, 100000), neko::Fixed16{-10});
+  EXPECT_EQ(Fixed16Traits::FromRatio(1, 100000), Raw(0));
+  // Same bits as Fixed16{num, den} wherever that one doesn't overflow
+  for (int num = -300; num <= 300; num += 7) {
+    for (int den = -250; den <= 250; den += 11) {
+      if (den == 0) {
+        continue;
+      }
+      ASSERT_EQ(Fixed16Traits::FromRatio(num, den), (neko::Fixed16{num, den}))
+          << num << " / " << den;
+    }
+  }
+  using Fixed8Traits = neko::ScalarTraits<neko::Fixed8>;
+  EXPECT_EQ(Fixed8Traits::FromRatio(300, 200),
+            neko::Fixed8::FromUnderlyingValue(96));
+}
+
+// Vec2 of a type without ScalarTraits keeps its float path
+TEST(Vec2Traits, TypesWithoutTraitsKeepLength) {
+  EXPECT_EQ((neko::Vec2<double>{3.0, 4.0}.Length()), 5.0);
+  EXPECT_EQ((neko::Vec2<double>{3.0, 4.0}.Normalized().x()), 0.6);
+  EXPECT_EQ(neko::CompareLength(neko::Vec2i{3, 4}, 5), 0);
+  EXPECT_LT(neko::CompareLength(neko::Vec2i{3, 4}, 6), 0);
+}
+
+// Fixed8 lengths saturate at the largest Fixed8 instead of wrapping
+TEST(Vec2Traits, Fixed8LengthSaturates) {
+  const auto one_and_half = neko::Fixed8::FromUnderlyingValue(96);
+  const neko::Vec2<neko::Fixed8> v{one_and_half, one_and_half};
+  EXPECT_EQ(v.Length(), std::numeric_limits<neko::Fixed8>::max());
+  const auto half = neko::Fixed8::FromUnderlyingValue(32);
+  const neko::Vec2<neko::Fixed8> small{half, neko::Fixed8{0}};
+  EXPECT_EQ(small.Length(), half);
 }
 
 }  // namespace

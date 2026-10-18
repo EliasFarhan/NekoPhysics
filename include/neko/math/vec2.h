@@ -19,7 +19,7 @@ namespace internal {
 // otherwise
 template <typename T>
 [[nodiscard]] constexpr auto WideSquare(T value) noexcept {
-  if constexpr (ScalarTraits<T>::kIsFixedPoint) {
+  if constexpr (kIsFixedPointScalar<T>) {
     const auto raw = static_cast<std::int64_t>(value.underlying_value());
     return static_cast<std::uint64_t>(raw * raw);
   } else {
@@ -265,15 +265,17 @@ class Vec2 {
   /// loses small vectors; a length beyond the largest @ref Fixed16 saturates
   /// to it.
   [[nodiscard]] T Length() const {
-    if constexpr (ScalarTraits<T>::kIsFixedPoint) {
+    if constexpr (internal::kIsFixedPointScalar<T>) {
       // Sum of squares in Q32.32: SquareLength() overflows past ~181 and rounds
-      // to zero below ~1/256
+      // to zero below ~1/256. Saturates at the largest value of the storage
+      // type (int32 for Fixed16, int8 for Fixed8)
+      using Bits = typename ScalarTraits<T>::Bits;
       const auto root = internal::ISqrt64(internal::WideSquare(x_) +
                                           internal::WideSquare(y_));
       constexpr auto max_raw =
-          static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max());
+          static_cast<std::uint32_t>(std::numeric_limits<Bits>::max());
       return T::FromUnderlyingValue(
-          static_cast<std::int32_t>(root > max_raw ? max_raw : root));
+          static_cast<Bits>(root > max_raw ? max_raw : root));
     } else {
       return Sqrt(SquareLength());
     }
