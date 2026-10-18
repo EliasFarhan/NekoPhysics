@@ -10,6 +10,7 @@
 #include "neko/bsh/bsh.h"
 #include "neko/bsh/sweep_and_prune.h"
 #include "neko/core/allocator.h"
+#include "neko/math/angle.h"
 #include "neko/math/rotation.h"
 #include "neko/math/shape.h"
 #include "neko/math/vec2.h"
@@ -294,16 +295,26 @@ struct Body {
 ///
 /// A pair is a trigger pair as soon as one of its two colliders is a trigger.
 ///
+/// A solid collider can also be one-way (`is_one_way`): a platform that
+/// blocks shapes coming from one side only. `is_enabled` takes a collider
+/// out of the simulation without removing it.
+///
 /// `category` and `mask` filter pairs before any of that: two colliders meet
 /// only when each one's category is in the other's mask (see
 /// @ref ShouldCollide). The defaults (category 1, every bit of the mask) let
 /// everything meet.
 struct Collider {
-  /// Free pointer for your game (e.g. the entity that owns the collider).
+  /// Integer id for your game, 0 by default: typically the index of the
+  /// entity that owns the collider in one of your game's tables.
   ///
-  /// The physics never reads it and it is not part of the checksum. Prefer an
-  /// index-like value over a real pointer if the world is copied for rollback.
-  const void* user_data = nullptr;
+  /// The physics never reads it and it is not part of the checksum, but
+  /// @ref PhysicsWorld::CopyFrom copies it with the collider. That is why it
+  /// is an integer and not a pointer: an index into a game-side table stays
+  /// valid in a rollback snapshot (the game rolls its own tables back with
+  /// the world), while a pointer would still point into the state it was
+  /// taken from. Read it in a @ref ContactListener to find which entities
+  /// touched.
+  std::uint32_t user_id = 0;
   /// Position of the shape's center relative to the body's position, in the
   /// body's frame.
   ///
@@ -332,6 +343,24 @@ struct Collider {
   ShapeIndex shape_index{};
   /// Kind of shape; @ref ShapeType::kNone marks a free slot.
   ShapeType type = ShapeType::kNone;
+  /// Direction of the solid side of a one-way collider, in the body's frame:
+  /// (0, 1) by default, up while the body is not turned.
+  ///
+  /// It turns with the body like `offset`: the world direction is
+  /// `rotation.Rotate(one_way_normal)`. Keep it of unit length. Only read
+  /// when `is_one_way` is set.
+  Vec2f one_way_normal{Scalar{0}, Scalar{1}};
+  /// Opening of the cone of contact normals that a one-way collider blocks,
+  /// centered on `one_way_normal`: pi (a half plane) by default.
+  ///
+  /// A shape that starts touching the collider from a direction within half
+  /// this angle of the normal lands on it; from anywhere else it passes
+  /// through. pi blocks everything that comes from the normal's side; a
+  /// narrower arc (150 degrees, 5 pi / 6) also lets shapes that hit the
+  /// collider at a grazing angle, such as the side of a tilted platform, pass
+  /// through. The test is strict: a contact normal exactly at half the arc
+  /// (a side hit on a half plane) passes. Only read when `is_one_way` is set.
+  Radian one_way_arc{Pi<Scalar>()};
   /// What the collider is, as one bit (or several) of 16: player, enemy,
   /// wall, bullet... Your game picks the meaning of each bit. 1 by default.
   ///
@@ -347,6 +376,33 @@ struct Collider {
   /// `true` for a trigger (detects overlaps only), `false` for a solid
   /// collider. Colliders are triggers by default.
   bool is_trigger = true;
+  /// `true` for a one-way collider: a platform that shapes can jump through
+  /// from below and land on from above. `false` by default.
+  ///
+  /// A solid pair where one collider is one-way is decided when it starts
+  /// touching. It is solid when the contact normal, from the one-way
+  /// collider toward the other, is within half of `one_way_arc` of the
+  /// world `one_way_normal`, and the other shape's velocity relative to the
+  /// one-way collider (at the contact point) doesn't point along the normal:
+  /// it comes from the solid side and isn't already leaving. Otherwise the
+  /// pair is *passing*: it is not solved, gets no contact and sends no
+  /// collision events, and it stays passing until the two shapes stop
+  /// overlapping (see @ref PhysicsWorld::passing_pairs). When both colliders
+  /// are one-way, both rules must say solid. Triggers ignore the flag.
+  ///
+  /// @see @ref PhysicsWorld::DropThrough to fall through a platform the body
+  /// stands on.
+  bool is_one_way = false;
+  /// `false` takes the collider out of the simulation without removing it:
+  /// `true` by default.
+  ///
+  /// A disabled collider is skipped by the broadphase, the narrowphase, the
+  /// world queries and the inertia of its body; it keeps its slot, shape and
+  /// settings. Its touching pairs end with exit events at the next
+  /// @ref PhysicsWorld::Step. Use it for a platform that comes and goes, a
+  /// door, a hitbox active on some frames of an attack. Hashed by
+  /// @ref GenerateChecksum only when `false`.
+  bool is_enabled = true;
 };
 
 /// Returns whether two colliders meet: each one's category is in the other's
@@ -375,9 +431,11 @@ struct Collider {
 }
 /// Returns a hash of the simulation fields of `collider`.
 ///
-/// `user_data` is left out: it is game data, not simulation state.
+/// `user_id` is left out: it is game data, not simulation state.
 /// `category` and `mask` are hashed only when they differ from their
-/// defaults, so worlds that don't filter keep their checksums.
+/// defaults, the one-way fields only when `is_one_way` is set and
+/// `is_enabled` only when `false`, so worlds that use none of them keep their
+/// checksums.
 ///
 /// @param collider @ref Collider to hash.
 /// @return FNV-1a hash of the collider's fields.
@@ -473,6 +531,65 @@ struct TouchingPair {
   bool is_trigger = false;
 };
 
+/// How many items a capacity of @ref PhysicsWorldConfig turned away, read
+/// with @ref PhysicsWorld::step_overflow.
+///
+/// The world never allocates during a step, so when a table is full the
+/// extra items are dropped. Before, that was only an `assert` in debug
+/// builds; a release build lost contacts or events silently. The world now
+/// counts every item it drops, and keeps the first ones in its usual stable
+/// order (broadphase order for pairs), so a full table still gives the same
+/// result on every machine. A non-zero counter in a test or a debug overlay
+/// says which capacity to raise.
+///
+/// @ref PhysicsWorld::Step resets the counters when it starts, then adds what
+/// that step drops. Calls made between two steps that hit a limit
+/// (@ref PhysicsWorld::AddDistanceJoint, @ref PhysicsWorld::DropThrough) are
+/// added to the next step's counters. The counters are diagnostics: not
+/// copied by @ref PhysicsWorld::CopyFrom nor hashed.
+///
+/// @code
+/// world.Step();
+/// if (world.step_overflow().IsAnyCounted()) {
+///   // raise the capacities of PhysicsWorldConfig
+/// }
+/// @endcode
+struct StepOverflow {
+  /// Colliders the broadphase couldn't insert (only a custom
+  /// @ref BoundingSurfaceHierarchy built for fewer colliders than the world
+  /// can overflow).
+  std::uint32_t broadphase_colliders = 0;
+  /// Broadphase pairs dropped past
+  /// @ref PhysicsWorldConfig::max_broadphase_pairs (or the capacity of a
+  /// custom broadphase): these pairs are never tested.
+  std::uint32_t broadphase_pairs = 0;
+  /// Touching pairs left out of @ref PhysicsWorld::touching_pairs past
+  /// @ref PhysicsWorldConfig::max_touching_pairs: no enter or exit events for
+  /// them.
+  std::uint32_t touching_pairs = 0;
+  /// Solid contacts left unsolved past
+  /// @ref PhysicsWorldConfig::max_touching_pairs: these shapes overlap
+  /// without being pushed apart.
+  std::uint32_t contacts = 0;
+  /// Pairs that should have been passing past
+  /// @ref PhysicsWorldConfig::max_passing_pairs.
+  std::uint32_t passing_pairs = 0;
+  /// @ref PhysicsWorld::AddDistanceJoint calls refused past
+  /// @ref PhysicsWorldConfig::max_joints.
+  std::uint32_t joints = 0;
+
+  /// Returns whether any counter is non-zero.
+  ///
+  /// @return `true` when the step dropped at least one item.
+  [[nodiscard]] constexpr bool IsAnyCounted() const noexcept {
+    return broadphase_colliders != 0 || broadphase_pairs != 0 ||
+           touching_pairs != 0 || contacts != 0 || passing_pairs != 0 ||
+           joints != 0;
+  }
+  /// Compares every counter.
+  constexpr bool operator==(const StepOverflow& rhs) const noexcept = default;
+};
+
 /// Settings of a @ref PhysicsWorld, fixed for the world's lifetime.
 ///
 /// All tables are allocated once, in the @ref PhysicsWorld constructor, with
@@ -504,19 +621,33 @@ struct PhysicsWorldConfig {
   std::size_t max_bodies = 256;
   /// Maximum number of colliders alive at once (circles and boxes together).
   std::size_t max_colliders = 256;
-  /// Maximum number of touching pairs tracked for enter/exit events.
+  /// Maximum number of touching pairs tracked for enter/exit events, and of
+  /// solid contacts solved per step.
   ///
-  /// Exceeding it asserts in debug builds; extra pairs are still resolved but
-  /// not reported.
+  /// Pairs past it are counted in @ref StepOverflow::touching_pairs (and
+  /// @ref StepOverflow::contacts for the solid ones that aren't solved
+  /// either); the first ones, in broadphase order, are kept.
   std::size_t max_touching_pairs = 1024;
   /// Maximum number of pairs whose bounding boxes overlap, for the default
   /// broadphase (@ref SweepAndPrune).
+  ///
+  /// Pairs past it are dropped and counted in
+  /// @ref StepOverflow::broadphase_pairs.
   std::size_t max_broadphase_pairs = 2048;
   /// Maximum number of joints alive at once (see @ref DistanceJoint).
   ///
   /// A joint and its solver data take about 100 bytes; 0 for a world
-  /// without joints.
+  /// without joints. Refused additions are counted in
+  /// @ref StepOverflow::joints.
   std::size_t max_joints = 64;
+  /// Maximum number of passing pairs (see @ref Collider::is_one_way), 4 bytes
+  /// each.
+  ///
+  /// A pair that should become passing when the table is full is still not
+  /// solved for that step, and is counted in
+  /// @ref StepOverflow::passing_pairs; the next step decides it again as if
+  /// it had just started touching.
+  std::size_t max_passing_pairs = 64;
   /// Passes of the contact solver over all the contacts of a step, see
   /// @ref ContactSolverSettings::velocity_iterations.
   ///
@@ -644,7 +775,8 @@ class PhysicsWorld {
   /// @ref ResolveNarrowphase, which resolves contacts and calls the
   /// @ref ContactListener. Never allocates.
   void Step();
-  /// Removes every body, collider and shape and forgets touching pairs.
+  /// Removes every body, collider and shape and forgets touching and passing
+  /// pairs.
   ///
   /// Keeps the allocated capacity, the listener and the BSH. No exit events
   /// are sent.
@@ -660,7 +792,9 @@ class PhysicsWorld {
   /// Skips pairs where a body is inactive, both bodies are static, both
   /// colliders belong to the same body, @ref ShouldCollide refuses the pair,
   /// or a joint links two solid colliders' bodies (see
-  /// @ref DistanceJoint::collide_connected). Called by @ref Step after
+  /// @ref DistanceJoint::collide_connected). Solid pairs with a one-way
+  /// collider are decided by the one-way rule (see @ref Collider::is_one_way)
+  /// and the passing ones are left out. Called by @ref Step after
   /// @ref ResolveBroadphase; public for tests and profiling.
   void ResolveNarrowphase();
   /// Sorts this step's touching pairs by @ref ColliderPair (c1, then c2).
@@ -1085,6 +1219,52 @@ class PhysicsWorld {
   [[nodiscard]] const ArrayList<TouchingPair>& touching_pairs() const {
     return touching_pairs_;
   }
+  /// Returns the passing pairs: solid pairs with a one-way collider (see
+  /// @ref Collider::is_one_way) whose shapes overlap but are not solved.
+  ///
+  /// A pair enters the table when it starts touching from the open side of
+  /// a one-way collider, or through @ref DropThrough, and leaves it at the
+  /// first step its shapes no longer overlap. The table is simulation state:
+  /// @ref CopyFrom copies it and @ref GenerateChecksum hashes it.
+  ///
+  /// @return The passing pairs, sorted by @ref ColliderPair.
+  [[nodiscard]] const ArrayList<ColliderPair>& passing_pairs() const {
+    return passing_pairs_;
+  }
+  /// Returns whether a pair is passing: overlapping a one-way collider
+  /// without being solved.
+  ///
+  /// @param pair The two colliders, in any order.
+  /// @return `true` when @p pair is in @ref passing_pairs.
+  [[nodiscard]] bool IsPassing(ColliderPair pair) const;
+  /// Lets a body fall through the one-way colliders it stands on: every
+  /// one-way pair of its colliders that touches at the end of the last step
+  /// becomes passing.
+  ///
+  /// Call it on the drop-through input (down plus jump in most platformers).
+  /// At the next @ref Step these pairs are not solved and send a collision
+  /// exit event; they stay passing, without any warm-start impulse, until
+  /// the shapes stop overlapping. Then the body can land on the platform
+  /// again. Pairs the body only reaches during the next step are not
+  /// affected: they are decided by the usual one-way rule.
+  ///
+  /// @code
+  /// if (input.down && input.jump_pressed) {
+  ///   world.DropThrough(player);
+  /// }
+  /// @endcode
+  ///
+  /// @param index @ref Body that drops.
+  /// @return The number of pairs that became passing. Pairs that didn't fit
+  /// in @ref PhysicsWorldConfig::max_passing_pairs are not counted here but in
+  /// the next step's @ref StepOverflow::passing_pairs.
+  std::size_t DropThrough(BodyIndex index);
+  /// Returns what the last @ref Step dropped because a table was full.
+  ///
+  /// @return The counters, all zero when nothing overflowed.
+  [[nodiscard]] const StepOverflow& step_overflow() const {
+    return step_overflow_;
+  }
   /// Returns the number of pairs whose bounding boxes overlap, found by the
   /// broadphase during the last @ref ResolveBroadphase.
   ///
@@ -1102,8 +1282,8 @@ class PhysicsWorld {
   /// snapshot world, `snapshot.CopyFrom(world)` to save and
   /// `world.CopyFrom(snapshot)` to roll back, then resimulate. Copies bodies,
   /// colliders, shapes, joints, touching pairs (so enter/exit events stay
-  /// consistent after a rollback) and the contact cache, not the listener nor
-  /// the BSH.
+  /// consistent after a rollback), the contact cache and the passing pairs,
+  /// not the listener, the BSH nor the @ref StepOverflow counters.
   ///
   /// @param physics_world World to copy from.
   /// @note Doesn't allocate when both worlds were built with the same
@@ -1113,8 +1293,8 @@ class PhysicsWorld {
   ///
   /// Peers of a networked game exchange checksums of the same frame: a
   /// mismatch means their simulations diverged (a desync). Covers bodies,
-  /// colliders, shapes, touching pairs, the contact cache and joints, but not
-  /// @ref Collider::user_data.
+  /// colliders, shapes, touching pairs, the contact cache, joints and passing
+  /// pairs, but not @ref Collider::user_id nor @ref step_overflow.
   ///
   /// @return FNV-1a hash of the world state.
   [[nodiscard]] std::uint32_t GenerateChecksum() const;
@@ -1138,6 +1318,10 @@ class PhysicsWorld {
   [[nodiscard]] ColliderMass GetColliderMass(const Collider& collider) const;
   // Sets inverse_inertia from inertia_mode for every active dynamic body
   void UpdateInertia();
+  // Whether a solid pair with a one-way collider is solved this step: it was
+  // solid last step, or it starts touching from the solid side. Records the
+  // pair in new_passing_pairs_ when it isn't.
+  [[nodiscard]] bool IsOneWaySolid(ColliderPair pair, const Contact& contact);
   // Copies the cached impulses into this step's contacts, and back
   void WarmStartContacts();
   void CacheContactImpulses();
@@ -1165,6 +1349,14 @@ class PhysicsWorld {
   ArrayList<Collider> colliders_;
   ArrayList<TouchingPair> touching_pairs_;
   ArrayList<TouchingPair> new_touching_pairs_;
+  // Passing pairs of one-way colliders, sorted by pair (simulation state,
+  // copied and hashed), and the next step's, built by the narrowphase
+  ArrayList<ColliderPair> passing_pairs_;
+  ArrayList<ColliderPair> new_passing_pairs_;
+  // What the last step dropped, and what calls since then dropped (added to
+  // the next step's counters)
+  StepOverflow step_overflow_{};
+  StepOverflow pending_overflow_{};
   // Scratch buffer for ResolveBroadphase: each active collider's Aabbf,
   // computed once per Step and reused for both the world box pass and the
   // insert pass (GetAabb isn't free: a body lookup plus a shape switch)

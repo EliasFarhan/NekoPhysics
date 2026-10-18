@@ -1,6 +1,8 @@
 #ifndef NEKO_BSH_BSH_H_
 #define NEKO_BSH_BSH_H_
 
+#include <cstddef>
+
 #include "neko/core/allocator.h"
 #include "neko/math/shape.h"
 #include "neko/physics/physics_type.h"
@@ -85,6 +87,22 @@ class BoundingSurfaceHierarchy {
   /// @return The pairs, valid until the next @ref Clear.
   [[nodiscard]] virtual const ArrayList<ColliderPair>& GetPossiblePairs()
       const = 0;
+  /// Returns how many boxes @ref Insert refused since the last @ref Clear,
+  /// because the structure was full.
+  ///
+  /// @ref PhysicsWorld adds it to @ref StepOverflow::broadphase_colliders.
+  /// The default returns 0, for structures without a capacity.
+  ///
+  /// @return The number of refused boxes.
+  [[nodiscard]] virtual std::size_t dropped_collider_count() const { return 0; }
+  /// Returns how many pairs @ref CalculatePairs dropped since the last
+  /// @ref Clear, because the pair list was full.
+  ///
+  /// @ref PhysicsWorld adds it to @ref StepOverflow::broadphase_pairs. The
+  /// default returns 0, for structures without a capacity.
+  ///
+  /// @return The number of dropped pairs.
+  [[nodiscard]] virtual std::size_t dropped_pair_count() const { return 0; }
 };
 
 }  // namespace neko

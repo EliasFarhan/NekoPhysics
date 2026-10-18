@@ -43,11 +43,13 @@ class SweepAndPrune final : public BoundingSurfaceHierarchy {
   ///
   /// @param collider_aabb Box and index of the collider.
   /// @pre Fewer than `max_colliders` colliders were inserted since
-  /// @ref Clear (asserts in debug, ignores the collider in release).
+  /// @ref Clear; past that the collider is ignored and counted in
+  /// @ref dropped_collider_count.
   void Insert(const ColliderAabb& collider_aabb) override;
   /// Sorts the boxes on x and sweeps them to find the overlapping pairs.
   ///
-  /// Pairs beyond `max_pairs` are dropped (asserts in debug).
+  /// Pairs beyond `max_pairs` are dropped and counted in
+  /// @ref dropped_pair_count.
   void CalculatePairs() override;
   /// Removes all boxes and pairs, keeping the capacity.
   void Clear() override;
@@ -60,12 +62,28 @@ class SweepAndPrune final : public BoundingSurfaceHierarchy {
       const override {
     return possible_pairs_;
   }
+  /// Returns how many colliders @ref Insert ignored since the last
+  /// @ref Clear.
+  ///
+  /// @return The number of ignored colliders.
+  [[nodiscard]] std::size_t dropped_collider_count() const override {
+    return dropped_colliders_;
+  }
+  /// Returns how many pairs @ref CalculatePairs dropped since the last
+  /// @ref Clear.
+  ///
+  /// @return The number of dropped pairs.
+  [[nodiscard]] std::size_t dropped_pair_count() const override {
+    return dropped_pairs_;
+  }
 
  private:
   std::size_t max_colliders_;
   std::size_t max_pairs_;
   ArrayList<ColliderAabb> colliders_;
   ArrayList<ColliderPair> possible_pairs_;
+  std::size_t dropped_colliders_ = 0;
+  std::size_t dropped_pairs_ = 0;
 };
 
 }  // namespace neko

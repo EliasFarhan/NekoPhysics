@@ -368,6 +368,42 @@ Scalar DivideBy(Scalar value) {
   }
 }
 
+// Velocity of the body's material point at a world point: v + w x r
+Vec2f PointVelocity(const Body& body, Vec2f point) {
+  return body.velocity +
+         (point - body.position).Perpendicular2() * body.angular_velocity;
+}
+
+// The one-way rule of the collider on one side of a contact (0 for the
+// contact's body 1, 1 for its body 2) at the moment the pair starts touching:
+// true when the pair may be solid, always for a collider that isn't one-way.
+// Solid needs the contact normal, from the one-way collider toward the other
+// shape, strictly within half the arc of the world one-way normal (by more
+// than the scalar's rounding tolerance, so a side hit on a half plane passes
+// with both scalars), and the other shape not moving along that normal
+// relative to the one-way collider at the contact point.
+bool OneWayAllowsSolid(const Contact& contact, std::size_t side) {
+  const Collider& one_way = *contact.bodies[side].collider;
+  if (!one_way.is_one_way) {
+    return true;
+  }
+  const Body& body = *contact.bodies[side].body;
+  const Body& other = *contact.bodies[1 - side].body;
+  const Vec2f normal = body.rotation.Rotate(one_way.one_way_normal);
+  // The contact normal points from body 2 toward body 1
+  const Vec2f toward_other =
+      side == 0 ? -contact.contact_normal : contact.contact_normal;
+  const Scalar threshold =
+      Cos(Radian{DivideBy<2>(one_way.one_way_arc.value())}) +
+      ScalarTraits<Scalar>::Tolerance();
+  if (!(Vec2f::Dot(toward_other, normal) > threshold)) {
+    return false;
+  }
+  const Vec2f relative = PointVelocity(other, contact.contact_point) -
+                         PointVelocity(body, contact.contact_point);
+  return Vec2f::Dot(relative, normal) <= Scalar{0};
+}
+
 // Share of a collider's inertia per kilogram when the body's mass is spread
 // over its colliders by area. A lone collider gets the whole mass, without a
 // division.
@@ -492,6 +528,15 @@ std::uint32_t GenerateChecksum(const Collider& collider) {
     checksum.Add(static_cast<std::uint32_t>(collider.category));
     checksum.Add(static_cast<std::uint32_t>(collider.mask));
   }
+  // Only when used, for the same reason
+  if (collider.is_one_way) {
+    checksum.Add(collider.is_one_way);
+    checksum.Add(collider.one_way_normal);
+    checksum.Add(collider.one_way_arc.value());
+  }
+  if (!collider.is_enabled) {
+    checksum.Add(collider.is_enabled);
+  }
   return checksum.Get();
 }
 
@@ -545,6 +590,10 @@ PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config)
                                              config.max_touching_pairs)),
       new_touching_pairs_(MakeList<TouchingPair>(ConfigAllocator(config),
                                                  config.max_touching_pairs)),
+      passing_pairs_(MakeList<ColliderPair>(ConfigAllocator(config),
+                                            config.max_passing_pairs)),
+      new_passing_pairs_(MakeList<ColliderPair>(ConfigAllocator(config),
+                                                config.max_passing_pairs)),
       collider_aabb_cache_(
           MakeList<Aabbf>(ConfigAllocator(config), config.max_colliders)),
       body_area_(MakeList<Scalar>(ConfigAllocator(config), config.max_bodies)),
@@ -819,6 +868,7 @@ NEKO_HOT bool PhysicsWorld::DetectContact(Body& body1, Collider& collider1,
 NEKO_HOT void PhysicsWorld::ResolveNarrowphase() {
   NEKO_PROFILE_FUNCTION();
   new_touching_pairs_.clear();
+  new_passing_pairs_.clear();
   contacts_.clear();
   contact_pairs_.clear();
   const bool has_joint_filter = UpdateJointFilter();
@@ -855,20 +905,40 @@ NEKO_HOT void PhysicsWorld::ResolveNarrowphase() {
     if (!does_intersect) {
       continue;
     }
+    // A passing pair of a one-way collider: no contact, no events
+    if (!is_trigger && (collider1.is_one_way || collider2.is_one_way) &&
+        !IsOneWaySolid(pair, contact)) {
+      continue;
+    }
+    // Past a capacity the first pairs, in broadphase order, are kept
     if (!is_trigger) {
       if (contacts_.size() < config_.max_touching_pairs) {
         contacts_.push_back(contact);
         contact_pairs_.push_back(pair);
       } else {
-        assert(false && "PhysicsWorldConfig::max_touching_pairs reached");
+        ++step_overflow_.contacts;
       }
     }
     if (new_touching_pairs_.size() < config_.max_touching_pairs) {
       new_touching_pairs_.push_back({pair, is_trigger});
     } else {
-      assert(false && "PhysicsWorldConfig::max_touching_pairs reached");
+      ++step_overflow_.touching_pairs;
     }
   }
+  // Sorted like the touching pairs, for the binary searches of the next step
+  // (insertion sort: the table is short and the pairs are unique)
+  for (auto it = new_passing_pairs_.begin(); it != new_passing_pairs_.end();
+       ++it) {
+    const ColliderPair value = *it;
+    auto insert_at = it;
+    while (insert_at != new_passing_pairs_.begin() &&
+           value < *(insert_at - 1)) {
+      *insert_at = *(insert_at - 1);
+      --insert_at;
+    }
+    *insert_at = value;
+  }
+  std::swap(passing_pairs_, new_passing_pairs_);
   // All the step's contacts together: each pass sees the others' pushes
   const auto t_resolve_start = StepProfileNow();
   if (config_.warm_starting) {
@@ -894,6 +964,63 @@ NEKO_HOT void PhysicsWorld::ResolveNarrowphase() {
   NotifyContactChanges();
   StepProfileMark(StepPhase::kSortAndNotify, t_sort_start);
   std::swap(touching_pairs_, new_touching_pairs_);
+}
+
+bool PhysicsWorld::IsOneWaySolid(ColliderPair pair, const Contact& contact) {
+  // Passing stays passing until the shapes stop overlapping, solid stays
+  // solid while they touch: only a pair that starts touching is decided
+  bool is_solid = false;
+  if (!IsPassing(pair)) {
+    const auto touching = std::lower_bound(
+        touching_pairs_.begin(), touching_pairs_.end(), pair,
+        [](const TouchingPair& entry, const ColliderPair& value) {
+          return entry.pair < value;
+        });
+    const bool was_solid = touching != touching_pairs_.end() &&
+                           touching->pair == pair && !touching->is_trigger;
+    is_solid = was_solid ||
+               (OneWayAllowsSolid(contact, 0) && OneWayAllowsSolid(contact, 1));
+  }
+  if (!is_solid) {
+    if (new_passing_pairs_.size() < config_.max_passing_pairs) {
+      new_passing_pairs_.push_back(pair);
+    } else {
+      ++step_overflow_.passing_pairs;
+    }
+  }
+  return is_solid;
+}
+
+bool PhysicsWorld::IsPassing(ColliderPair pair) const {
+  return std::binary_search(passing_pairs_.begin(), passing_pairs_.end(), pair);
+}
+
+std::size_t PhysicsWorld::DropThrough(BodyIndex index) {
+  std::size_t count = 0;
+  for (const TouchingPair& touching : touching_pairs_) {
+    if (touching.is_trigger) {
+      continue;
+    }
+    const Collider& collider1 = colliders_[touching.pair.c1().index()];
+    const Collider& collider2 = colliders_[touching.pair.c2().index()];
+    if ((collider1.body_index != index && collider2.body_index != index) ||
+        (!collider1.is_one_way && !collider2.is_one_way)) {
+      continue;
+    }
+    const auto it = std::lower_bound(passing_pairs_.begin(),
+                                     passing_pairs_.end(), touching.pair);
+    if (it != passing_pairs_.end() && *it == touching.pair) {
+      continue;
+    }
+    if (passing_pairs_.size() >= config_.max_passing_pairs) {
+      ++pending_overflow_.passing_pairs;
+      continue;
+    }
+    // Within the reserved capacity: no allocation
+    passing_pairs_.insert(it, touching.pair);
+    ++count;
+  }
+  return count;
 }
 
 NEKO_HOT void PhysicsWorld::SortNewTouchingPairs() {
@@ -1135,9 +1262,13 @@ NEKO_HOT void PhysicsWorld::CacheContactImpulses() {
 }
 
 void PhysicsWorld::RemoveCollider(ColliderIndex index) {
-  // Forget its cached impulses: a later collider may reuse the index
+  // Forget its cached impulses and passing pairs: a later collider may reuse
+  // the index
   std::erase_if(contact_cache_, [index](const CachedContact& entry) {
     return entry.pair.c1() == index || entry.pair.c2() == index;
+  });
+  std::erase_if(passing_pairs_, [index](const ColliderPair& pair) {
+    return pair.Contains(index);
   });
   auto& collider = colliders_[index.index()];
   switch (collider.type) {
@@ -1159,6 +1290,7 @@ void PhysicsWorld::RemoveCollider(ColliderIndex index) {
 JointIndex PhysicsWorld::AddDistanceJoint(BodyIndex body_a, BodyIndex body_b) {
   const auto slot = AcquireSlot(joints_, config_.max_joints, IsFreeJoint);
   if (!slot.has_value()) {
+    ++pending_overflow_.joints;
     return kInvalidJointIndex;
   }
   DistanceJoint& joint = joints_[*slot];
@@ -1302,7 +1434,7 @@ void PhysicsWorld::ApplyImpulseAtPoint(BodyIndex index, Vec2f impulse,
 
 NEKO_HOT PhysicsWorld::ColliderMass PhysicsWorld::GetColliderMass(
     const Collider& collider) const {
-  if (collider.is_trigger) {
+  if (collider.is_trigger || !collider.is_enabled) {
     return {};
   }
   // Per kilogram, before the mass: the squares are about the shape's size,
@@ -1403,6 +1535,10 @@ NEKO_HOT void PhysicsWorld::UpdateInertia() {
 NEKO_HOT void PhysicsWorld::Step() {
   NEKO_PROFILE_FUNCTION();
   const auto dt = config_.dt;
+  // This step's counters start with what the calls since the last one
+  // dropped
+  step_overflow_ = pending_overflow_;
+  pending_overflow_ = {};
 
   const auto t_inertia_start = StepProfileNow();
   UpdateInertia();
@@ -1456,8 +1592,11 @@ void PhysicsWorld::Clear() {
   colliders_.clear();
   touching_pairs_.clear();
   new_touching_pairs_.clear();
+  passing_pairs_.clear();
   contact_cache_.clear();
   joints_.clear();
+  step_overflow_ = {};
+  pending_overflow_ = {};
 }
 
 NEKO_HOT Aabbf PhysicsWorld::GetAabb(const Collider& collider) const {
@@ -1484,7 +1623,7 @@ NEKO_HOT Aabbf PhysicsWorld::GetAabb(const Collider& collider) const {
 
 bool PhysicsWorld::IsQueried(const Collider& collider,
                              QueryFilter filter) const {
-  return collider.type != ShapeType::kNone &&
+  return collider.type != ShapeType::kNone && collider.is_enabled &&
          bodies_[collider.body_index.index()].is_active &&
          (collider.category & filter.mask) != 0 &&
          (filter.include_triggers || !collider.is_trigger);
@@ -1701,7 +1840,7 @@ NEKO_HOT void PhysicsWorld::ResolveBroadphase() {
   collider_aabb_cache_.clear();
 
   const auto is_inserted = [this](const Collider& collider) {
-    return collider.type != ShapeType::kNone &&
+    return collider.type != ShapeType::kNone && collider.is_enabled &&
            bodies_[collider.body_index.index()].is_active;
   };
   // World box from the collider extents, starting from the first one (no
@@ -1739,6 +1878,10 @@ NEKO_HOT void PhysicsWorld::ResolveBroadphase() {
     }
   }
   broadphase.CalculatePairs();
+  step_overflow_.broadphase_colliders +=
+      static_cast<std::uint32_t>(broadphase.dropped_collider_count());
+  step_overflow_.broadphase_pairs +=
+      static_cast<std::uint32_t>(broadphase.dropped_pair_count());
   StepProfileMark(StepPhase::kBroadphase, t_broadphase_start);
 }
 
@@ -1754,6 +1897,8 @@ void PhysicsWorld::CopyFrom(const PhysicsWorld& physics_world) {
   // Warm starting reads it next step: part of the simulation state
   contact_cache_ = physics_world.contact_cache_;
   joints_ = physics_world.joints_;
+  // Which pairs pass through one-way colliders: part of the simulation state
+  passing_pairs_ = physics_world.passing_pairs_;
 }
 
 std::uint32_t PhysicsWorld::GenerateChecksum() const {
@@ -1792,6 +1937,11 @@ std::uint32_t PhysicsWorld::GenerateChecksum() const {
   // Empty in worlds without joints, which keep their old checksums
   for (const auto& joint : joints_) {
     checksum.Add(neko::GenerateChecksum(joint));
+  }
+  // Empty in worlds without one-way colliders, which keep their old checksums
+  for (const auto& pair : passing_pairs_) {
+    checksum.Add(pair.c1());
+    checksum.Add(pair.c2());
   }
   return checksum.Get();
 }

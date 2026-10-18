@@ -1,7 +1,6 @@
 #include "neko/bsh/sweep_and_prune.h"
 
 #include <algorithm>
-#include <cassert>
 
 #include "neko/core/platform.h"
 #include "neko/core/profile.h"
@@ -22,7 +21,7 @@ void SweepAndPrune::Insert(const ColliderAabb& collider_aabb) {
   if (colliders_.size() < max_colliders_) {
     colliders_.push_back(collider_aabb);
   } else {
-    assert(false && "SweepAndPrune: max_colliders reached");
+    ++dropped_colliders_;
   }
 }
 
@@ -49,7 +48,7 @@ NEKO_HOT void SweepAndPrune::CalculatePairs() {
       if (possible_pairs_.size() < max_pairs_) {
         possible_pairs_.emplace_back(it->collider_index, other->collider_index);
       } else {
-        assert(false && "SweepAndPrune: max_pairs reached");
+        ++dropped_pairs_;
       }
     }
   }
@@ -58,6 +57,8 @@ NEKO_HOT void SweepAndPrune::CalculatePairs() {
 void SweepAndPrune::Clear() {
   colliders_.clear();
   possible_pairs_.clear();
+  dropped_colliders_ = 0;
+  dropped_pairs_ = 0;
 }
 
 }  // namespace neko

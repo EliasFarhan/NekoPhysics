@@ -90,11 +90,13 @@ class QuadTree final : public BoundingSurfaceHierarchy {
   ///
   /// @param collider_aabb Box and index of the collider.
   /// @pre Fewer than `max_colliders` colliders were inserted since
-  /// @ref Clear (asserts in debug, ignores the collider in release).
+  /// @ref Clear; past that the collider is ignored and counted in
+  /// @ref dropped_collider_count.
   void Insert(const ColliderAabb& collider_aabb) override;
   /// Collects the pairs whose boxes overlap, walking the tree from the root.
   ///
-  /// Pairs beyond `max_pairs` are dropped (asserts in debug).
+  /// Pairs beyond `max_pairs` are dropped and counted in
+  /// @ref dropped_pair_count.
   void CalculatePairs() override;
   /// Removes all colliders and pairs and collapses the tree to its root.
   ///
@@ -110,6 +112,20 @@ class QuadTree final : public BoundingSurfaceHierarchy {
   [[nodiscard]] const ArrayList<ColliderPair>& GetPossiblePairs()
       const override {
     return possible_pairs_;
+  }
+  /// Returns how many colliders @ref Insert ignored since the last
+  /// @ref Clear.
+  ///
+  /// @return The number of ignored colliders.
+  [[nodiscard]] std::size_t dropped_collider_count() const override {
+    return dropped_colliders_;
+  }
+  /// Returns how many pairs @ref CalculatePairs dropped since the last
+  /// @ref Clear.
+  ///
+  /// @return The number of dropped pairs.
+  [[nodiscard]] std::size_t dropped_pair_count() const override {
+    return dropped_pairs_;
   }
 
   /// Returns a node of the tree, to inspect or draw the subdivision.
@@ -144,6 +160,8 @@ class QuadTree final : public BoundingSurfaceHierarchy {
   ArrayList<QuadNode> nodes_;
   ArrayList<Entry> entries_;
   ArrayList<ColliderPair> possible_pairs_;
+  std::size_t dropped_colliders_ = 0;
+  std::size_t dropped_pairs_ = 0;
   std::size_t used_nodes_ = 1;
 };
 

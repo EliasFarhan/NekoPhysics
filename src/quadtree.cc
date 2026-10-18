@@ -37,7 +37,7 @@ QuadTree::QuadTree(std::size_t max_colliders, std::size_t max_pairs,
 void QuadTree::Insert(const ColliderAabb& collider_aabb) {
   NEKO_PROFILE_FUNCTION();
   if (entries_.size() >= max_colliders_) {
-    assert(false && "QuadTree: max_colliders reached");
+    ++dropped_colliders_;
     return;
   }
   entries_.push_back({collider_aabb, QuadNode::kNone});
@@ -53,6 +53,8 @@ void QuadTree::Clear() {
   NEKO_PROFILE_FUNCTION();
   entries_.clear();
   possible_pairs_.clear();
+  dropped_colliders_ = 0;
+  dropped_pairs_ = 0;
   used_nodes_ = 1;
   nodes_[kRoot] = QuadNode{nodes_[kRoot].aabb};
 }
@@ -171,7 +173,7 @@ void QuadTree::AddPair(Index entry1, Index entry2) {
     possible_pairs_.emplace_back(collider_aabb1.collider_index,
                                  collider_aabb2.collider_index);
   } else {
-    assert(false && "QuadTree: max_pairs reached");
+    ++dropped_pairs_;
   }
 }
 
