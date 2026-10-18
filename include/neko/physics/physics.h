@@ -704,7 +704,8 @@ struct PhysicsWorldConfig {
 ///   solver for the solid pairs and the rigid and rope joints
 ///   (@ref SolveConstraints), and the enter/exit events.
 /// - **Positions**: dynamic and kinematic bodies move and turn at their
-///   (corrected) velocities.
+///   (corrected) velocities, and kinematic bodies with a target (see
+///   @ref SetKinematicTarget) are put exactly on it.
 ///
 /// See @ref Body for the integration formula, @ref ResolveBroadphase and
 /// @ref ResolveNarrowphase for the two collision phases, and
@@ -776,7 +777,7 @@ class PhysicsWorld {
   /// @ref ContactListener. Never allocates.
   void Step();
   /// Removes every body, collider and shape and forgets touching and passing
-  /// pairs.
+  /// pairs and pending kinematic targets.
   ///
   /// Keeps the allocated capacity, the listener and the BSH. No exit events
   /// are sent.
@@ -1259,6 +1260,67 @@ class PhysicsWorld {
   /// in @ref PhysicsWorldConfig::max_passing_pairs are not counted here but in
   /// the next step's @ref StepOverflow::passing_pairs.
   std::size_t DropThrough(BodyIndex index);
+  /// Moves a kinematic body to a target position and angle over the next
+  /// @ref Step: a moving platform, a lift, a door that follows a path.
+  ///
+  /// Instead of setting the position directly (a jump that contacts can't
+  /// follow), this sets the velocities that reach the target in exactly one
+  /// step: `velocity = (position - body.position) / dt` and
+  /// `angular_velocity = WrapAngle(angle - body angle) / dt` (the short way
+  /// around). The contact solver sees these velocities, so a crate on a lift
+  /// is carried by friction and a box in the way is pushed, as by any
+  /// kinematic body. At the end of that step the body is put exactly on the
+  /// target: `velocity * dt` is rounded (to 1/65536 m with @ref Fixed16), and
+  /// without this snap a platform driven every step would drift away from
+  /// its path.
+  ///
+  /// Call it every step with the next point of the path, before
+  /// @ref Step. The velocity stays after the step: a platform that gets no
+  /// new target keeps moving at it (set `velocity` to zero to stop it). The
+  /// pending target is simulation state: @ref CopyFrom copies it and
+  /// @ref GenerateChecksum hashes it. Calling it twice before a step keeps
+  /// the last target.
+  ///
+  /// @code
+  /// // A lift going up and down 2 m around y = 3, one cycle every 4 s
+  /// const neko::Scalar phase = time * (two_pi / neko::Scalar{4});
+  /// world.SetKinematicTarget(
+  ///     lift, {x, neko::Scalar{3} + neko::Scalar{2} * neko::Sin(phase)},
+  ///     neko::Radian{});
+  /// world.Step();
+  /// @endcode
+  ///
+  /// @note With @ref Fixed16 the velocity is `distance / dt`: keep the move
+  /// per step under about 500 m (32767 m/s at 60 Hz).
+  /// @param index A kinematic @ref Body; does nothing for other body types.
+  /// @param position Where the body's position must be after the next step,
+  /// in meters.
+  /// @param angle The body's angle after the next step, in radians.
+  /// @see @ref Teleport to move a body without crossing the space between.
+  void SetKinematicTarget(BodyIndex index, Vec2f position, Radian angle);
+  /// Moves a body to a new position and angle at once, without crossing the
+  /// space between: a respawn, a portal, a platform that wraps around the
+  /// screen.
+  ///
+  /// The velocity and angular velocity are kept (set them yourself if the
+  /// body must stop or turn around). Everything the world remembers about
+  /// where the body was is dropped, since it would be wrong at the new
+  /// place:
+  /// - its cached contact impulses, so the next step doesn't warm start from
+  ///   a contact of the old place (see @ref PhysicsWorldConfig::warm_starting);
+  /// - its passing pairs (see @ref passing_pairs);
+  /// - its pending @ref SetKinematicTarget (call that after the teleport);
+  /// - the accumulated impulse of its joints (@ref DistanceJoint::impulse).
+  ///
+  /// The touching pairs stay until the next @ref Step, which finds the pairs
+  /// at the new place: pairs of the old place get their exit events, pairs
+  /// of the new place their enter events, as for any move. World queries
+  /// made right after the call already see the body at its new place.
+  ///
+  /// @param index @ref Body to move, of any type.
+  /// @param position The new position, in meters.
+  /// @param angle The new angle, in radians (wrapped to one turn).
+  void Teleport(BodyIndex index, Vec2f position, Radian angle);
   /// Returns what the last @ref Step dropped because a table was full.
   ///
   /// @return The counters, all zero when nothing overflowed.
@@ -1282,8 +1344,9 @@ class PhysicsWorld {
   /// snapshot world, `snapshot.CopyFrom(world)` to save and
   /// `world.CopyFrom(snapshot)` to roll back, then resimulate. Copies bodies,
   /// colliders, shapes, joints, touching pairs (so enter/exit events stay
-  /// consistent after a rollback), the contact cache and the passing pairs,
-  /// not the listener, the BSH nor the @ref StepOverflow counters.
+  /// consistent after a rollback), the contact cache, the passing pairs and
+  /// the pending kinematic targets, not the listener, the BSH nor the @ref
+  /// StepOverflow counters.
   ///
   /// @param physics_world World to copy from.
   /// @note Doesn't allocate when both worlds were built with the same
@@ -1293,8 +1356,9 @@ class PhysicsWorld {
   ///
   /// Peers of a networked game exchange checksums of the same frame: a
   /// mismatch means their simulations diverged (a desync). Covers bodies,
-  /// colliders, shapes, touching pairs, the contact cache, joints and passing
-  /// pairs, but not @ref Collider::user_id nor @ref step_overflow.
+  /// colliders, shapes, touching pairs, the contact cache, joints, passing
+  /// pairs and pending kinematic targets, but not @ref Collider::user_id nor
+  /// @ref step_overflow.
   ///
   /// @return FNV-1a hash of the world state.
   [[nodiscard]] std::uint32_t GenerateChecksum() const;
@@ -1353,6 +1417,14 @@ class PhysicsWorld {
   // copied and hashed), and the next step's, built by the narrowphase
   ArrayList<ColliderPair> passing_pairs_;
   ArrayList<ColliderPair> new_passing_pairs_;
+  // Targets of SetKinematicTarget for the next step, sorted by body, at most
+  // one per body (simulation state, copied and hashed); emptied by Step
+  struct KinematicTarget {
+    BodyIndex body{};
+    Vec2f position{};
+    Radian angle{};
+  };
+  ArrayList<KinematicTarget> kinematic_targets_;
   // What the last step dropped, and what calls since then dropped (added to
   // the next step's counters)
   StepOverflow step_overflow_{};

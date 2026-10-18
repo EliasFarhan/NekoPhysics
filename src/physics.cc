@@ -594,6 +594,8 @@ PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config)
                                             config.max_passing_pairs)),
       new_passing_pairs_(MakeList<ColliderPair>(ConfigAllocator(config),
                                                 config.max_passing_pairs)),
+      kinematic_targets_(MakeList<KinematicTarget>(ConfigAllocator(config),
+                                                   config.max_bodies)),
       collider_aabb_cache_(
           MakeList<Aabbf>(ConfigAllocator(config), config.max_colliders)),
       body_area_(MakeList<Scalar>(ConfigAllocator(config), config.max_bodies)),
@@ -644,6 +646,10 @@ BodyIndex PhysicsWorld::AddBody() {
 
 void PhysicsWorld::RemoveBody(BodyIndex index) {
   bodies_[index.index()].type = BodyType::kNone;
+  // A later body may reuse the index
+  std::erase_if(kinematic_targets_, [index](const KinematicTarget& target) {
+    return target.body == index;
+  });
   for (auto& joint : joints_) {
     if (joint.type != DistanceJointType::kNone &&
         (joint.body_a == index || joint.body_b == index)) {
@@ -1021,6 +1027,56 @@ std::size_t PhysicsWorld::DropThrough(BodyIndex index) {
     ++count;
   }
   return count;
+}
+
+void PhysicsWorld::SetKinematicTarget(BodyIndex index, Vec2f position,
+                                      Radian angle) {
+  Body& body = bodies_[index.index()];
+  if (body.type != BodyType::kKinematic) {
+    return;
+  }
+  // The velocities that cover the distance in one step; the short way around
+  // for the angle
+  const Scalar dt = config_.dt;
+  body.velocity = (position - body.position) / dt;
+  body.angular_velocity = WrapAngle(angle - body.rotation.angle()).value() / dt;
+  // Sorted by body, one entry each: within the capacity of max_bodies, so no
+  // allocation
+  const auto it = std::lower_bound(
+      kinematic_targets_.begin(), kinematic_targets_.end(), index,
+      [](const KinematicTarget& target, BodyIndex value) {
+        return target.body.index() < value.index();
+      });
+  if (it != kinematic_targets_.end() && it->body == index) {
+    *it = {index, position, angle};
+  } else {
+    kinematic_targets_.insert(it, {index, position, angle});
+  }
+}
+
+void PhysicsWorld::Teleport(BodyIndex index, Vec2f position, Radian angle) {
+  Body& body = bodies_[index.index()];
+  body.position = position;
+  body.rotation.set_angle(angle);
+  // What the world remembers of the old place: no warm start from it, no
+  // passing state, no target computed from it
+  const auto has_body = [this, index](ColliderPair pair) {
+    return colliders_[pair.c1().index()].body_index == index ||
+           colliders_[pair.c2().index()].body_index == index;
+  };
+  std::erase_if(contact_cache_, [&has_body](const CachedContact& entry) {
+    return has_body(entry.pair);
+  });
+  std::erase_if(passing_pairs_, has_body);
+  std::erase_if(kinematic_targets_, [index](const KinematicTarget& target) {
+    return target.body == index;
+  });
+  for (DistanceJoint& joint : joints_) {
+    if (joint.type != DistanceJointType::kNone &&
+        (joint.body_a == index || joint.body_b == index)) {
+      joint.impulse = Scalar{0};
+    }
+  }
 }
 
 NEKO_HOT void PhysicsWorld::SortNewTouchingPairs() {
@@ -1581,6 +1637,19 @@ NEKO_HOT void PhysicsWorld::Step() {
     body.position += body.velocity * dt;
     Turn(body, dt);
   }
+  // Kinematic targets: exactly on the target, whatever velocity * dt rounded
+  // to
+  for (const KinematicTarget& target : kinematic_targets_) {
+    Body& body = bodies_[target.body.index()];
+    if (!body.is_active || body.type != BodyType::kKinematic) {
+      continue;
+    }
+    body.position = target.position;
+    if (body.rotation.angle().value() != WrapAngle(target.angle).value()) {
+      body.rotation.set_angle(target.angle);
+    }
+  }
+  kinematic_targets_.clear();
   StepProfileMark(StepPhase::kIntegration, t_integration_start);
 }
 
@@ -1593,6 +1662,7 @@ void PhysicsWorld::Clear() {
   touching_pairs_.clear();
   new_touching_pairs_.clear();
   passing_pairs_.clear();
+  kinematic_targets_.clear();
   contact_cache_.clear();
   joints_.clear();
   step_overflow_ = {};
@@ -1899,6 +1969,8 @@ void PhysicsWorld::CopyFrom(const PhysicsWorld& physics_world) {
   joints_ = physics_world.joints_;
   // Which pairs pass through one-way colliders: part of the simulation state
   passing_pairs_ = physics_world.passing_pairs_;
+  // Targets set before the snapshot: the next step must reach them
+  kinematic_targets_ = physics_world.kinematic_targets_;
 }
 
 std::uint32_t PhysicsWorld::GenerateChecksum() const {
@@ -1942,6 +2014,12 @@ std::uint32_t PhysicsWorld::GenerateChecksum() const {
   for (const auto& pair : passing_pairs_) {
     checksum.Add(pair.c1());
     checksum.Add(pair.c2());
+  }
+  // Empty between steps unless SetKinematicTarget was called
+  for (const auto& target : kinematic_targets_) {
+    checksum.Add(target.body);
+    checksum.Add(target.position);
+    checksum.Add(target.angle.value());
   }
   return checksum.Get();
 }
