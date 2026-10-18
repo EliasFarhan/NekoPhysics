@@ -81,11 +81,17 @@
 #include "tutorials/12_aiming/solutions/high_arc_sample.h"
 #include "tutorials/12_aiming/solutions/moving_target_sample.h"
 #include "tutorials/12_aiming/solutions/out_of_range_sample.h"
+#include "tutorials/13_one_way/one_way_sample.h"
+#include "tutorials/13_one_way/solutions/arc_sweep_sample.h"
+#include "tutorials/13_one_way/solutions/drop_through_sample.h"
+#include "tutorials/13_one_way/solutions/ghost_timer_sample.h"
+#include "tutorials/13_one_way/solutions/stacked_one_way_sample.h"
 
 namespace {
 
 using neko::Scalar;
 using neko::tutorial::AimingSample;
+using neko::tutorial::ArcSweepSample;
 using neko::tutorial::BallHitsBoxSample;
 using neko::tutorial::BounceSample;
 using neko::tutorial::BouncesToRestSample;
@@ -97,6 +103,7 @@ using neko::tutorial::CornerSample;
 using neko::tutorial::CriticalDampingSample;
 using neko::tutorial::DecayingThrustSample;
 using neko::tutorial::DiskSample;
+using neko::tutorial::DropThroughSample;
 using neko::tutorial::DumbbellSample;
 using neko::tutorial::EnergyBudgetSample;
 using neko::tutorial::EnergySample;
@@ -105,6 +112,7 @@ using neko::tutorial::ExplicitEulerSample;
 using neko::tutorial::ExplosionSample;
 using neko::tutorial::FastestSpinSample;
 using neko::tutorial::FrictionSample;
+using neko::tutorial::GhostTimerSample;
 using neko::tutorial::HalfStepSample;
 using neko::tutorial::HeadOnSample;
 using neko::tutorial::HeavyOnLightSample;
@@ -122,6 +130,7 @@ using neko::tutorial::NarrowPillarSample;
 using neko::tutorial::OffCenterImpactSample;
 using neko::tutorial::OneHitSample;
 using neko::tutorial::OneStepByHandSample;
+using neko::tutorial::OneWaySample;
 using neko::tutorial::OutOfRangeSample;
 using neko::tutorial::PassesSample;
 using neko::tutorial::PendulumSample;
@@ -138,6 +147,7 @@ using neko::tutorial::SingleForceSample;
 using neko::tutorial::SoftVsExplicitSample;
 using neko::tutorial::SpringSample;
 using neko::tutorial::StabilityLimitSample;
+using neko::tutorial::StackedOneWaySample;
 using neko::tutorial::StackingSample;
 using neko::tutorial::StepRateSample;
 using neko::tutorial::StoppingDistanceSample;
@@ -3197,6 +3207,230 @@ TEST(AimingSolutions, ErrorTableWithinOneStep) {
   BeginWith(sample, {});
   EXPECT_EQ(sample.GenerateChecksum(), checksum);
   sample.End();
+}
+
+// The floor the chapter's player stands on just before each scripted action,
+// for `actions` actions
+std::vector<int> OneWayFloors(OneWaySample& sample, int actions) {
+  std::vector<int> floors;
+  while (static_cast<int>(floors.size()) < actions) {
+    if (sample.steps() % OneWaySample::kActionSteps ==
+        OneWaySample::kActionOffset) {
+      floors.push_back(sample.player_floor());
+    }
+    sample.FixedUpdate();
+  }
+  return floors;
+}
+
+// Chapter 13: three jumps up through the one-way floors, three drops back
+// down, twice. Each jump passes through the floor above and lands on it;
+// each drop falls through the floor below the player and lands on the next
+// one (or the ground)
+TEST(OneWayTutorial, ClimbsThreeFloorsAndDropsBack) {
+  OneWaySample sample;
+  BeginWith(sample, {});
+  const std::vector<int> expected = {0, 1, 2, 3, 2, 1, 0, 1, 2, 3, 2, 1, 0};
+  EXPECT_EQ(OneWayFloors(sample, 13), expected);
+  // Per cycle: 3 landings going up, 2 on the floors going down (the last
+  // drop lands on the solid ground), 3 drops that took effect
+  EXPECT_EQ(sample.landings(), 10);
+  EXPECT_EQ(sample.drops(), 6);
+  EXPECT_GE(sample.max_passing(), 1u);
+  sample.End();
+}
+
+// Passing pairs exist only while a shape crosses a floor: none when the
+// player waits for its next action, and no landing is counted while the
+// player's pair is passing
+TEST(OneWayTutorial, PassingOnlyDuringCrossings) {
+  OneWaySample sample;
+  BeginWith(sample, {});
+  int landings = 0;
+  for (int step = 0; step < OneWaySample::kCycleSteps; ++step) {
+    sample.FixedUpdate();
+    const auto& passing = sample.world().passing_pairs();
+    const bool player_passing =
+        std::any_of(passing.begin(), passing.end(),
+                    [&sample](const neko::ColliderPair& pair) {
+                      return pair.Contains(sample.player());
+                    });
+    if (player_passing) {
+      EXPECT_EQ(sample.landings(), landings) << sample.steps();
+    }
+    landings = sample.landings();
+    if (sample.steps() % OneWaySample::kActionSteps ==
+        OneWaySample::kActionOffset) {
+      EXPECT_FALSE(player_passing) << sample.steps();
+    }
+  }
+}
+
+// The ghost platform switches off at step 120: the crates resting on it
+// fall to the ground, with exit events, and stay there when it comes back
+TEST(OneWayTutorial, GhostDropsItsCrates) {
+  OneWaySample sample;
+  BeginWith(sample, {});
+  const neko::PhysicsWorld& world = sample.world();
+  const float ghost_top =
+      ToFloat(world.ColliderCenter(sample.ghost()).y()) + 0.175f;
+  const auto count_at = [&](float height) {
+    int count = 0;
+    for (const auto crate : sample.crates()) {
+      if (std::abs(ToFloat(world.ColliderCenter(crate).y()) - height) < 0.02f) {
+        ++count;
+      }
+    }
+    return count;
+  };
+  RunSteps(sample, 119);
+  ASSERT_TRUE(sample.ghost_enabled());
+  const int on_ghost = count_at(ghost_top + 0.2f);
+  EXPECT_GE(on_ghost, 2);
+  const int on_ground = count_at(0.7f);
+  RunSteps(sample, 1);
+  EXPECT_FALSE(sample.ghost_enabled());
+  RunSteps(sample, 120);
+  EXPECT_TRUE(sample.ghost_enabled());
+  EXPECT_EQ(count_at(ghost_top + 0.2f), 0);
+  EXPECT_EQ(count_at(0.7f), on_ground + on_ghost);
+  sample.End();
+}
+
+// A jump too weak to clear the floor above: the player's head goes into the
+// floor (passing), and it falls back to the ground without landing on it
+TEST(OneWayTutorial, WeakJumpFallsBack) {
+  OneWaySample sample;
+  BeginWith(sample, {{OneWaySample::kJumpSpeed, 40}});
+  const std::vector<int> expected = {0, 0, 0};
+  EXPECT_EQ(OneWayFloors(sample, 3), expected);
+  EXPECT_EQ(sample.landings(), 0);
+  EXPECT_GE(sample.max_passing(), 1u);
+  sample.End();
+}
+
+// Flat floors have contact normals straight along their one-way normal, so
+// even a 90 degree arc climbs the same way
+TEST(OneWayTutorial, NarrowArcStillClimbsFlatFloors) {
+  OneWaySample sample;
+  BeginWith(sample, {{OneWaySample::kArc, 90}});
+  const std::vector<int> expected = {0, 1, 2, 3, 2, 1, 0};
+  EXPECT_EQ(OneWayFloors(sample, 7), expected);
+  sample.End();
+}
+
+TEST(OneWayTutorial, SameParametersSameRun) {
+  std::vector<neko::SampleRegistry::Entry> samples;
+  samples.push_back({"13 One-way", std::make_unique<OneWaySample>()});
+  neko::SampleRegistry registry{std::move(samples)};
+  const neko::SampleContext context{neko::sample_config::kWorldBounds};
+  // Mid-cycle: once everything rests on the ground again, the state doesn't
+  // depend on the jump speed any more
+  const auto run = [&registry] {
+    for (int step = 0; step < 200; ++step) {
+      registry.FixedUpdate();
+    }
+    return registry.current()->GenerateChecksum();
+  };
+  registry.Select(0, context);
+  const std::uint32_t first = run();
+  registry.SetParameter(OneWaySample::kJumpSpeed, 70);
+  const std::uint32_t changed = run();
+  registry.SetParameter(OneWaySample::kJumpSpeed, 65);
+  const std::uint32_t restored = run();
+  EXPECT_NE(first, changed);
+  EXPECT_EQ(first, restored);
+}
+
+// Exercise "arc sweep": a ball lands on a plank tilted strictly less than
+// half the arc away from the one-way normal, and passes otherwise
+TEST(OneWaySolutions, ArcSweepLandsBelowHalfTheArc) {
+  const auto run = [](int arc_a, int arc_b) {
+    ArcSweepSample sample;
+    BeginWith(sample,
+              {{ArcSweepSample::kArcA, arc_a}, {ArcSweepSample::kArcB, arc_b}});
+    RunSteps(sample, ArcSweepSample::kMeasuredSteps);
+    for (std::size_t row = 0; row < 2; ++row) {
+      // Every ball decided
+      for (std::size_t i = 0; i < ArcSweepSample::kTiltCount; ++i) {
+        EXPECT_NE(sample.outcome(row, i), 0) << row << " " << i;
+      }
+      EXPECT_EQ(sample.max_landed_tilt(row), sample.predicted_max_tilt(row))
+          << arc_a << " " << arc_b << " row " << row;
+    }
+    return std::pair{sample.max_landed_tilt(0), sample.max_landed_tilt(1)};
+  };
+  EXPECT_EQ(run(150, 180), (std::pair{74, 86}));
+  // Exactly twice a tilt: that plank is at half the arc and passes
+  EXPECT_EQ(run(160, 152), (std::pair{76, 74}));
+  EXPECT_EQ(run(100, 120), (std::pair{-1, 50}));
+}
+
+// Exercise "ghost timer": the shortest off time that lets the crate fall is
+// the first step its center is below the ghost's center, predicted by the
+// engine's own recurrence
+TEST(OneWaySolutions, GhostTimerMatchesTheRecurrence) {
+  for (const int first_off : {12, 15, 17}) {
+    GhostTimerSample sample;
+    BeginWith(sample, {{GhostTimerSample::kFirstOff, first_off}});
+    RunSteps(sample, GhostTimerSample::kMeasuredSteps);
+    EXPECT_NEAR(ToFloat(sample.rest_offset()), 0.375f, 0.005f);
+    // g dt^2 n (n + 1) / 2 > 0.375 from n = 17 (16 * 17 / 2 * 9.81 / 3600 =
+    // 0.371, 17 * 18 / 2 * 9.81 / 3600 = 0.417)
+    EXPECT_EQ(sample.predicted_min_off(), 17);
+    EXPECT_EQ(sample.measured_min_off(),
+              std::max(first_off, sample.predicted_min_off()))
+        << first_off;
+    for (std::size_t i = 0; i < GhostTimerSample::kGhostCount; ++i) {
+      EXPECT_EQ(sample.outcome(i),
+                sample.off_steps(i) >= sample.predicted_min_off() ? -1 : 1)
+          << first_off << " " << i;
+    }
+    sample.End();
+  }
+  // All caught when every ghost comes back early
+  GhostTimerSample sample;
+  BeginWith(sample, {{GhostTimerSample::kFirstOff, 5}});
+  RunSteps(sample, GhostTimerSample::kMeasuredSteps);
+  EXPECT_EQ(sample.measured_min_off(), -1);
+  sample.End();
+}
+
+// Exercise "drop through": the pair stays passing for exactly the steps the
+// recurrence predicts, close to sqrt(2 d / g) / dt, with one exit event
+TEST(OneWaySolutions, DropThroughLastsThePredictedSteps) {
+  for (const int thickness : {10, 35, 100}) {
+    for (const int height : {30, 60, 120}) {
+      DropThroughSample sample;
+      BeginWith(sample, {{DropThroughSample::kThickness, thickness},
+                         {DropThroughSample::kPlayerHeight, height}});
+      RunSteps(sample, DropThroughSample::kMeasuredSteps);
+      EXPECT_EQ(sample.drop_result(), 1u);
+      EXPECT_EQ(sample.exit_events(), 1);
+      EXPECT_EQ(sample.passing_steps(), sample.predicted_steps())
+          << thickness << " " << height;
+      EXPECT_NEAR(static_cast<float>(sample.passing_steps()),
+                  ToFloat(sample.continuous_steps()), 1.0f)
+          << thickness << " " << height;
+      // On the ground, below the platform
+      EXPECT_LT(ToFloat(sample.player_height()), 2.0f);
+      sample.End();
+    }
+  }
+}
+
+// Exercise "stacked one-way": DropThrough only affects the pairs touching
+// now, so only calling it every step drops the whole stack
+TEST(OneWaySolutions, StackedOneWayNeedsRepeatedDrops) {
+  const auto run = [](int mode) {
+    StackedOneWaySample sample;
+    BeginWith(sample, {{StackedOneWaySample::kMode, mode}});
+    RunSteps(sample, StackedOneWaySample::kMeasuredSteps);
+    return std::pair{sample.crates_below(), sample.passing_made()};
+  };
+  EXPECT_EQ(run(0), (std::pair{1, 1}));
+  EXPECT_EQ(run(1), (std::pair{1, 1}));
+  EXPECT_EQ(run(2), (std::pair{3, 3}));
 }
 
 }  // namespace
