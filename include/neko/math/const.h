@@ -12,6 +12,9 @@ namespace neko {
 
 #if defined(NEKO_SCALAR_SIXIT)
 /// The number type used by the whole physics engine (`NEKO_SCALAR=SIXIT`).
+// TODO(S1.8): ScalarTraits<sixit::dmath::ieee_float_inline_asm> goes in
+// neko/math/scalar_traits.h (deterministic, cross-platform exact on x86, sixit
+// mathf functions), once the SIXIT build is repaired.
 using Scalar = sixit::dmath::ieee_float_inline_asm;
 #elif defined(NEKO_SCALAR_FLOAT)
 /// The number type used by the whole physics engine (`NEKO_SCALAR=FLOAT`).
