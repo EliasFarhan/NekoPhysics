@@ -10,14 +10,16 @@
 #include "neko/math/const.h"
 #include "neko/math/fixed_trig.h"
 #include "neko/math/func.h"
+#include "neko/math/scalar_traits.h"
 
 namespace neko {
 namespace internal {
-// Square that can't overflow: Q32.32 in 64 bits for Fixed16 (16.16 overflows
-// past ~181), T otherwise
+// Square that can't overflow: for fixed point, the raw value squared in 64
+// bits (Q32.32 for Fixed16, whose 16.16 square overflows past ~181), T
+// otherwise
 template <typename T>
 [[nodiscard]] constexpr auto WideSquare(T value) noexcept {
-  if constexpr (std::is_same_v<T, Fixed16>) {
+  if constexpr (ScalarTraits<T>::kIsFixedPoint) {
     const auto raw = static_cast<std::int64_t>(value.underlying_value());
     return static_cast<std::uint64_t>(raw * raw);
   } else {
@@ -263,7 +265,7 @@ class Vec2 {
   /// loses small vectors; a length beyond the largest @ref Fixed16 saturates
   /// to it.
   [[nodiscard]] T Length() const {
-    if constexpr (std::is_same_v<T, Fixed16>) {
+    if constexpr (ScalarTraits<T>::kIsFixedPoint) {
       // Sum of squares in Q32.32: SquareLength() overflows past ~181 and rounds
       // to zero below ~1/256
       const auto root = internal::ISqrt64(internal::WideSquare(x_) +

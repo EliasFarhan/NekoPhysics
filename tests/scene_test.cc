@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include "neko/math/scalar_traits.h"
 #include "neko/physics/physics.h"
 
 #include "tests/scenes/falling_pile.h"
@@ -12,7 +13,7 @@
 // neko::scenes::kFallingPileGoldenChecksums, and the ROM expectations), or
 // determinism broke.
 TEST(Scene, FallingPileGoldenChecksums) {
-  if constexpr (!std::is_same_v<neko::Scalar, neko::Fixed16>) {
+  if constexpr (!neko::ScalarTraits<neko::Scalar>::kIsFixedPoint) {
     GTEST_SKIP() << "golden checksums are for NEKO_SCALAR=FIXED16";
   } else {
     neko::PhysicsWorld world{};
@@ -31,7 +32,7 @@ TEST(Scene, FallingPileGoldenChecksums) {
 
 // Positions and velocities only: see neko::scenes::TrajectoryChecksum
 TEST(Scene, FallingPileGoldenTrajectory) {
-  if constexpr (!std::is_same_v<neko::Scalar, neko::Fixed16>) {
+  if constexpr (!neko::ScalarTraits<neko::Scalar>::kIsFixedPoint) {
     GTEST_SKIP() << "golden checksums are for NEKO_SCALAR=FIXED16";
   } else {
     neko::PhysicsWorld world{};

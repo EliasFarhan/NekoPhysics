@@ -7,9 +7,12 @@
 
 #include "neko/math/const.h"
 #include "neko/math/func.h"
+#include "neko/math/scalar_traits.h"
 #include "neko/physics/physics.h"
 
 namespace {
+
+using Traits = neko::ScalarTraits<neko::Scalar>;
 
 constexpr neko::Scalar Ratio(int num, int den) {
   return static_cast<neko::Scalar>(num) / static_cast<neko::Scalar>(den);
@@ -155,20 +158,19 @@ TEST(Conventions, ImpactsSlowerThanTheThresholdDontBounce) {
   EXPECT_GT(fast.world.body(fast.box).velocity.y(), neko::Scalar{2});
 }
 
-// A macro rather than if constexpr: outside a template, the discarded branch
-// must still compile, and it uses the Fixed16 raw value
+// Outside a template the discarded branch of if constexpr still compiles, so
+// the raw values go through ScalarTraits (the raw bits of a float otherwise)
 TEST(Conventions, Fixed16SlowestMovingSpeed) {
-#ifndef NEKO_SCALAR_FIXED16
-  GTEST_SKIP() << "Fixed16 resolution";
-#else
-  {
+  if constexpr (!Traits::kIsFixedPoint) {
+    GTEST_SKIP() << "Fixed16 resolution";
+  } else {
     // dt = 1/60 s is stored as 1092 / 65536 s (0.0166626 s, 60 steps are
     // 0.99976 s). A position moves by velocity * dt rounded to 1 / 65536 m:
     // below 31 / 65536 m/s (about 0.47 mm/s) the step rounds to zero
     const neko::PhysicsWorldConfig config;
-    EXPECT_EQ(config.dt.underlying_value(), 1092);
-    const auto still = neko::Fixed16::FromUnderlyingValue(30);
-    const auto moving = neko::Fixed16::FromUnderlyingValue(31);
+    EXPECT_EQ(Traits::ToBits(config.dt), Traits::Bits{1092});
+    const auto still = Traits::FromBits(30);
+    const auto moving = Traits::FromBits(31);
     EXPECT_EQ(still * config.dt, neko::Scalar{0});
     EXPECT_NE(moving * config.dt, neko::Scalar{0});
 
@@ -180,7 +182,6 @@ TEST(Conventions, Fixed16SlowestMovingSpeed) {
     }
     EXPECT_EQ(world.body(body).position, neko::Vec2f::Zero());
   }
-#endif
 }
 
 TEST(Conventions, PositiveAngularVelocityAndTorqueTurnCounterClockwise) {
@@ -212,33 +213,30 @@ TEST(Conventions, AngleIsWrappedFromMinusPiIncludedToPiExcluded) {
 }
 
 TEST(Conventions, Fixed16RotationRanges) {
-#ifndef NEKO_SCALAR_FIXED16
-  GTEST_SKIP() << "Fixed16 resolution";
-#else
-  {
+  if constexpr (!Traits::kIsFixedPoint) {
+    GTEST_SKIP() << "Fixed16 resolution";
+  } else {
     // Like positions: the angle moves by angular_velocity * dt rounded to
     // 1 / 65536 rad, so below 31 / 65536 rad/s a body doesn't turn
     const neko::PhysicsWorldConfig config;
-    const auto still = neko::Fixed16::FromUnderlyingValue(30);
-    const auto turning = neko::Fixed16::FromUnderlyingValue(31);
+    const auto still = Traits::FromBits(30);
+    const auto turning = Traits::FromBits(31);
     EXPECT_EQ(still * config.dt, neko::Scalar{0});
     EXPECT_NE(turning * config.dt, neko::Scalar{0});
 
     // 2 pi is 411774 / 65536, 0.83 of a step below 2 pi * 65536 = 411774.83:
     // each wrap turns the angle by 1.3e-5 rad
     const auto pi = neko::Pi<neko::Scalar>();
-    EXPECT_EQ((pi + pi).underlying_value(), 411774);
+    EXPECT_EQ(Traits::ToBits(pi + pi), Traits::Bits{411774});
   }
-#endif
 }
 
 // Inverse inertia of a 1 kg body with one collider, compared with the exact
 // value: within 0.8 % from 0.001 to 1000 kg m^2, worse outside
 TEST(Conventions, Fixed16InertiaPrecision) {
-#ifndef NEKO_SCALAR_FIXED16
-  GTEST_SKIP() << "Fixed16 resolution";
-#else
-  {
+  if constexpr (!Traits::kIsFixedPoint) {
+    GTEST_SKIP() << "Fixed16 resolution";
+  } else {
     const auto relative_error = [](neko::Vec2f half_size, neko::Scalar radius) {
       neko::PhysicsWorld world{{.gravity = neko::Vec2f::Zero()}};
       const auto body = world.AddBody();
@@ -250,17 +248,17 @@ TEST(Conventions, Fixed16InertiaPrecision) {
       if (is_box) {
         world.aabb(world.collider(collider).shape_index).half_size = half_size;
         const double w =
-            2.0 * static_cast<double>(static_cast<float>(half_size.x()));
+            2.0 * static_cast<double>(Traits::ToFloat(half_size.x()));
         const double h =
-            2.0 * static_cast<double>(static_cast<float>(half_size.y()));
+            2.0 * static_cast<double>(Traits::ToFloat(half_size.y()));
         inertia = (w * w + h * h) / 12.0;
       } else {
         world.circle(world.collider(collider).shape_index).radius = radius;
-        const double r = static_cast<double>(static_cast<float>(radius));
+        const double r = static_cast<double>(Traits::ToFloat(radius));
         inertia = r * r / 2.0;
       }
       const double inverse = static_cast<double>(
-          static_cast<float>(world.ComputeInverseInertia(body)));
+          Traits::ToFloat(world.ComputeInverseInertia(body)));
       return inverse * inertia - 1.0;
     };
     const auto box = [&](int half_num, int half_den) {
@@ -280,7 +278,6 @@ TEST(Conventions, Fixed16InertiaPrecision) {
     EXPECT_LT(std::abs(box(50, 1)), 0.009);
     EXPECT_GT(std::abs(circle(1, 100)), 0.09);
   }
-#endif
 }
 
 int main(int argc, char** argv) {

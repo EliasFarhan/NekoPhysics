@@ -328,22 +328,6 @@ using Fixed16 = Fixed<std::int32_t, 16, std::int64_t>;
 /// Tiny 8-bit fixed point (2.6 format): range about -2 to 1.98, step 1/64.
 using Fixed8 = Fixed<std::int8_t, 6, std::int16_t>;
 
-// Named like a standard type trait (std::is_floating_point_v)
-// NOLINTBEGIN(readability-identifier-naming)
-/// True when `T` is a @ref Fixed type, false otherwise.
-///
-/// Lets generic code pick a fixed-point specific path with
-/// `if constexpr (neko::is_fixed_v<T>)`, like `std::is_floating_point_v`.
-///
-/// @tparam T The type to test.
-template <typename T>
-inline constexpr bool is_fixed_v = false;
-
-/// Specialization of `is_fixed_v` that is true for every @ref Fixed.
-template <typename T, T Exp, typename MulT>
-inline constexpr bool is_fixed_v<Fixed<T, Exp, MulT>> = true;
-// NOLINTEND(readability-identifier-naming)
-
 /// Square root of a @ref Fixed16, exact and deterministic.
 ///
 /// Computes the floor of the true square root at 16.16 precision using only

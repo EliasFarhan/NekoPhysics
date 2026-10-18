@@ -359,11 +359,13 @@ Vec2f WorldCenter(const Body& body, const Collider& collider) {
 // instead of the 64-bit divider
 template <int N>
 Scalar DivideBy(Scalar value) {
-#ifdef NEKO_SCALAR_FIXED16
-  return Scalar::FromUnderlyingValue(value.underlying_value() / N);
-#else
-  return value / Scalar{N};
-#endif
+  using Traits = ScalarTraits<Scalar>;
+  if constexpr (Traits::kIsFixedPoint) {
+    return Traits::FromBits(
+        static_cast<Traits::Bits>(Traits::ToBits(value) / N));
+  } else {
+    return value / Scalar{N};
+  }
 }
 
 // Share of a collider's inertia per kilogram when the body's mass is spread

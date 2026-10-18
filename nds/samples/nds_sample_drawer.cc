@@ -2,11 +2,13 @@
 
 #include <algorithm>
 #include <cstdlib>
-#include <type_traits>
+
+#include "neko/math/scalar_traits.h"
 
 namespace neko {
 
-static_assert(std::is_same_v<Scalar, Fixed16>,
+static_assert(ScalarTraits<Scalar>::kIsFixedPoint &&
+                  ScalarTraits<Scalar>::kDisplayName == "Fixed16",
               "The DS drawer maps Fixed16 raw values to pixels, with no float");
 
 namespace {

@@ -11,6 +11,7 @@
 
 #include <gtest/gtest.h>
 
+#include "neko/math/scalar_traits.h"
 #include "neko/physics/physics.h"
 
 #include "main/samples/sample.h"
@@ -142,7 +143,7 @@ TEST_P(SampleTest, SameSeedGivesSameChecksum) {
 }
 
 TEST_P(SampleTest, GoldenChecksums) {
-  if constexpr (!std::is_same_v<neko::Scalar, neko::Fixed16>) {
+  if constexpr (!neko::ScalarTraits<neko::Scalar>::kIsFixedPoint) {
     GTEST_SKIP() << "golden checksums are for NEKO_SCALAR=FIXED16";
   } else {
     neko::SampleRegistry registry;
