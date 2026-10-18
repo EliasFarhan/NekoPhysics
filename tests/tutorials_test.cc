@@ -12,6 +12,8 @@
 
 #include <gtest/gtest.h>
 
+#include "neko/math/scalar_traits.h"
+
 #include "main/samples/sample.h"
 #include "main/samples/sample_config.h"
 #include "tutorials/00_bounce/bounce_sample.h"
@@ -74,10 +76,16 @@
 #include "tutorials/11_jetpack/solutions/hover_sample.h"
 #include "tutorials/11_jetpack/solutions/step_rate_sample.h"
 #include "tutorials/11_jetpack/solutions/terminal_velocity_sample.h"
+#include "tutorials/12_aiming/aiming_sample.h"
+#include "tutorials/12_aiming/solutions/error_table_sample.h"
+#include "tutorials/12_aiming/solutions/high_arc_sample.h"
+#include "tutorials/12_aiming/solutions/moving_target_sample.h"
+#include "tutorials/12_aiming/solutions/out_of_range_sample.h"
 
 namespace {
 
 using neko::Scalar;
+using neko::tutorial::AimingSample;
 using neko::tutorial::BallHitsBoxSample;
 using neko::tutorial::BounceSample;
 using neko::tutorial::BouncesToRestSample;
@@ -92,6 +100,7 @@ using neko::tutorial::DiskSample;
 using neko::tutorial::DumbbellSample;
 using neko::tutorial::EnergyBudgetSample;
 using neko::tutorial::EnergySample;
+using neko::tutorial::ErrorTableSample;
 using neko::tutorial::ExplicitEulerSample;
 using neko::tutorial::ExplosionSample;
 using neko::tutorial::FastestSpinSample;
@@ -100,6 +109,7 @@ using neko::tutorial::HalfStepSample;
 using neko::tutorial::HeadOnSample;
 using neko::tutorial::HeavyOnLightSample;
 using neko::tutorial::HertzSweepSample;
+using neko::tutorial::HighArcSample;
 using neko::tutorial::HoverSample;
 using neko::tutorial::ImpulsePerBoxSample;
 using neko::tutorial::JetpackSample;
@@ -107,10 +117,12 @@ using neko::tutorial::JointOrderSample;
 using neko::tutorial::LaserBounceSample;
 using neko::tutorial::LongLaserSample;
 using neko::tutorial::MixedSurfacesSample;
+using neko::tutorial::MovingTargetSample;
 using neko::tutorial::NarrowPillarSample;
 using neko::tutorial::OffCenterImpactSample;
 using neko::tutorial::OneHitSample;
 using neko::tutorial::OneStepByHandSample;
+using neko::tutorial::OutOfRangeSample;
 using neko::tutorial::PassesSample;
 using neko::tutorial::PendulumSample;
 using neko::tutorial::PerLinkStretchSample;
@@ -2967,6 +2979,225 @@ TEST(JetpackSolutions, DragReachesTheTerminalVelocity) {
     sample.End();
   }
 }
+
+// Chapter 12: the lead, the integrator's one-step-early landing, and the
+// replay
+namespace {
+
+constexpr double kPi = 3.14159265358979323846;
+
+struct AimingRun {
+  float angle = 0.0f;
+  float lead_time = 0.0f;
+  float flight_time = 0.0f;
+  float predicted_flight = 0.0f;
+  float measured_flight = 0.0f;
+  float predicted_error = 0.0f;
+  float measured_error = 0.0f;
+  float impact_angle = 0.0f;
+  int rounds = 0;
+  int same_rounds = 0;
+};
+
+AimingRun RunAiming(int speed_tenths, int distance_tenths,
+                    int target_speed_tenths, int rounds = 1) {
+  AimingSample sample;
+  BeginWith(sample, {{AimingSample::kSpeed, speed_tenths},
+                     {AimingSample::kDistance, distance_tenths},
+                     {AimingSample::kTargetSpeed, target_speed_tenths}});
+  RunSteps(sample, AimingSample::kRoundSteps * rounds);
+  AimingRun run;
+  run.angle = ToFloat(sample.lead().angle.value());
+  run.lead_time = ToFloat(sample.lead().lead_time);
+  run.flight_time = ToFloat(neko::tutorial::FlightTime(
+      sample.lead().angle, neko::Ratio(speed_tenths, 10),
+      neko::Ratio(981, 100)));
+  run.predicted_flight = ToFloat(sample.predicted_flight_time());
+  run.measured_flight =
+      ToFloat(sample.measured_flight_time().value_or(Scalar{0}));
+  run.predicted_error = ToFloat(sample.predicted_error());
+  run.measured_error = ToFloat(sample.measured_error().value_or(Scalar{0}));
+  run.impact_angle =
+      ToFloat(sample.impact_angle().value_or(neko::Radian{}).value());
+  run.rounds = sample.rounds();
+  run.same_rounds = sample.same_rounds();
+  sample.End();
+  return run;
+}
+
+class AimingTest : public ::testing::TestWithParam<std::tuple<int, int, int>> {
+};
+
+TEST_P(AimingTest, HitErrorMatchesTheIntegratorPrediction) {
+  const auto [speed, distance, target_speed] = GetParam();
+  const AimingRun run = RunAiming(speed, distance, target_speed);
+  ASSERT_EQ(run.rounds, 1);
+  // The lead converged: the aim time is the flight time of the aim
+  EXPECT_NEAR(run.lead_time, run.flight_time, 2e-3f);
+  // The ball comes back one step early, at T - dt
+  EXPECT_NEAR(run.measured_flight, run.predicted_flight, 2e-4f);
+  EXPECT_NEAR(run.measured_error, run.predicted_error, 3e-3f);
+  // ... so it lands short by about (v_x - u) dt
+  const float v = static_cast<float>(speed) / 10.0f;
+  const float u = static_cast<float>(target_speed) / 10.0f;
+  EXPECT_NEAR(run.predicted_error, -(v * std::cos(run.angle) - u) / 60.0f,
+              3e-3f);
+  // Mirror image of the launch, a little shallower (g dt / v)
+  EXPECT_NEAR(run.impact_angle, -run.angle, 0.03f);
+}
+
+INSTANTIATE_TEST_SUITE_P(Chapter12, AimingTest,
+                         ::testing::Values(std::make_tuple(100, 60, 10),
+                                           std::make_tuple(100, 60, 0),
+                                           std::make_tuple(100, 30, -20),
+                                           std::make_tuple(140, 90, 20),
+                                           std::make_tuple(70, 40, 5)));
+
+// Every round starts from the same state and gives the same bits
+TEST(AimingTutorial, RoundsReplayBitIdentical) {
+  const AimingRun run = RunAiming(100, 60, 10, 4);
+  EXPECT_EQ(run.rounds, 4);
+  EXPECT_EQ(run.same_rounds, 3);
+}
+
+// The launch angle is integer-only in Fixed16: these bits are the same on
+// every machine, the DS included
+TEST(AimingTutorial, Fixed16AngleGolden) {
+  using Traits = neko::ScalarTraits<Scalar>;
+  if constexpr (!Traits::kIsFixedPoint) {
+    GTEST_SKIP() << "the golden bits are for NEKO_SCALAR=FIXED16";
+  } else {
+    AimingSample sample;
+    BeginWith(sample, {});
+    RunSteps(sample, AimingSample::kRoundSteps);
+    // 0.35973 rad (20.611 degrees) and -0.14035 m
+    EXPECT_EQ(Traits::ToBits(sample.lead().angle.value()), 23575);
+    ASSERT_TRUE(sample.measured_error().has_value());
+    EXPECT_EQ(Traits::ToBits(*sample.measured_error()), -9198);
+  }
+}
+
+TEST(AimingTutorial, SameParametersSameRun) {
+  std::vector<neko::SampleRegistry::Entry> samples;
+  samples.push_back({"12 Aiming", std::make_unique<AimingSample>()});
+  neko::SampleRegistry registry{std::move(samples)};
+  const neko::SampleContext context{neko::sample_config::kWorldBounds};
+  const auto run = [&registry] {
+    for (int step = 0; step < 240; ++step) {
+      registry.FixedUpdate();
+    }
+    return registry.current()->GenerateChecksum();
+  };
+  registry.Select(0, context);
+  const std::uint32_t first = run();
+  registry.SetParameter(AimingSample::kTargetSpeed, -10);
+  const std::uint32_t changed = run();
+  registry.SetParameter(AimingSample::kTargetSpeed, 10);
+  const std::uint32_t restored = run();
+  EXPECT_NE(first, changed);
+  EXPECT_EQ(first, restored);
+}
+
+// Exercise "high arc": pi / 2 - theta reaches the same distance, flies longer
+// and loses less to the integrator
+TEST(AimingSolutions, HighArcReachesTheSameDistance) {
+  for (const auto& [speed, distance] :
+       {std::pair{100, 60}, std::pair{80, 30}, std::pair{110, 90}}) {
+    HighArcSample sample;
+    BeginWith(sample, {{HighArcSample::kSpeed, speed},
+                       {HighArcSample::kDistance, distance}});
+    RunSteps(sample, 300);
+    const float low = ToFloat(sample.angle(HighArcSample::kLow).value());
+    const float high = ToFloat(sample.angle(HighArcSample::kHigh).value());
+    EXPECT_NEAR(low + high, static_cast<float>(kPi / 2.0), 1e-4f);
+    for (const std::size_t shot : {HighArcSample::kLow, HighArcSample::kHigh}) {
+      ASSERT_TRUE(sample.measured_error(shot).has_value()) << shot;
+      EXPECT_NEAR(ToFloat(*sample.measured_error(shot)),
+                  ToFloat(sample.predicted_error(shot)), 3e-3f);
+    }
+    EXPECT_GT(ToFloat(*sample.flight_time(HighArcSample::kHigh)),
+              ToFloat(*sample.flight_time(HighArcSample::kLow)));
+    EXPECT_LT(std::abs(ToFloat(*sample.measured_error(HighArcSample::kHigh))),
+              std::abs(ToFloat(*sample.measured_error(HighArcSample::kLow))));
+    sample.End();
+  }
+}
+
+// Exercise "out of range": past v^2 / g Asin clamps, the shot goes at 45
+// degrees and falls short; sqrt(g d) reaches
+TEST(AimingSolutions, OutOfRangeClampsTo45Degrees) {
+  OutOfRangeSample sample;
+  BeginWith(sample, {});
+  RunSteps(sample, 300);
+  EXPECT_GT(ToFloat(sample.asin_input()), 1.0f);
+  EXPECT_NEAR(ToFloat(sample.angle().value()), static_cast<float>(kPi / 4.0),
+              1e-4f);
+  ASSERT_TRUE(sample.measured_landing().has_value());
+  ASSERT_TRUE(sample.needed_error().has_value());
+  EXPECT_NEAR(ToFloat(*sample.measured_landing()),
+              ToFloat(sample.predicted_landing()), 3e-3f);
+  EXPECT_LT(ToFloat(*sample.measured_landing()), ToFloat(sample.max_range()));
+  EXPECT_NEAR(ToFloat(sample.needed_speed()), std::sqrt(9.81f * 9.0f), 1e-3f);
+  // One step short: v_x dt
+  const float needed_vx = ToFloat(sample.needed_speed()) * std::cos(0.7854f);
+  EXPECT_NEAR(ToFloat(*sample.needed_error()), -needed_vx / 60.0f, 3e-3f);
+  sample.End();
+
+  // In range: the clamp doesn't apply
+  BeginWith(sample, {{OutOfRangeSample::kDistance, 40}});
+  EXPECT_LT(ToFloat(sample.asin_input()), 1.0f);
+  EXPECT_LT(ToFloat(sample.angle().value()), static_cast<float>(kPi / 4.0));
+  sample.End();
+}
+
+// Exercise "moving target": each iteration shrinks the miss, down to the
+// integrator's own error
+TEST(AimingSolutions, MovingTargetMissShrinksWithIterations) {
+  for (const int target_speed : {20, -20, 30}) {
+    MovingTargetSample sample;
+    BeginWith(sample, {{MovingTargetSample::kTargetSpeed, target_speed}});
+    RunSteps(sample, 300);
+    const float speed = 10.0f;
+    const float u = static_cast<float>(target_speed) / 10.0f;
+    float previous = 1e9f;
+    for (std::size_t i = 0; i < MovingTargetSample::kShotCount; ++i) {
+      ASSERT_TRUE(sample.miss(i).has_value()) << i;
+      const float miss = ToFloat(*sample.miss(i));
+      EXPECT_NEAR(miss, ToFloat(sample.predicted_miss(i)), 3e-3f) << i;
+      // What is left once the integrator's step, -(v_x - u) dt, is taken
+      // out: the lead's own error, shrinking at every iteration
+      const float angle = ToFloat(sample.lead(i).angle.value());
+      const float integrator = -(speed * std::cos(angle) - u) / 60.0f;
+      const float lead_miss = std::abs(miss - integrator);
+      EXPECT_LT(lead_miss, 0.5f * previous) << i;
+      previous = lead_miss;
+    }
+    // Three iterations: within 10 cm of the integrator's step at 3 m/s,
+    // 1 cm at 2 m/s
+    EXPECT_LT(previous, target_speed == 30 ? 0.1f : 0.015f);
+    sample.End();
+  }
+}
+
+// Exercise "error table": the Fixed16 inverse trigonometry is within one step
+// (15.3 urad) of the exact angle
+TEST(AimingSolutions, ErrorTableWithinOneStep) {
+  ErrorTableSample sample;
+  BeginWith(sample, {});
+  EXPECT_LT(sample.asin_max_error(), 15.3);
+  EXPECT_LT(sample.atan2_max_error(), 15.3);
+  EXPECT_GT(sample.asin_max_error(), 1.0);
+  EXPECT_NEAR(sample.fixed_angle(), sample.float_angle(), 5e-5);
+  EXPECT_LT(std::abs(sample.range_shift()), 1000.0);
+  // Computed from both types whatever NEKO_SCALAR is: the same everywhere
+  const std::uint32_t checksum = sample.GenerateChecksum();
+  sample.End();
+  BeginWith(sample, {});
+  EXPECT_EQ(sample.GenerateChecksum(), checksum);
+  sample.End();
+}
+
+}  // namespace
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
