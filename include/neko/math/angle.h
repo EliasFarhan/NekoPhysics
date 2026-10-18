@@ -201,7 +201,7 @@ inline Scalar Cos(Radian angle) { return Cos(angle.value()); }
 /// @return The tangent of @p angle (very large near +/- 90 degrees).
 inline Scalar Tan(Radian angle) { return Tan(angle.value()); }
 
-/// Arcsine: the angle whose sine is @p value, in the range from -pi / 2 to
+/// Arcsine: the angle whose sine is `value`, in the range from -pi / 2 to
 /// pi / 2.
 ///
 /// Forwards to @ref ScalarTraits: with @ref Fixed16 an integer-only version
@@ -221,7 +221,7 @@ inline Radian Asin(Scalar value) {
   return Radian{ScalarTraits<Scalar>::Asin(value)};
 }
 
-/// Angle of the vector (@p x, @p y): the direction it points to, measured
+/// Angle of the vector (`x`, `y`): the direction it points to, measured
 /// counterclockwise from +x, in the range from -pi (excluded) to pi.
 ///
 /// Note the order, y first, like `std::atan2`. Forwards to @ref ScalarTraits:

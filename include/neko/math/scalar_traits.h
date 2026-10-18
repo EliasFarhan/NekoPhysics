@@ -84,7 +84,7 @@ struct ScalarTraits<float> {
   [[nodiscard]] static float Asin(float value) {
     return std::asin(Clamp(value, -1.0f, 1.0f));
   }
-  /// Angle of the vector (@p x, @p y) in radians, in the range from -pi
+  /// Angle of the vector (`x`, `y`) in radians, in the range from -pi
   /// (excluded) to pi (`std::atan2`).
   ///
   /// @param y The y component.
@@ -111,7 +111,7 @@ struct ScalarTraits<float> {
   [[nodiscard]] static constexpr Bits ToBits(float value) noexcept {
     return std::bit_cast<Bits>(value);
   }
-  /// Value with the raw bits @p bits, the inverse of @ref ToBits.
+  /// Value with the raw bits `bits`, the inverse of @ref ToBits.
   ///
   /// @param bits An IEEE 754 bit pattern.
   /// @return The value.
@@ -120,30 +120,38 @@ struct ScalarTraits<float> {
   }
 
   /// Gap between 1 and the next value, about 1.2e-7.
+  ///
+  /// @return The machine epsilon of `float`.
   [[nodiscard]] static constexpr float Epsilon() noexcept {
     return std::numeric_limits<float>::epsilon();
   }
   /// Largest finite value, about 3.4e38.
+  ///
+  /// @return The largest `float`.
   [[nodiscard]] static constexpr float Max() noexcept {
     return std::numeric_limits<float>::max();
   }
   /// Default tolerance to compare two results of a few operations on values
   /// around 1: 1e-5.
+  ///
+  /// @return The tolerance.
   [[nodiscard]] static constexpr float Tolerance() noexcept { return 1e-5f; }
   /// Largest error of @ref Asin and @ref Atan2 against the exact angle of
-  /// their inputs, as tested: 1e-6 rad.
+  /// their inputs: 1e-6 rad, a few `float` steps at pi.
+  ///
+  /// @return The tolerance.
   [[nodiscard]] static constexpr float AngleTolerance() noexcept {
     return 1e-6f;
   }
 
-  /// Converts the integer @p value.
+  /// Converts the integer `value`.
   ///
   /// @param value The integer.
   /// @return The same value as a `float`.
   [[nodiscard]] static constexpr float FromInt(int value) noexcept {
     return static_cast<float>(value);
   }
-  /// The ratio @p num / @p den, the deterministic way to write a fraction.
+  /// The ratio `num / den`, the deterministic way to write a fraction.
   ///
   /// @param num The numerator.
   /// @param den The denominator, not 0.
@@ -226,7 +234,7 @@ struct ScalarTraits<Fixed<T, Exp, MulT>> {
   [[nodiscard]] static constexpr Type Asin(Type value) noexcept {
     return internal::AsinFixed16(value);
   }
-  /// Angle of the vector (@p x, @p y) in radians, in the range from -pi
+  /// Angle of the vector (`x`, `y`) in radians, in the range from -pi
   /// (excluded) to pi, with integers only.
   ///
   /// The smaller component is divided by the larger one, the arctangent of
@@ -248,7 +256,7 @@ struct ScalarTraits<Fixed<T, Exp, MulT>> {
   [[nodiscard]] static constexpr Type Abs(Type value) noexcept {
     return neko::Abs(value);
   }
-  /// Largest whole number not greater than @p value: clears the fractional
+  /// Largest whole number not greater than `value`: clears the fractional
   /// bits (two's complement rounds negative values down).
   ///
   /// @param value The value.
@@ -259,7 +267,7 @@ struct ScalarTraits<Fixed<T, Exp, MulT>> {
         static_cast<T>(value.underlying_value() & ~fraction_mask));
   }
 
-  /// Raw bits of @p value: the scaled integer.
+  /// Raw bits of `value`: the scaled integer.
   ///
   /// @param value The value.
   /// @return @ref Fixed::underlying_value.
@@ -275,20 +283,28 @@ struct ScalarTraits<Fixed<T, Exp, MulT>> {
   }
 
   /// One step, the smallest positive value (1 / 65536 for @ref Fixed16).
+  ///
+  /// @return The value whose raw bits are 1.
   [[nodiscard]] static constexpr Type Epsilon() noexcept {
     return Type::FromUnderlyingValue(T{1});
   }
   /// Largest value (about 32768 for @ref Fixed16).
+  ///
+  /// @return The value with the largest raw bits.
   [[nodiscard]] static constexpr Type Max() noexcept {
     return Type::FromUnderlyingValue(std::numeric_limits<T>::max());
   }
   /// Default tolerance to compare two results of a few operations on values
   /// around 1: 4 steps.
+  ///
+  /// @return The tolerance.
   [[nodiscard]] static constexpr Type Tolerance() noexcept {
     return Type::FromUnderlyingValue(T{4});
   }
   /// Largest error of @ref Asin and @ref Atan2 against the exact angle of
   /// their inputs, as tested: 1 step.
+  ///
+  /// @return The tolerance.
   [[nodiscard]] static constexpr Type AngleTolerance() noexcept {
     return Type::FromUnderlyingValue(T{1});
   }
@@ -300,7 +316,7 @@ struct ScalarTraits<Fixed<T, Exp, MulT>> {
   [[nodiscard]] static constexpr Type FromInt(int value) noexcept {
     return Type{value};
   }
-  /// The ratio @p num / @p den, without floating point (truncated toward
+  /// The ratio `num / den`, without floating point (truncated toward
   /// zero).
   ///
   /// @param num The numerator.
