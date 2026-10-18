@@ -5,6 +5,7 @@
 
 #include <gtest/gtest.h>
 
+#include "neko/math/scalar_traits.h"
 #include "neko/physics/physics.h"
 
 namespace {
@@ -15,11 +16,7 @@ using neko::Vec2f;
 
 template <typename T>
 float ToFloat(T value) {
-  if constexpr (std::is_same_v<T, float>) {
-    return value;
-  } else {
-    return static_cast<float>(value);
-  }
+  return neko::ScalarTraits<T>::ToFloat(value);
 }
 
 // A free body in a world without gravity, stepped at the given rate

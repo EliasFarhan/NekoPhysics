@@ -9,6 +9,7 @@
 #include "neko/math/angle.h"
 #include "neko/math/const.h"
 #include "neko/math/func.h"
+#include "neko/math/scalar_traits.h"
 #include "neko/physics/physics.h"
 
 namespace {
@@ -26,14 +27,11 @@ constexpr Scalar Ratio(int num, int den) {
 Scalar QuarterTurn() { return neko::Pi<Scalar>() / Scalar{2}; }
 Scalar EighthTurn() { return neko::Pi<Scalar>() / Scalar{4}; }
 
-// static_cast<float> would be a useless cast when Scalar is float
+// ScalarTraits picks the conversion (none for float: it would be a useless
+// cast)
 template <typename T>
 float ToFloat(T value) {
-  if constexpr (std::is_same_v<T, float>) {
-    return value;
-  } else {
-    return static_cast<float>(value);
-  }
+  return neko::ScalarTraits<T>::ToFloat(value);
 }
 
 void ExpectNear(Scalar actual, Scalar expected, Scalar tolerance) {

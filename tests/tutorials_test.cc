@@ -139,15 +139,11 @@ using neko::tutorial::TwoBoxesByHandSample;
 using neko::tutorial::TwoRampsSample;
 using neko::tutorial::WhereSlackSample;
 
-// static_cast<float> would be a useless cast when Scalar is float. A template
-// so that if constexpr discards the branch that doesn't compile for the type.
+// ScalarTraits picks the conversion (none for float: it would be a useless
+// cast)
 template <typename T>
 float ToFloat(T value) {
-  if constexpr (std::is_same_v<T, float>) {
-    return value;
-  } else {
-    return static_cast<float>(value);
-  }
+  return neko::ScalarTraits<T>::ToFloat(value);
 }
 
 struct BounceRun {

@@ -10,6 +10,7 @@
 #include "neko/math/angle.h"
 #include "neko/math/const.h"
 #include "neko/math/func.h"
+#include "neko/math/scalar_traits.h"
 #include "neko/physics/physics.h"
 
 namespace {
@@ -26,15 +27,11 @@ constexpr Scalar Ratio(int num, int den) {
 
 Scalar Pi() { return neko::Pi<Scalar>(); }
 
-// static_cast<float> would be a useless cast when Scalar is float. A template
-// so that if constexpr discards the branch that doesn't compile for the type.
+// ScalarTraits picks the conversion (none for float: it would be a useless
+// cast)
 template <typename T>
 float ToFloat(T value) {
-  if constexpr (std::is_same_v<T, float>) {
-    return value;
-  } else {
-    return static_cast<float>(value);
-  }
+  return neko::ScalarTraits<T>::ToFloat(value);
 }
 
 // Close enough for values computed with table sines (5e-5) and 1/65536 steps

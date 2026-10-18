@@ -8,6 +8,7 @@
 #include "neko/math/angle.h"
 #include "neko/math/const.h"
 #include "neko/math/func.h"
+#include "neko/math/scalar_traits.h"
 #include "neko/physics/physics.h"
 
 namespace {
@@ -24,11 +25,7 @@ constexpr Scalar Ratio(int num, int den) {
 
 template <typename T>
 float ToFloat(T value) {
-  if constexpr (std::is_same_v<T, float>) {
-    return value;
-  } else {
-    return static_cast<float>(value);
-  }
+  return neko::ScalarTraits<T>::ToFloat(value);
 }
 
 void ExpectNear(Scalar actual, Scalar expected, Scalar tolerance) {
