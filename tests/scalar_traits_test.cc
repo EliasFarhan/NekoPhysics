@@ -7,6 +7,7 @@
 #include <iostream>
 #include <limits>
 #include <numbers>
+#include <type_traits>
 #include <utility>
 
 #include <gtest/gtest.h>
@@ -254,6 +255,13 @@ TEST(FloatTraits, InverseTrig) {
   EXPECT_FLOAT_EQ(FloatTraits::Atan2(0.0f, -1.0f), std::numbers::pi_v<float>);
   EXPECT_FLOAT_EQ(FloatTraits::Atan2(1.0f, 1.0f),
                   std::numbers::pi_v<float> / 4.0f);
+  // float keeps the sign of a negative zero y (documented), Fixed16 has none
+  EXPECT_FLOAT_EQ(FloatTraits::Atan2(-0.0f, -1.0f), -std::numbers::pi_v<float>);
+}
+
+TEST(ScalarTraits, TypeAlias) {
+  static_assert(std::is_same_v<FloatTraits::Type, float>);
+  static_assert(std::is_same_v<Fixed16Traits::Type, neko::Fixed16>);
 }
 
 // The Radian API on the configured Scalar

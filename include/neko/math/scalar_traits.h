@@ -49,6 +49,8 @@ struct ScalarTraits;
 /// simulation can't promise bit-identical replays between two machines.
 template <>
 struct ScalarTraits<float> {
+  /// The number type these traits describe: `float`.
+  using Type = float;
   /// The raw bits of a value: the IEEE 754 single precision pattern.
   using Bits = std::uint32_t;
 
@@ -84,12 +86,17 @@ struct ScalarTraits<float> {
   [[nodiscard]] static float Asin(float value) {
     return std::asin(Clamp(value, -1.0f, 1.0f));
   }
-  /// Angle of the vector (`x`, `y`) in radians, in the range from -pi
-  /// (excluded) to pi (`std::atan2`).
+  /// Angle of the vector (`x`, `y`) in radians, in the range from -pi to pi
+  /// (`std::atan2`).
+  ///
+  /// Unlike the @ref Fixed16 version, `float` has a negative zero, and
+  /// `std::atan2` keeps its sign: a negative `x` with `y` equal to -0 gives
+  /// -pi instead of pi, and the zero vector gives 0, pi, -0 or -pi depending
+  /// on the signs of its zeros.
   ///
   /// @param y The y component.
   /// @param x The x component.
-  /// @return The angle; 0 for the zero vector.
+  /// @return The angle; 0 for (+0, +0).
   [[nodiscard]] static float Atan2(float y, float x) {
     return std::atan2(y, x);
   }

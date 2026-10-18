@@ -3189,7 +3189,9 @@ TEST(AimingSolutions, ErrorTableWithinOneStep) {
   EXPECT_GT(sample.asin_max_error(), 1.0);
   EXPECT_NEAR(sample.fixed_angle(), sample.float_angle(), 5e-5);
   EXPECT_LT(std::abs(sample.range_shift()), 1000.0);
-  // Computed from both types whatever NEKO_SCALAR is: the same everywhere
+  // Computed from both types whatever NEKO_SCALAR is, so both builds of this
+  // machine agree; the float half (std::asin) may differ on another machine,
+  // which is the point of the chapter: only the repeat is checked here
   const std::uint32_t checksum = sample.GenerateChecksum();
   sample.End();
   BeginWith(sample, {});
