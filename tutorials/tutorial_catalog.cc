@@ -82,6 +82,11 @@
 #include "tutorials/15_fast_projectile/solutions/speed_threshold_sample.h"
 #include "tutorials/15_fast_projectile/solutions/substeps_vs_ccd_sample.h"
 #include "tutorials/15_fast_projectile/solutions/trigger_hits_sample.h"
+#include "tutorials/16_seesaw/seesaw_sample.h"
+#include "tutorials/16_seesaw/solutions/limit_stiffness_sample.h"
+#include "tutorials/16_seesaw/solutions/over_constrained_sample.h"
+#include "tutorials/16_seesaw/solutions/pin_vs_distance_sample.h"
+#include "tutorials/16_seesaw/solutions/retarget_chain_sample.h"
 
 namespace neko::tutorial {
 namespace {
@@ -90,7 +95,7 @@ std::unique_ptr<Sample> Create() {
   return std::make_unique<T>();
 }
 
-const std::array<TutorialEntry, 80> kTutorials{{
+const std::array<TutorialEntry, 85> kTutorials{{
     {"00_bounce/demo", "00 bounce", "00 Bounce", true, &Create<BounceSample>},
     {"00_bounce/bounces_to_rest", "00 bounce", "00 Bounces to rest", false,
      &Create<BouncesToRestSample>},
@@ -245,6 +250,15 @@ const std::array<TutorialEntry, 80> kTutorials{{
      "15 Substeps vs CCD", false, &Create<SubstepsVsCcdSample>},
     {"15_fast_projectile/trigger_hits", "15 fast projectile", "15 Trigger hits",
      false, &Create<TriggerHitsSample>},
+    {"16_seesaw/demo", "16 seesaw", "16 Seesaw", true, &Create<SeesawSample>},
+    {"16_seesaw/limit_stiffness", "16 seesaw", "16 Limit stiffness", false,
+     &Create<LimitStiffnessSample>},
+    {"16_seesaw/over_constrained", "16 seesaw", "16 Over-constrained", false,
+     &Create<OverConstrainedSample>},
+    {"16_seesaw/pin_vs_distance", "16 seesaw", "16 Pin vs distance", false,
+     &Create<PinVsDistanceSample>},
+    {"16_seesaw/retarget_chain", "16 seesaw", "16 Retarget chain", false,
+     &Create<RetargetChainSample>},
 }};
 }  // namespace
 

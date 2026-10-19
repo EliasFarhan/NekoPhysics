@@ -99,6 +99,11 @@
 #include "tutorials/15_fast_projectile/solutions/speed_threshold_sample.h"
 #include "tutorials/15_fast_projectile/solutions/substeps_vs_ccd_sample.h"
 #include "tutorials/15_fast_projectile/solutions/trigger_hits_sample.h"
+#include "tutorials/16_seesaw/seesaw_sample.h"
+#include "tutorials/16_seesaw/solutions/limit_stiffness_sample.h"
+#include "tutorials/16_seesaw/solutions/over_constrained_sample.h"
+#include "tutorials/16_seesaw/solutions/pin_vs_distance_sample.h"
+#include "tutorials/16_seesaw/solutions/retarget_chain_sample.h"
 #include "tutorials/tutorial_catalog.h"
 
 namespace {
@@ -139,6 +144,7 @@ using neko::tutorial::JetpackSample;
 using neko::tutorial::JointOrderSample;
 using neko::tutorial::LagMeasureSample;
 using neko::tutorial::LaserBounceSample;
+using neko::tutorial::LimitStiffnessSample;
 using neko::tutorial::LongLaserSample;
 using neko::tutorial::MixedSurfacesSample;
 using neko::tutorial::MovingPlatformSample;
@@ -150,18 +156,22 @@ using neko::tutorial::OneStepByHandSample;
 using neko::tutorial::OneWayBulletSample;
 using neko::tutorial::OneWaySample;
 using neko::tutorial::OutOfRangeSample;
+using neko::tutorial::OverConstrainedSample;
 using neko::tutorial::PassesSample;
 using neko::tutorial::PendulumSample;
 using neko::tutorial::PerLinkStretchSample;
 using neko::tutorial::PhysicalPendulumSample;
+using neko::tutorial::PinVsDistanceSample;
 using neko::tutorial::PointsOverATurnSample;
 using neko::tutorial::PushToStartSample;
 using neko::tutorial::PyramidSample;
 using neko::tutorial::ReachSample;
+using neko::tutorial::RetargetChainSample;
 using neko::tutorial::RiderCarrySample;
 using neko::tutorial::RollingDiskSample;
 using neko::tutorial::RotatedBoxSample;
 using neko::tutorial::RotationSample;
+using neko::tutorial::SeesawSample;
 using neko::tutorial::SingleForceSample;
 using neko::tutorial::SoftVsExplicitSample;
 using neko::tutorial::SpeedThresholdSample;
@@ -3834,11 +3844,175 @@ TEST(FastProjectileSolutions, OneWayBulletLandsEveryTime) {
   }
 }
 
+// Chapter 16: the heavier pan takes the plank down to the limit, and the
+// limit carries g (M_L - M_R) a cos(theta)
+TEST(SeesawTutorial, HeavierSideRestsOnTheLimit) {
+  for (const auto& [left, right, limit] :
+       {std::tuple{3, 1, 30}, std::tuple{1, 3, 30}, std::tuple{5, 0, 45}}) {
+    SeesawSample sample;
+    BeginWith(sample, {{SeesawSample::kLeft, left},
+                       {SeesawSample::kRight, right},
+                       {SeesawSample::kLimit, limit}});
+    RunSteps(sample, sample.settled_steps());
+    const float sign = left > right ? 1.0f : -1.0f;
+    EXPECT_NEAR(ToFloat(neko::Degree{sample.plank_angle()}.value()),
+                sign * static_cast<float>(limit), 0.1f)
+        << left << " " << right;
+    const float predicted = ToFloat(sample.predicted_torque());
+    EXPECT_NEAR(ToFloat(sample.limit_torque()), predicted,
+                0.01f * std::abs(predicted))
+        << left << " " << right;
+    sample.End();
+  }
+}
+
+// The axle carries the whole weight; the soft pins part by millimeters
+TEST(SeesawTutorial, AxleCarriesTheWeight) {
+  for (const auto& [left, right] :
+       {std::pair{0, 0}, std::pair{3, 1}, std::pair{5, 5}}) {
+    SeesawSample sample;
+    BeginWith(sample,
+              {{SeesawSample::kLeft, left}, {SeesawSample::kRight, right}});
+    RunSteps(sample, sample.settled_steps());
+    const float weight = ToFloat(sample.weight());
+    EXPECT_NEAR(ToFloat(sample.axle_force()), weight, 0.005f * weight);
+    EXPECT_LT(ToFloat(sample.max_pin_gap()), 0.02f);
+    EXPECT_EQ(sample.dropped(0), left);
+    EXPECT_EQ(sample.dropped(1), right);
+    sample.End();
+  }
+}
+
+// Equal loads: no torque for the limit to carry, an empty seesaw stays level
+TEST(SeesawTutorial, EqualLoadsNeedNoLimitTorque) {
+  for (const int crates : {0, 2, 5}) {
+    SeesawSample sample;
+    BeginWith(sample,
+              {{SeesawSample::kLeft, crates}, {SeesawSample::kRight, crates}});
+    RunSteps(sample, sample.settled_steps());
+    EXPECT_NEAR(ToFloat(sample.limit_torque()), 0.0f, 0.01f) << crates;
+    if (crates == 0) {
+      EXPECT_NEAR(ToFloat(neko::Degree{sample.plank_angle()}.value()), 0.0f,
+                  0.01f);
+    }
+    sample.End();
+  }
+}
+
+TEST(SeesawTutorial, SameParametersSameRun) {
+  std::vector<neko::SampleRegistry::Entry> samples;
+  samples.push_back({"16 Seesaw", std::make_unique<SeesawSample>()});
+  neko::SampleRegistry registry{std::move(samples)};
+  const neko::SampleContext context{neko::sample_config::kWorldBounds};
+  const auto run = [&registry] {
+    for (int step = 0; step < 300; ++step) {
+      registry.FixedUpdate();
+    }
+    return registry.current()->GenerateChecksum();
+  };
+  registry.Select(0, context);
+  const std::uint32_t first = run();
+  registry.SetParameter(SeesawSample::kLimit, 10);
+  const std::uint32_t changed = run();
+  registry.SetParameter(SeesawSample::kLimit, 30);
+  const std::uint32_t restored = run();
+  EXPECT_NE(first, changed);
+  EXPECT_EQ(first, restored);
+}
+
+// Exercise "pin vs distance": the pinned disk is a physical pendulum,
+// T sqrt(1 + r^2 / (2 L^2)), the rod pendulum a point mass; the pin holds a
+// kicked bob within millimeters, the zero-length distance joint lets the kick
+// through for a step (2 m/s for 1/60 s, 33 mm)
+TEST(SeesawSolutions, PinVsDistancePeriodsAndKicks) {
+  float previous_pin = 0.0f;
+  for (const int radius_cm : {5, 20, 50}) {
+    PinVsDistanceSample sample;
+    BeginWith(sample, {{PinVsDistanceSample::kRadius, radius_cm}});
+    RunSteps(sample, 600);
+    for (std::size_t i = 0; i < 2; ++i) {
+      const auto measured = sample.measured_period(i);
+      ASSERT_TRUE(measured.has_value()) << radius_cm << " " << i;
+      const float predicted = ToFloat(sample.predicted_period(i));
+      EXPECT_NEAR(ToFloat(*measured), predicted, 0.002f * predicted)
+          << radius_cm << " " << i;
+    }
+    const float pin = ToFloat(*sample.measured_period(0));
+    EXPECT_GT(pin, previous_pin);
+    previous_pin = pin;
+    EXPECT_LT(ToFloat(sample.max_kick_gap(0)), 0.005f);
+    EXPECT_NEAR(ToFloat(sample.max_kick_gap(1)), 2.0f / 60.0f, 0.001f);
+    sample.End();
+  }
+}
+
+// Exercise "limit stiffness": the plank rests past the limit by
+// torque / (w^2 I), and the limit pushes back with the applied torque
+TEST(SeesawSolutions, LimitSinksByTorqueOverStiffness) {
+  for (const auto& [hertz, torque] :
+       {std::pair{15, 5}, std::pair{5, 5}, std::pair{30, 20}}) {
+    LimitStiffnessSample sample;
+    BeginWith(sample, {{LimitStiffnessSample::kHertz, hertz},
+                       {LimitStiffnessSample::kTorque, torque}});
+    RunSteps(sample, 300);
+    const float predicted = ToFloat(sample.predicted_sink());
+    EXPECT_GT(predicted, 0.0f) << hertz;
+    EXPECT_NEAR(ToFloat(sample.measured_sink()), predicted, 0.1f * predicted)
+        << hertz << " " << torque;
+    EXPECT_GE(ToFloat(sample.max_overshoot()),
+              ToFloat(sample.measured_sink()) * 0.99f);
+    EXPECT_NEAR(ToFloat(sample.limit_torque()), static_cast<float>(torque),
+                0.01f * static_cast<float>(torque));
+    sample.End();
+  }
+}
+
+// Exercise "over-constrained": rods longer than the rig allows open the
+// hinges by centimeters, and the rig stays calm (no explosion) for 60 s
+TEST(SeesawSolutions, OverConstrainedRigSplitsTheError) {
+  float previous_gap = 0.0f;
+  for (const int rod_dm : {75, 80, 85}) {
+    OverConstrainedSample sample;
+    BeginWith(sample, {{OverConstrainedSample::kRodLength, rod_dm}});
+    RunSteps(sample, 3600);
+    const float gap = ToFloat(sample.max_hinge_gap());
+    EXPECT_GT(gap, previous_gap) << rod_dm;
+    previous_gap = gap;
+    EXPECT_LT(ToFloat(sample.max_speed()), 1.0f) << rod_dm;
+    EXPECT_LT(ToFloat(sample.anchor_drift()), 0.01f) << rod_dm;
+    if (rod_dm == 80) {
+      EXPECT_GT(gap, 0.02f);
+      EXPECT_LT(gap, 0.05f);
+    }
+    sample.End();
+  }
+}
+
+// Exercise "retarget chain": the collision filter follows the joint (one
+// enter and one exit per pair change), and a rope that keeps the old player's
+// length throws the new one at the chain
+TEST(SeesawSolutions, RetargetNeedsANewLength) {
+  for (const int keep_length : {0, 1}) {
+    RetargetChainSample sample;
+    BeginWith(sample, {{RetargetChainSample::kKeepLength, keep_length}});
+    RunSteps(sample, 5 * RetargetChainSample::kRetargetPeriod);
+    EXPECT_EQ(sample.retargets(), 4);
+    EXPECT_EQ(sample.enters(), sample.exits());
+    EXPECT_GE(sample.enters(), 1);
+    if (keep_length == 0) {
+      EXPECT_LT(ToFloat(sample.max_kick()), 0.01f);
+    } else {
+      EXPECT_GT(ToFloat(sample.max_kick()), 5.0f);
+    }
+    sample.End();
+  }
+}
+
 }  // namespace
 
 TEST(TutorialCatalog, CoversEverySourceAndHasUniqueIds) {
   const auto catalog = neko::tutorial::TutorialCatalog();
-  ASSERT_EQ(catalog.size(), 80u);
+  ASSERT_EQ(catalog.size(), 85u);
   std::set<std::string> ids;
   std::size_t demos = 0;
   for (const auto& entry : catalog) {
@@ -3847,15 +4021,16 @@ TEST(TutorialCatalog, CoversEverySourceAndHasUniqueIds) {
               neko::SampleRegistry::kNone);
     demos += entry.is_demo ? 1u : 0u;
   }
-  EXPECT_EQ(demos, 16u);
+  EXPECT_EQ(demos, 17u);
   EXPECT_EQ(neko::tutorial::FindTutorial("unknown"),
             neko::SampleRegistry::kNone);
   const auto root =
       std::filesystem::path{__FILE__}.parent_path().parent_path() / "tutorials";
   for (const auto& chapter : std::filesystem::directory_iterator(root)) {
     if (!chapter.is_directory() ||
-        !std::filesystem::exists(chapter.path() / "main.cc"))
+        !std::filesystem::exists(chapter.path() / "main.cc")) {
       continue;
+    }
     const auto chapter_id = chapter.path().filename().string();
     EXPECT_TRUE(ids.contains(chapter_id + "/demo"));
     for (const auto& solution :
