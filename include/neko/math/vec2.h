@@ -191,8 +191,8 @@ class Vec2 {
   ///
   /// In 3D, the cross product of two vectors of the xy plane points along z;
   /// in 2D only that z component is left. It is `|v1| * |v2| * sin(angle)`
-  /// where `angle` turns from @p v1 to @p v2: positive when @p v2 is
-  /// counter-clockwise from @p v1, negative when clockwise, zero when they
+  /// where `angle` turns from @p v1 to `v2`: positive when @p v2 is
+  /// counter-clockwise from `v1`, negative when clockwise, zero when they
   /// are parallel.
   ///
   /// Physics uses it for torque: a force `f` applied at `r` from the center

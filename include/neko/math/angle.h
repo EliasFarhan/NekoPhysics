@@ -150,7 +150,7 @@ constexpr Radian::Radian(const Degree& angle) {
   value_ = angle.value() / Scalar{180} * Pi<Scalar>();
 }
 
-/// Returns the same direction as @p angle, wrapped to one turn: at least
+/// Returns the same direction as `angle`, wrapped to one turn: at least
 /// -pi and less than pi radians.
 ///
 /// Adds or subtracts whole turns (2 pi) until the angle is in range, so an
