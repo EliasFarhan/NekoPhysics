@@ -1,3 +1,0 @@
-[submodule "externals/unordered_dense"]
-	path = externals/unordered_dense
-	url = https://github.com/martinus/unordered_dense.git
