@@ -671,6 +671,36 @@ std::optional<SweepHit> SweepShapes(const SweptShape& moving, Vec2f delta,
   }
   return SweepBoxBox(moving.box, delta, target.box);
 }
+
+// The core of a bullet's shape: shrunk on every side by a margin of an
+// eighth of its smallest size, at least slop but at most a quarter of that
+// size. A bullet resting on a floor sinks up to about the slop into it, so
+// its core stays clear of the next tile at a seam.
+SweptShape CoreOf(const SweptShape& shape, Scalar slop) {
+  const Scalar extent =
+      shape.is_circle ? shape.radius
+                      : Min(shape.box.half_size.x(), shape.box.half_size.y());
+  const Scalar margin =
+      Min(Max(DivideBy<4>(extent), slop), DivideBy<2>(extent));
+  SweptShape core = shape;
+  if (shape.is_circle) {
+    core.radius = shape.radius - margin;
+  } else {
+    core.box.half_size = shape.box.half_size - Vec2f{margin, margin};
+  }
+  return core;
+}
+
+// Where a shape moving from moving_start by delta touches the target at
+// hit: its center there, back along the normal by its reach
+Vec2f TouchPoint(const SweptShape& moving_start, Vec2f delta,
+                 const SweepHit& hit) {
+  const Vec2f center = moving_start.box.center + delta * hit.fraction;
+  const Scalar reach = moving_start.is_circle
+                           ? moving_start.radius
+                           : ProjectedRadius(moving_start.box, hit.normal);
+  return center - hit.normal * reach;
+}
 }  // namespace
 
 std::uint32_t GenerateChecksum(const Body& body) {
@@ -1855,6 +1885,9 @@ void PhysicsWorld::SolveBullets() {
   // finds the contact (touching counts) without pushing it out
   const Scalar depth =
       Max(DivideBy<2>(config_.penetration_slop), Scalar{1} / Scalar{1024});
+  const auto core_of = [this](const SweptShape& shape) {
+    return CoreOf(shape, config_.penetration_slop);
+  };
   // A collider's shape with its body at position, turned by rotation
   const auto swept_shape = [this](const Collider& collider, Vec2f position,
                                   const Rotation& rotation) {
@@ -1917,12 +1950,12 @@ void PhysicsWorld::SolveBullets() {
     }
     const Vec2f end = bullet.position;
     const Vec2f start = end - displacement;
-    // Calls visit(moving, other, hit) for every pair of a collider of the
-    // bullet and another collider that passes accept and whose shapes meet
-    // during the step, after its start. The sweep is relative: the other
-    // shape stays at its end place and the bullet's moves by the difference
-    // of the two displacements.
-    const auto for_each_hit = [&](auto accept, auto visit) {
+    // Calls visit(moving, other, moving_start, delta, target) for every pair
+    // of a collider of the bullet and another collider that passes accept and
+    // whose swept bounds meet. The sweep is relative: the other shape
+    // (target) stays at its end place and the bullet's moves from
+    // moving_start by delta, the difference of the two displacements.
+    const auto for_each_candidate = [&](auto accept, auto visit) {
       for (Collider& moving : colliders_) {
         if (moving.body_index != bullet_index || !is_live(moving)) {
           continue;
@@ -1943,10 +1976,7 @@ void PhysicsWorld::SolveBullets() {
           }
           SweptShape moving_start = moving_end;
           moving_start.box.center = moving_end.box.center - delta;
-          const auto hit = SweepShapes(moving_start, delta, target);
-          if (hit.has_value() && hit->fraction > Scalar{0}) {
-            visit(moving, other, *hit);
-          }
+          visit(moving, other, moving_start, delta, target);
         }
       }
     };
@@ -1960,7 +1990,7 @@ void PhysicsWorld::SolveBullets() {
       ColliderIndex moving;
     };
     std::optional<Impact> impact;
-    for_each_hit(
+    for_each_candidate(
         [this, has_joint_filter](const Collider& moving,
                                  const Collider& other) {
           const BodyType type = bodies_[other.body_index.index()].type;
@@ -1971,7 +2001,22 @@ void PhysicsWorld::SolveBullets() {
                  !IsPassing({moving.collider_index, other.collider_index});
         },
         [&](const Collider& moving, const Collider& other,
-            const SweepHit& hit) {
+            const SweptShape& moving_start, Vec2f delta,
+            const SweptShape& target) {
+          // Only an obstacle the core of the shape (shrunk by margin) meets
+          // counts: a bullet sliding on a floor rests a little into it and
+          // grazes the next tile's corner at a seam, which must not stop it
+          const SweptShape core = core_of(moving_start);
+          const auto core_hit = SweepShapes(core, delta, target);
+          if (!core_hit.has_value() || core_hit->fraction == Scalar{0}) {
+            return;
+          }
+          // The impact is where the whole shape touches (it overlaps
+          // already at the start: it stays there)
+          const auto touch = SweepShapes(moving_start, delta, target);
+          const SweepHit hit = touch.has_value() && touch->fraction > Scalar{0}
+                                   ? *touch
+                                   : SweepHit{Scalar{0}, core_hit->normal};
           if (impact.has_value() &&
               (hit.fraction > impact->hit.fraction ||
                (hit.fraction == impact->hit.fraction &&
@@ -1980,9 +2025,10 @@ void PhysicsWorld::SolveBullets() {
                   moving.collider_index > impact->moving))))) {
             return;
           }
-          // A one-way collider blocks only from its solid side
+          // A one-way collider blocks only from its solid side, judged at
+          // the point where the shapes touch
           const Body& other_body = bodies_[other.body_index.index()];
-          const Vec2f point = start + displacement * hit.fraction;
+          const Vec2f point = TouchPoint(moving_start, delta, hit);
           if ((other.is_one_way &&
                !OneWayRuleAllowsSolid(other_body, other, bullet, hit.normal,
                                       point)) ||
@@ -1998,8 +2044,10 @@ void PhysicsWorld::SolveBullets() {
       // Back to the impact, the rest of the step is dropped; the velocity
       // stays for the next step's contact
       end_fraction = impact->hit.fraction;
-      bullet.position =
-          start + displacement * end_fraction - impact->hit.normal * depth;
+      bullet.position = start + displacement * end_fraction;
+      if (end_fraction > Scalar{0}) {
+        bullet.position -= impact->hit.normal * depth;
+      }
     }
 
     // Trigger pairs: every crossing up to the impact, not already touching
@@ -2007,12 +2055,18 @@ void PhysicsWorld::SolveBullets() {
       return a.pair < b.pair;
     };
     bullet_trigger_hits_.clear();
-    for_each_hit(
+    for_each_candidate(
         [](const Collider& moving, const Collider& other) {
           return moving.is_trigger || other.is_trigger;
         },
         [&](const Collider& moving, const Collider& other,
-            const SweepHit& hit) {
+            const SweptShape& moving_start, Vec2f delta,
+            const SweptShape& target) {
+          const auto touch = SweepShapes(moving_start, delta, target);
+          if (!touch.has_value() || touch->fraction == Scalar{0}) {
+            return;
+          }
+          const SweepHit& hit = *touch;
           if (hit.fraction > end_fraction ||
               std::binary_search(
                   touching_pairs_.begin(), touching_pairs_.end(),

@@ -282,8 +282,15 @@ struct Body {
   /// - **Solid colliders** of the bullet are swept against the solid
   ///   colliders of static and kinematic bodies, one-way ones included (they
   ///   block only a bullet that comes from their solid side, the rule of
-  ///   @ref Collider::is_one_way). At the earliest time of impact (equal
-  ///   times: the lower collider index) the body is moved back to where it
+  ///   @ref Collider::is_one_way). Only an obstacle that the bullet's core
+  ///   meets stops it: its shape shrunk on every side by an eighth of its
+  ///   smallest size (at least @ref PhysicsWorldConfig::penetration_slop, at
+  ///   most a quarter of that size). A bullet sliding on a floor rests a
+  ///   little into it and touches the corner of the next tile at every seam;
+  ///   its core passes above, so it keeps sliding, and an obstacle that only
+  ///   grazes it by less than the margin is left to the next step's
+  ///   contacts. At the earliest time of impact (equal times: the lower
+  ///   collider index) the body is moved back to where its whole shape
   ///   touches, then half of @ref PhysicsWorldConfig::penetration_slop into
   ///   the shape (at least 1/1024 m), so the next step's contact finds the
   ///   pair and makes it bounce or stop. The velocity is kept and the rest
@@ -303,9 +310,11 @@ struct Body {
   /// already overlaps at the start of the step (the step's contacts handle
   /// it), and it is skipped when the bullet moves less than a quarter of its
   /// smallest size in the step: steps that short overlap anything on the way
-  /// (Box2D's rule, which also keeps slow bullets from stopping at the seams
-  /// between floor tiles). Solid bullets against solid dynamic bodies are not
-  /// swept: two fast dynamic bodies can still pass through each other.
+  /// (Box2D's rule). Solid bullets against solid dynamic bodies are not
+  /// swept: two fast dynamic bodies can still pass through each other. The
+  /// motion of another bullet is taken from its velocity, even when its own
+  /// sweep stopped it earlier in the same step: a trigger bullet crossing a
+  /// bullet that hit a wall in that step sees it a little off.
   ///
   /// Each bullet costs one scan of the colliders per step, with a bounding
   /// box test before each exact sweep: mark only the few bodies that need

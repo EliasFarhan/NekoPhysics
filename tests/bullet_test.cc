@@ -497,6 +497,41 @@ TEST(Bullet, SlowBulletIsNotSwept) {
   EXPECT_EQ(run(true), run(false));
 }
 
+// A bullet sliding at 30 m/s on a floor of 1 m tiles grazes the next tile's
+// corner at every seam (it rests a little into the floor): it must neither
+// stop there nor be thrown up (review 1 of S4, B1)
+TEST(Bullet, SlidesAcrossTiledFloor) {
+  for (const ShapeType shape : {ShapeType::kCircle, ShapeType::kAabb}) {
+    neko::PhysicsWorld world{{.max_bodies = 32,
+                              .max_colliders = 32,
+                              .max_touching_pairs = 32,
+                              .max_broadphase_pairs = 64,
+                              .max_joints = 0}};
+    for (int tile = 0; tile < 30; ++tile) {
+      AddShape(world, neko::BodyType::kStatic, ShapeType::kAabb,
+               {static_cast<Scalar>(tile) + Ratio(1, 2), -Ratio(1, 2)},
+               {Ratio(1, 2), Ratio(1, 2)});
+    }
+    const Shape shot = AddShot(world, shape, {Ratio(1, 2), Ratio(1, 10)},
+                               {Scalar{0}, Scalar{0}}, false);
+    world.collider(shot.collider).friction = Scalar{0};
+    Steps(world, 60);
+    const Vec2f rest = world.body(shot.body).position;
+    world.body(shot.body).velocity = {Scalar{30}, Scalar{0}};
+    world.body(shot.body).is_bullet = true;
+    for (int step = 0; step < 40; ++step) {
+      world.Step();
+      const neko::Body& body = world.body(shot.body);
+      ASSERT_NEAR(ToFloat(body.position.y()), ToFloat(rest.y()), 0.003f)
+          << step;
+      ASSERT_NEAR(ToFloat(body.velocity.x()), 30.0f, 0.01f) << step;
+      ASSERT_NEAR(ToFloat(body.velocity.y()), 0.0f, 0.2f) << step;
+    }
+    EXPECT_NEAR(ToFloat(world.body(shot.body).position.x()),
+                ToFloat(rest.x()) + 20.0f, 0.02f);
+  }
+}
+
 // Solid bullets ignore dynamic bodies (out of scope) and triggers' masks
 // apply: a shot whose mask leaves out the wall flies through it
 TEST(Bullet, FiltersApply) {
