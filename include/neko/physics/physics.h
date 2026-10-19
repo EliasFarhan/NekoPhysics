@@ -266,6 +266,51 @@ struct Body {
   /// When `false` the body is frozen: not integrated and its colliders are
   /// left out of collision detection, but it keeps its slot.
   bool is_active = true;
+  /// `true` for a fast dynamic body that must not pass through thin walls: a
+  /// projectile, a water shot, a dashing player. `false` by default.
+  ///
+  /// A step only looks at where bodies are, not at the way between: a body
+  /// that moves farther in one step than the wall is thick can jump over it
+  /// without ever overlapping it (tunneling: at 60 Hz a shot at 50 m/s moves
+  /// 0.83 m per step, more than a 0.35 m platform). For a bullet, each
+  /// @ref PhysicsWorld::Step adds a continuous collision pass after the
+  /// positions moved: the translation of each of its colliders from the
+  /// start to the end of the step (with the rotation of the end) is swept
+  /// against the other colliders, exactly for every pair of circles, boxes
+  /// and oriented boxes. Bullets are swept in body index order.
+  ///
+  /// - **Solid colliders** of the bullet are swept against the solid
+  ///   colliders of static and kinematic bodies, one-way ones included (they
+  ///   block only a bullet that comes from their solid side, the rule of
+  ///   @ref Collider::is_one_way). At the earliest time of impact (equal
+  ///   times: the lower collider index) the body is moved back to where it
+  ///   touches, then half of @ref PhysicsWorldConfig::penetration_slop into
+  ///   the shape (at least 1/1024 m), so the next step's contact finds the
+  ///   pair and makes it bounce or stop. The velocity is kept and the rest
+  ///   of the step's motion is dropped (as in Box2D): at most one time of
+  ///   impact per bullet per step.
+  /// - **Trigger pairs** (the bullet's collider or the other one is a
+  ///   trigger) are swept against every collider, dynamic ones too: every
+  ///   collider the path crosses up to the time of impact gets a
+  ///   @ref ContactListener::OnTriggerEnter at the end of this step, in the
+  ///   order of the crossings (equal times: the lower collider index), and
+  ///   an exit at the next step if the shapes no longer overlap. A water shot
+  ///   that flies through a player in one step still hits it.
+  ///
+  /// The sweep follows the motion of both bodies over the step (the other
+  /// body moves from where it was to where it is now), so a bullet also hits
+  /// a kinematic platform or a player that moves. It ignores what the bullet
+  /// already overlaps at the start of the step (the step's contacts handle
+  /// it), and it is skipped when the bullet moves less than a quarter of its
+  /// smallest size in the step: steps that short overlap anything on the way
+  /// (Box2D's rule, which also keeps slow bullets from stopping at the seams
+  /// between floor tiles). Solid bullets against solid dynamic bodies are not
+  /// swept: two fast dynamic bodies can still pass through each other.
+  ///
+  /// Each bullet costs one scan of the colliders per step, with a bounding
+  /// box test before each exact sweep: mark only the few bodies that need
+  /// it. Hashed by @ref GenerateChecksum only when `true`.
+  bool is_bullet = false;
 };
 
 /// Returns a hash of every field of `body`.
@@ -577,6 +622,10 @@ struct StepOverflow {
   /// @ref PhysicsWorld::AddDistanceJoint calls refused past
   /// @ref PhysicsWorldConfig::max_joints.
   std::uint32_t joints = 0;
+  /// Trigger crossings of a bullet (see @ref Body::is_bullet) dropped past
+  /// @ref PhysicsWorldConfig::max_bullet_trigger_hits: no enter event for
+  /// them.
+  std::uint32_t bullet_trigger_hits = 0;
 
   /// Returns whether any counter is non-zero.
   ///
@@ -584,7 +633,7 @@ struct StepOverflow {
   [[nodiscard]] constexpr bool IsAnyCounted() const noexcept {
     return broadphase_colliders != 0 || broadphase_pairs != 0 ||
            touching_pairs != 0 || contacts != 0 || passing_pairs != 0 ||
-           joints != 0;
+           joints != 0 || bullet_trigger_hits != 0;
   }
   /// Compares every counter.
   constexpr bool operator==(const StepOverflow& rhs) const noexcept = default;
@@ -648,6 +697,12 @@ struct PhysicsWorldConfig {
   /// @ref StepOverflow::passing_pairs; the next step decides it again as if
   /// it had just started touching.
   std::size_t max_passing_pairs = 64;
+  /// Maximum number of colliders one bullet's trigger pairs can cross in a
+  /// step (see @ref Body::is_bullet), 8 bytes each.
+  ///
+  /// Crossings past it, in collider order, get no enter event and are
+  /// counted in @ref StepOverflow::bullet_trigger_hits.
+  std::size_t max_bullet_trigger_hits = 16;
   /// Passes of the contact solver over all the contacts of a step, see
   /// @ref ContactSolverSettings::velocity_iterations.
   ///
@@ -692,7 +747,7 @@ struct PhysicsWorldConfig {
 /// positions to draw them. See the namespace documentation for a full
 /// example.
 ///
-/// Each @ref Step runs four phases:
+/// Each @ref Step runs four phases, plus a fifth when there are bullets:
 ///
 /// - **Velocities**: the inertia of dynamic bodies is computed from their
 ///   colliders, springs add their forces, then dynamic bodies get gravity,
@@ -706,6 +761,9 @@ struct PhysicsWorldConfig {
 /// - **Positions**: dynamic and kinematic bodies move and turn at their
 ///   (corrected) velocities, and kinematic bodies with a target (see
 ///   @ref SetKinematicTarget) are put exactly on it.
+/// - **Continuous collision**: each bullet (@ref Body::is_bullet) is swept
+///   from its start to its end position, stopped at its first time of
+///   impact and given the trigger events of what it crossed.
 ///
 /// See @ref Body for the integration formula, @ref ResolveBroadphase and
 /// @ref ResolveNarrowphase for the two collision phases, and
@@ -1214,7 +1272,10 @@ class PhysicsWorld {
   [[nodiscard]] Scalar dt() const { return config_.dt; }
   /// Returns the pairs of colliders touching at the end of the last step.
   ///
-  /// Use it to poll the current contacts instead of tracking events.
+  /// Use it to poll the current contacts instead of tracking events. It
+  /// also lists the trigger pairs a bullet crossed during the last step (see
+  /// @ref Body::is_bullet), which may no longer overlap: the next step sends
+  /// their exit events.
   ///
   /// @return The touching pairs, sorted by @ref ColliderPair.
   [[nodiscard]] const ArrayList<TouchingPair>& touching_pairs() const {
@@ -1386,6 +1447,9 @@ class PhysicsWorld {
   // solid last step, or it starts touching from the solid side. Records the
   // pair in new_passing_pairs_ when it isn't.
   [[nodiscard]] bool IsOneWaySolid(ColliderPair pair, const Contact& contact);
+  // The continuous collision pass of the bullets (Body::is_bullet), after
+  // the positions moved
+  void SolveBullets();
   // Copies the cached impulses into this step's contacts, and back
   void WarmStartContacts();
   void CacheContactImpulses();
@@ -1425,6 +1489,14 @@ class PhysicsWorld {
     Radian angle{};
   };
   ArrayList<KinematicTarget> kinematic_targets_;
+  // Scratch for SolveBullets: the trigger crossings of one bullet, sorted by
+  // time before their enter events
+  struct BulletTriggerHit {
+    Scalar fraction{};
+    ColliderIndex bullet{};
+    ColliderIndex other{};
+  };
+  ArrayList<BulletTriggerHit> bullet_trigger_hits_;
   // What the last step dropped, and what calls since then dropped (added to
   // the next step's counters)
   StepOverflow step_overflow_{};

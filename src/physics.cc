@@ -374,34 +374,42 @@ Vec2f PointVelocity(const Body& body, Vec2f point) {
          (point - body.position).Perpendicular2() * body.angular_velocity;
 }
 
-// The one-way rule of the collider on one side of a contact (0 for the
-// contact's body 1, 1 for its body 2) at the moment the pair starts touching:
-// true when the pair may be solid, always for a collider that isn't one-way.
-// Solid needs the contact normal, from the one-way collider toward the other
-// shape, strictly within half the arc of the world one-way normal (by more
-// than the scalar's rounding tolerance, so a side hit on a half plane passes
-// with both scalars), and the other shape not moving along that normal
-// relative to the one-way collider at the contact point.
-bool OneWayAllowsSolid(const Contact& contact, std::size_t side) {
-  const Collider& one_way = *contact.bodies[side].collider;
-  if (!one_way.is_one_way) {
-    return true;
-  }
-  const Body& body = *contact.bodies[side].body;
-  const Body& other = *contact.bodies[1 - side].body;
+// The one-way rule of a one-way collider of body against the other shape
+// (of the body other) at the moment the pair starts touching: true when the
+// pair may be solid. Solid needs the normal toward_other, from the one-way
+// collider toward the other shape, strictly within half the arc of the world
+// one-way normal (by more than the scalar's rounding tolerance, so a side hit
+// on a half plane passes with both scalars), and the other shape not moving
+// along that normal relative to the one-way collider at the contact point.
+// Shared by the narrowphase and the sweeps of bullets.
+bool OneWayRuleAllowsSolid(const Body& body, const Collider& one_way,
+                           const Body& other, Vec2f toward_other,
+                           Vec2f contact_point) {
   const Vec2f normal = body.rotation.Rotate(one_way.one_way_normal);
-  // The contact normal points from body 2 toward body 1
-  const Vec2f toward_other =
-      side == 0 ? -contact.contact_normal : contact.contact_normal;
   const Scalar threshold =
       Cos(Radian{DivideBy<2>(one_way.one_way_arc.value())}) +
       ScalarTraits<Scalar>::Tolerance();
   if (!(Vec2f::Dot(toward_other, normal) > threshold)) {
     return false;
   }
-  const Vec2f relative = PointVelocity(other, contact.contact_point) -
-                         PointVelocity(body, contact.contact_point);
+  const Vec2f relative =
+      PointVelocity(other, contact_point) - PointVelocity(body, contact_point);
   return Vec2f::Dot(relative, normal) <= Scalar{0};
+}
+
+// The one-way rule of the collider on one side of a contact (0 for the
+// contact's body 1, 1 for its body 2); always true for a collider that isn't
+// one-way
+bool OneWayAllowsSolid(const Contact& contact, std::size_t side) {
+  const Collider& one_way = *contact.bodies[side].collider;
+  if (!one_way.is_one_way) {
+    return true;
+  }
+  // The contact normal points from body 2 toward body 1
+  return OneWayRuleAllowsSolid(
+      *contact.bodies[side].body, one_way, *contact.bodies[1 - side].body,
+      side == 0 ? -contact.contact_normal : contact.contact_normal,
+      contact.contact_point);
 }
 
 // Share of a collider's inertia per kilogram when the body's mass is spread
@@ -490,6 +498,179 @@ void Turn(Body& body, Scalar dt) {
     body.rotation.set_angle(body.rotation.angle() + Radian{turn});
   }
 }
+
+// The sweeps of bullets (Body::is_bullet). A collider's shape at one place:
+// a circle (is_circle, its center in box.center) or a box.
+struct SweptShape {
+  BoxShape box;
+  Scalar radius;
+  bool is_circle;
+};
+
+// The world box around a swept shape
+Aabbf Bounds(const SweptShape& shape) {
+  if (shape.is_circle) {
+    return Aabbf::FromCenter(shape.box.center, {shape.radius, shape.radius});
+  }
+  const BoxShape& box = shape.box;
+  return Aabbf::FromCenter(box.center,
+                           {box.half_size.x() * Abs(box.axis_x.x()) +
+                                box.half_size.y() * Abs(box.axis_y.x()),
+                            box.half_size.x() * Abs(box.axis_x.y()) +
+                                box.half_size.y() * Abs(box.axis_y.y())});
+}
+
+// The box covering box at its place and moved by offset
+Aabbf Swept(const Aabbf& box, Vec2f offset) {
+  const Vec2f low = box.min_bound();
+  const Vec2f high = box.max_bound();
+  return {
+      {Min(low.x(), low.x() + offset.x()), Min(low.y(), low.y() + offset.y())},
+      {Max(high.x(), high.x() + offset.x()),
+       Max(high.y(), high.y() + offset.y())}};
+}
+
+// Where a shape moving by delta first touches a still target: the fraction
+// of delta, from 0 to 1, and the normal there, from the target toward the
+// moving shape. A fraction of 0 (zero normal) means they overlap at the
+// start; touching counts, like contacts.
+struct SweepHit {
+  Scalar fraction;
+  Vec2f normal;
+};
+
+// The point start + t delta against a circle: the closest approach of the
+// line to the center, then back by sqrt(radius^2 - distance^2), as in
+// Raycast
+std::optional<SweepHit> SweepPointCircle(Vec2f start, Vec2f delta, Vec2f center,
+                                         Scalar radius) {
+  const Vec2f to_start = start - center;
+  if (CompareLength(to_start, radius) <= 0) {
+    return SweepHit{Scalar{0}, Vec2f::Zero()};
+  }
+  const Scalar length = delta.Length();
+  if (length == Scalar{0}) {
+    return std::nullopt;
+  }
+  const Vec2f direction{delta.x() / length, delta.y() / length};
+  const Scalar along = -Vec2f::Dot(to_start, direction);
+  const Scalar off_line = Abs(Vec2f::Cross(to_start, direction));
+  if (off_line > radius) {
+    return std::nullopt;
+  }
+  const Scalar distance =
+      along - Sqrt((radius - off_line) * (radius + off_line));
+  if (distance < Scalar{0} || distance > length) {
+    return std::nullopt;
+  }
+  const Vec2f outward = start + direction * distance - center;
+  return SweepHit{Min(distance / length, Scalar{1}),
+                  radius > Scalar{0}
+                      ? Vec2f{outward.x() / radius, outward.y() / radius}
+                      : -direction};
+}
+
+// A moving circle against a box, in the box's frame: the circle's center
+// against the box grown by the radius with rounded corners (their Minkowski
+// sum). The slab test of the grown box finds the entry; an entry in a corner
+// square (beyond the box on both axes) is replaced by the center against the
+// circle of that corner, and missing it misses the shape.
+std::optional<SweepHit> SweepCircleBox(Vec2f start, Vec2f delta, Scalar radius,
+                                       const BoxShape& box) {
+  if (CollideBoxCircle(box, start, radius, nullptr)) {
+    return SweepHit{Scalar{0}, Vec2f::Zero()};
+  }
+  const Vec2f to_start = start - box.center;
+  const Vec2f local_start{Vec2f::Dot(to_start, box.axis_x),
+                          Vec2f::Dot(to_start, box.axis_y)};
+  const Vec2f local_delta{Vec2f::Dot(delta, box.axis_x),
+                          Vec2f::Dot(delta, box.axis_y)};
+  const Vec2f half = box.half_size;
+  const auto hit =
+      RaycastLocalBox(local_start, local_delta, half + Vec2f{radius, radius});
+  if (!hit.has_value()) {
+    return std::nullopt;
+  }
+  SweepHit local{hit->fraction, hit->normal};
+  const Vec2f point = local_start + local_delta * hit->fraction;
+  if (Abs(point.x()) > half.x() && Abs(point.y()) > half.y()) {
+    const Vec2f corner{point.x() < Scalar{0} ? -half.x() : half.x(),
+                       point.y() < Scalar{0} ? -half.y() : half.y()};
+    const auto corner_hit =
+        SweepPointCircle(local_start, local_delta, corner, radius);
+    if (!corner_hit.has_value()) {
+      return std::nullopt;
+    }
+    local = *corner_hit;
+  }
+  return SweepHit{local.fraction, box.axis_x * local.normal.x() +
+                                      box.axis_y * local.normal.y()};
+}
+
+// A moving box against a box: the separating axis test over time. On each
+// face normal of the two boxes the shadows overlap during an interval of the
+// fraction; the boxes touch on the overlap of the four intervals, which
+// begins at the latest entry (the earliest axis wins a tie). That axis is the
+// normal.
+std::optional<SweepHit> SweepBoxBox(const BoxShape& moving, Vec2f delta,
+                                    const BoxShape& target) {
+  if (CollideBoxes(moving, target, nullptr)) {
+    return SweepHit{Scalar{0}, Vec2f::Zero()};
+  }
+  Scalar enter{-2};
+  Scalar exit{2};
+  Vec2f normal{};
+  const std::array<Vec2f, 4> axes = {moving.axis_x, moving.axis_y,
+                                     target.axis_x, target.axis_y};
+  for (const Vec2f axis : axes) {
+    // The target's shadow is ahead by separation - t speed: they overlap
+    // while that stays within reach
+    const Scalar separation = Vec2f::Dot(target.center - moving.center, axis);
+    const Scalar reach =
+        ProjectedRadius(moving, axis) + ProjectedRadius(target, axis);
+    const Scalar speed = Vec2f::Dot(delta, axis);
+    if (speed == Scalar{0}) {
+      if (Abs(separation) > reach) {
+        return std::nullopt;
+      }
+      continue;
+    }
+    const Scalar to_near = RayFraction(separation - reach, speed);
+    const Scalar to_far = RayFraction(separation + reach, speed);
+    const Scalar axis_enter = Min(to_near, to_far);
+    if (axis_enter > enter) {
+      enter = axis_enter;
+      normal = speed > Scalar{0} ? -axis : axis;
+    }
+    exit = Min(exit, Max(to_near, to_far));
+  }
+  if (enter > exit || enter < Scalar{0} || enter > Scalar{1}) {
+    return std::nullopt;
+  }
+  return SweepHit{enter, normal};
+}
+
+// Any pair of swept shapes. A moving box against a circle is the circle
+// moving the other way against the box, with the normal turned around.
+std::optional<SweepHit> SweepShapes(const SweptShape& moving, Vec2f delta,
+                                    const SweptShape& target) {
+  if (moving.is_circle) {
+    if (target.is_circle) {
+      return SweepPointCircle(moving.box.center, delta, target.box.center,
+                              moving.radius + target.radius);
+    }
+    return SweepCircleBox(moving.box.center, delta, moving.radius, target.box);
+  }
+  if (target.is_circle) {
+    auto hit =
+        SweepCircleBox(target.box.center, -delta, target.radius, moving.box);
+    if (hit.has_value()) {
+      hit->normal = -hit->normal;
+    }
+    return hit;
+  }
+  return SweepBoxBox(moving.box, delta, target.box);
+}
 }  // namespace
 
 std::uint32_t GenerateChecksum(const Body& body) {
@@ -508,6 +689,10 @@ std::uint32_t GenerateChecksum(const Body& body) {
   // Only when scaled: worlds that don't scale gravity keep their checksums
   if (body.gravity_scale != Scalar{1}) {
     checksum.Add(body.gravity_scale);
+  }
+  // Only when set, for the same reason
+  if (body.is_bullet) {
+    checksum.Add(body.is_bullet);
   }
   return checksum.Get();
 }
@@ -596,6 +781,8 @@ PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config)
                                                 config.max_passing_pairs)),
       kinematic_targets_(MakeList<KinematicTarget>(ConfigAllocator(config),
                                                    config.max_bodies)),
+      bullet_trigger_hits_(MakeList<BulletTriggerHit>(
+          ConfigAllocator(config), config.max_bullet_trigger_hits)),
       collider_aabb_cache_(
           MakeList<Aabbf>(ConfigAllocator(config), config.max_colliders)),
       body_area_(MakeList<Scalar>(ConfigAllocator(config), config.max_bodies)),
@@ -1650,7 +1837,234 @@ NEKO_HOT void PhysicsWorld::Step() {
     }
   }
   kinematic_targets_.clear();
+  // Continuous collision, counted with the integration
+  SolveBullets();
   StepProfileMark(StepPhase::kIntegration, t_integration_start);
+}
+
+void PhysicsWorld::SolveBullets() {
+  const auto is_bullet = [](const Body& body) {
+    return body.is_bullet && body.is_active && body.type == BodyType::kDynamic;
+  };
+  if (std::none_of(bodies_.begin(), bodies_.end(), is_bullet)) {
+    return;
+  }
+  const Scalar dt = config_.dt;
+  const bool has_joint_filter = UpdateJointFilter();
+  // Where a bullet stops: half the slop into the shape, so the next step
+  // finds the contact (touching counts) without pushing it out
+  const Scalar depth =
+      Max(DivideBy<2>(config_.penetration_slop), Scalar{1} / Scalar{1024});
+  // A collider's shape with its body at position, turned by rotation
+  const auto swept_shape = [this](const Collider& collider, Vec2f position,
+                                  const Rotation& rotation) {
+    const Vec2f center = collider.offset == Vec2f::Zero()
+                             ? position
+                             : position + rotation.Rotate(collider.offset);
+    switch (collider.type) {
+      case ShapeType::kCircle:
+        return SweptShape{{center, Vec2f::Right(), Vec2f::Up(), Vec2f::Zero()},
+                          circles_[collider.shape_index.index()].radius,
+                          true};
+      case ShapeType::kAabb:
+        return SweptShape{{center, Vec2f::Right(), Vec2f::Up(),
+                           aabbs_[collider.shape_index.index()].half_size},
+                          Scalar{0},
+                          false};
+      default:
+        return SweptShape{
+            {center, rotation.x_axis(), rotation.y_axis(),
+             oriented_boxes_[collider.shape_index.index()].half_size},
+            Scalar{0},
+            false};
+    }
+  };
+  // How far a body moved in this step's integration
+  const auto displacement_of = [dt](const Body& body) {
+    return body.is_active && (body.type == BodyType::kDynamic ||
+                              body.type == BodyType::kKinematic)
+               ? body.velocity * dt
+               : Vec2f::Zero();
+  };
+  const auto is_live = [this](const Collider& collider) {
+    return collider.type != ShapeType::kNone && collider.is_enabled &&
+           bodies_[collider.body_index.index()].is_active;
+  };
+
+  for (std::size_t b = 0; b < bodies_.size(); ++b) {
+    Body& bullet = bodies_[b];
+    if (!is_bullet(bullet)) {
+      continue;
+    }
+    const BodyIndex bullet_index{static_cast<Index>(b)};
+    // Steps shorter than a quarter of the smallest size overlap anything on
+    // the way (Box2D's rule)
+    std::optional<Scalar> min_extent;
+    for (const Collider& collider : colliders_) {
+      if (collider.body_index != bullet_index || !is_live(collider)) {
+        continue;
+      }
+      const SweptShape shape = swept_shape(collider, Vec2f::Zero(), Rotation{});
+      const Scalar extent = shape.is_circle ? shape.radius
+                                            : Min(shape.box.half_size.x(),
+                                                  shape.box.half_size.y());
+      min_extent = min_extent.has_value() ? Min(*min_extent, extent) : extent;
+    }
+    const Vec2f displacement = displacement_of(bullet);
+    if (!min_extent.has_value() ||
+        CompareLength(displacement, DivideBy<2>(*min_extent)) <= 0) {
+      continue;
+    }
+    const Vec2f end = bullet.position;
+    const Vec2f start = end - displacement;
+    // Calls visit(moving, other, hit) for every pair of a collider of the
+    // bullet and another collider that passes accept and whose shapes meet
+    // during the step, after its start. The sweep is relative: the other
+    // shape stays at its end place and the bullet's moves by the difference
+    // of the two displacements.
+    const auto for_each_hit = [&](auto accept, auto visit) {
+      for (Collider& moving : colliders_) {
+        if (moving.body_index != bullet_index || !is_live(moving)) {
+          continue;
+        }
+        const SweptShape moving_end = swept_shape(moving, end, bullet.rotation);
+        const Aabbf moving_end_box = Bounds(moving_end);
+        for (Collider& other : colliders_) {
+          if (other.body_index == bullet_index || !is_live(other) ||
+              !ShouldCollide(moving, other) || !accept(moving, other)) {
+            continue;
+          }
+          const Body& other_body = bodies_[other.body_index.index()];
+          const Vec2f delta = displacement - displacement_of(other_body);
+          const SweptShape target =
+              swept_shape(other, other_body.position, other_body.rotation);
+          if (!Intersect(Swept(moving_end_box, -delta), Bounds(target))) {
+            continue;
+          }
+          SweptShape moving_start = moving_end;
+          moving_start.box.center = moving_end.box.center - delta;
+          const auto hit = SweepShapes(moving_start, delta, target);
+          if (hit.has_value() && hit->fraction > Scalar{0}) {
+            visit(moving, other, *hit);
+          }
+        }
+      }
+    };
+
+    // Solid pairs: the earliest time of impact against static and kinematic
+    // bodies (equal times: the lower collider index, then the lower collider
+    // of the bullet)
+    struct Impact {
+      SweepHit hit;
+      ColliderIndex other;
+      ColliderIndex moving;
+    };
+    std::optional<Impact> impact;
+    for_each_hit(
+        [this, has_joint_filter](const Collider& moving,
+                                 const Collider& other) {
+          const BodyType type = bodies_[other.body_index.index()].type;
+          return !moving.is_trigger && !other.is_trigger &&
+                 (type == BodyType::kStatic || type == BodyType::kKinematic) &&
+                 !(has_joint_filter &&
+                   AreJointFiltered(moving.body_index, other.body_index)) &&
+                 !IsPassing({moving.collider_index, other.collider_index});
+        },
+        [&](const Collider& moving, const Collider& other,
+            const SweepHit& hit) {
+          if (impact.has_value() &&
+              (hit.fraction > impact->hit.fraction ||
+               (hit.fraction == impact->hit.fraction &&
+                (other.collider_index > impact->other ||
+                 (other.collider_index == impact->other &&
+                  moving.collider_index > impact->moving))))) {
+            return;
+          }
+          // A one-way collider blocks only from its solid side
+          const Body& other_body = bodies_[other.body_index.index()];
+          const Vec2f point = start + displacement * hit.fraction;
+          if ((other.is_one_way &&
+               !OneWayRuleAllowsSolid(other_body, other, bullet, hit.normal,
+                                      point)) ||
+              (moving.is_one_way &&
+               !OneWayRuleAllowsSolid(bullet, moving, other_body, -hit.normal,
+                                      point))) {
+            return;
+          }
+          impact = Impact{hit, other.collider_index, moving.collider_index};
+        });
+    Scalar end_fraction{1};
+    if (impact.has_value()) {
+      // Back to the impact, the rest of the step is dropped; the velocity
+      // stays for the next step's contact
+      end_fraction = impact->hit.fraction;
+      bullet.position =
+          start + displacement * end_fraction - impact->hit.normal * depth;
+    }
+
+    // Trigger pairs: every crossing up to the impact, not already touching
+    const auto by_pair = [](const TouchingPair& a, const TouchingPair& b) {
+      return a.pair < b.pair;
+    };
+    bullet_trigger_hits_.clear();
+    for_each_hit(
+        [](const Collider& moving, const Collider& other) {
+          return moving.is_trigger || other.is_trigger;
+        },
+        [&](const Collider& moving, const Collider& other,
+            const SweepHit& hit) {
+          if (hit.fraction > end_fraction ||
+              std::binary_search(
+                  touching_pairs_.begin(), touching_pairs_.end(),
+                  TouchingPair{{moving.collider_index, other.collider_index}},
+                  by_pair)) {
+            return;
+          }
+          if (bullet_trigger_hits_.size() >= config_.max_bullet_trigger_hits) {
+            ++step_overflow_.bullet_trigger_hits;
+            return;
+          }
+          bullet_trigger_hits_.push_back(
+              {hit.fraction, moving.collider_index, other.collider_index});
+        });
+    // In the order of the crossings (insertion sort: few entries)
+    const auto is_before = [](const BulletTriggerHit& a,
+                              const BulletTriggerHit& b) {
+      if (a.fraction != b.fraction) {
+        return a.fraction < b.fraction;
+      }
+      if (a.other != b.other) {
+        return a.other < b.other;
+      }
+      return a.bullet < b.bullet;
+    };
+    for (auto it = bullet_trigger_hits_.begin();
+         it != bullet_trigger_hits_.end(); ++it) {
+      const BulletTriggerHit value = *it;
+      auto insert_at = it;
+      while (insert_at != bullet_trigger_hits_.begin() &&
+             is_before(value, *(insert_at - 1))) {
+        *insert_at = *(insert_at - 1);
+        --insert_at;
+      }
+      *insert_at = value;
+    }
+    for (const BulletTriggerHit& crossing : bullet_trigger_hits_) {
+      const TouchingPair touching{{crossing.bullet, crossing.other}, true};
+      const auto it = std::lower_bound(
+          touching_pairs_.begin(), touching_pairs_.end(), touching, by_pair);
+      if (touching_pairs_.size() >= config_.max_touching_pairs) {
+        ++step_overflow_.touching_pairs;
+        continue;
+      }
+      // Listed until the next step, which sends the exit if the shapes no
+      // longer overlap; within the reserved capacity, no allocation
+      touching_pairs_.insert(it, touching);
+      if (contact_listener_ != nullptr) {
+        contact_listener_->OnTriggerEnter(touching.pair);
+      }
+    }
+  }
 }
 
 void PhysicsWorld::Clear() {
