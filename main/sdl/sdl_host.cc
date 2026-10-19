@@ -46,8 +46,9 @@ void DrawSampleMenu(neko::SampleRegistry& registry,
       std::size_t end = index + 1;
       if (grouped) {
         while (end < registry.size() &&
-               std::string_view{options.groups[end]} == options.groups[first])
+               std::string_view{options.groups[end]} == options.groups[first]) {
           ++end;
+        }
       }
       bool matches = false;
       for (std::size_t i = first; i < end; ++i) {
@@ -59,8 +60,9 @@ void DrawSampleMenu(neko::SampleRegistry& registry,
         for (std::size_t i = first; i < end; ++i) {
           if (!filter.PassFilter(registry.name(i)) &&
               !(grouped && filter.IsActive() &&
-                filter.PassFilter(options.groups[i])))
+                filter.PassFilter(options.groups[i]))) {
             continue;
+          }
           ImGui::PushID(static_cast<int>(i));
           if (ImGui::Selectable(registry.name(i),
                                 registry.current_index() == i)) {
