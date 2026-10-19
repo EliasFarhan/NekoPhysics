@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <span>
 
+#include "neko/math/angle.h"
 #include "neko/math/vec2.h"
 #include "neko/physics/contact_solver.h"
 #include "neko/physics/physics_type.h"
@@ -152,6 +153,123 @@ struct DistanceJoint {
 /// @return FNV-1a hash of the joint's fields.
 [[nodiscard]] std::uint32_t GenerateChecksum(const DistanceJoint& joint);
 
+/// Pins an anchor point of one @ref Body to an anchor point of another, so
+/// that the bodies can only turn about it: a hinge, the axle of a seesaw, a
+/// door's pivot, the links of a jointed bridge.
+///
+/// Get one with @ref PhysicsWorld::AddRevoluteJoint and edit it in place
+/// through @ref PhysicsWorld::revolute_joint. Revolute joints live in their
+/// own table, next to the distance joints (@ref DistanceJoint), with their
+/// own index type (@ref RevoluteJointIndex).
+///
+/// **The point constraint.** Where a distance joint holds one number, the
+/// distance, a revolute joint holds a vector: the two anchors must stay on
+/// top of each other, `C = (pB + rB) - (pA + rA) = 0` in x and in y. The
+/// solver wants the anchors' relative velocity
+///
+/// @code
+/// Cdot = vB + wB x rB - vA - wA x rA
+/// @endcode
+///
+/// to be 0 (plus the soft correction of `C`), and applies `-P` at anchor A
+/// and `+P` at anchor B, a 2D impulse found by solving a 2x2 system with the
+/// effective mass matrix (the same `K` as Box2D's revolute joint):
+///
+/// @code
+/// K = | mA + mB + iA rA.y^2 + iB rB.y^2    -iA rA.x rA.y - iB rB.x rB.y |
+///     | -iA rA.x rA.y - iB rB.x rB.y       mA + mB + iA rA.x^2 + iB rB.x^2 |
+/// P = -mass_scale K^-1 (Cdot + bias_rate C) - impulse_scale impulse
+/// @endcode
+///
+/// with `mA`, `mB` the inverse masses and `iA`, `iB` the inverse inertias.
+/// The soft step is the one of the distance joints (see @ref DistanceJoint,
+/// @ref PhysicsWorldConfig::joint_hertz and
+/// @ref PhysicsWorldConfig::joint_damping_ratio): at rest the pin acts as a
+/// stiff spring, so a load sags it by about `F K / w^2` (1.1 mm for 1 kg
+/// hanging from a static pivot at 15 Hz). Unlike a distance joint of length
+/// 0, which only holds the anchors along the line between them and has no
+/// line when they meet, the pin holds both directions at once.
+///
+/// **The limits.** With `enable_limit`, the joint angle (see
+/// @ref PhysicsWorld::RevoluteJointAngle)
+///
+/// @code
+/// angle = WrapAngle(angle_b - angle_a - reference_angle)
+/// @endcode
+///
+/// stays between `lower_angle` and `upper_angle`. Each limit is a one-sided
+/// angular constraint with the axial mass `1 / (iA + iB)`, like a rope for
+/// rotation: its accumulated impulse only pushes away from the limit (it is
+/// clamped at 0), soft when the angle is past the limit, and rigid but
+/// speculative before it (the angle may close up to the limit within the
+/// step, not past it). The limits are solved before the point in each pass.
+///
+/// There is no motor: to drive a hinge, add a torque to one of its bodies
+/// before the step (@ref Body::torque), equal and opposite on the other one
+/// if both turn.
+///
+/// Bodies linked by a revolute joint don't collide with each other unless
+/// `collide_connected` is set. Static and kinematic bodies have infinite
+/// mass in joints, so a revolute joint to a static body is a fixed axle.
+///
+/// @note A revolute joint is simulation state: @ref PhysicsWorld::CopyFrom
+/// copies the table and @ref PhysicsWorld::GenerateChecksum hashes it,
+/// including the accumulated impulses that warm start the next step.
+struct RevoluteJoint {
+  /// First body, A.
+  BodyIndex body_a{};
+  /// Second body, B.
+  BodyIndex body_b{};
+  /// Anchor on body A, in A's frame, in meters from its position.
+  Vec2f local_anchor_a{};
+  /// Anchor on body B, in B's frame, in meters from its position.
+  Vec2f local_anchor_b{};
+  /// Angle of B relative to A at which the joint angle is 0, in radians.
+  ///
+  /// @ref PhysicsWorld::AddRevoluteJoint sets it to the bodies' current
+  /// relative angle, `angle_b - angle_a`, so a joint starts at angle 0 and
+  /// the limits are measured from the pose it was built in.
+  Radian reference_angle{};
+  /// Lowest joint angle when `enable_limit` is set, in radians, between -pi
+  /// and `upper_angle`.
+  Radian lower_angle{};
+  /// Highest joint angle when `enable_limit` is set, in radians, between
+  /// `lower_angle` and pi.
+  Radian upper_angle{};
+  /// Accumulated impulse of the point constraint over the last step, in N s,
+  /// applied at anchor B (and its opposite at anchor A).
+  ///
+  /// Divided by the time step it is the force the pin carries: a 1 kg bob
+  /// hanging at rest from a static pivot pushes it up with about
+  /// `(0, 9.81 * dt)`. It warm starts the next step.
+  Vec2f impulse{};
+  /// Accumulated angular impulse of the lower limit over the last step, in
+  /// N m s, at least 0 (it only turns B up from the limit, relative to A).
+  Scalar lower_impulse{};
+  /// Accumulated angular impulse of the upper limit over the last step, in
+  /// N m s, at least 0 (it only turns B down from the limit, relative to A).
+  Scalar upper_impulse{};
+  /// Whether `lower_angle` and `upper_angle` are enforced. `false` by
+  /// default: the bodies turn freely about the pin.
+  bool enable_limit = false;
+  /// Whether the colliders of body A and body B still collide with each
+  /// other. `false` by default: hinged parts usually overlap at the hinge.
+  ///
+  /// Only solid pairs are filtered; triggers still report overlaps.
+  bool collide_connected = false;
+  /// Whether the slot holds a joint; `false` marks a free slot in the
+  /// world's revolute joint table.
+  bool is_used = false;
+};
+
+/// Returns a hash of every field of `joint`.
+///
+/// Building block of @ref PhysicsWorld::GenerateChecksum.
+///
+/// @param joint @ref RevoluteJoint to hash.
+/// @return FNV-1a hash of the joint's fields.
+[[nodiscard]] std::uint32_t GenerateChecksum(const RevoluteJoint& joint);
+
 namespace internal {
 // Per-joint data computed once per step by SolveConstraints and reused by
 // every pass. body_a is null for a joint the solver skips (a spring, a free
@@ -173,6 +291,39 @@ struct JointScratch {
   Scalar mass_scale{1};
   Scalar impulse_scale{};
   bool is_rope = false;
+};
+// Per-revolute-joint data computed once per step by SolveConstraints. body_a
+// is null for a joint the solver skips (a free slot, an inactive body, or two
+// bodies that can't move).
+struct RevoluteJointScratch {
+  Body* body_a = nullptr;
+  Body* body_b = nullptr;
+  Scalar inverse_mass_a{};
+  Scalar inverse_mass_b{};
+  Scalar inverse_inertia_a{};
+  Scalar inverse_inertia_b{};
+  Vec2f r_a{};
+  Vec2f r_b{};
+  // Inverse of the effective mass matrix K, symmetric: (xx, xy; xy, yy)
+  Scalar mass_xx{};
+  Scalar mass_xy{};
+  Scalar mass_yy{};
+  // Soft correction of the anchor separation, bias_rate * C
+  Vec2f bias{};
+  // Soft step coefficients of the point constraint
+  Scalar mass_scale{1};
+  Scalar impulse_scale{};
+  // 1 / (iA + iB), 0 when neither body turns (no limit then)
+  Scalar axial_mass{};
+  // Target angular speeds of the lower and upper limits, and their soft step
+  // coefficients (rigid while the limit isn't reached)
+  Scalar lower_bias{};
+  Scalar lower_mass_scale{1};
+  Scalar lower_impulse_scale{};
+  Scalar upper_bias{};
+  Scalar upper_mass_scale{1};
+  Scalar upper_impulse_scale{};
+  bool has_limit = false;
 };
 }  // namespace internal
 
@@ -205,6 +356,35 @@ void SolveConstraints(std::span<Contact> contacts,
                       std::span<DistanceJoint> joints, std::span<Body> bodies,
                       std::span<internal::JointScratch> joint_scratch,
                       const ContactSolverSettings& settings);
+
+/// Solves the contacts, the rigid and rope joints and the revolute joints of
+/// a step together, in the same passes.
+///
+/// As the overload without revolute joints, with the revolute joints solved
+/// after the distance joints and before the contacts in each pass, in table
+/// order (limits first, then the point; see @ref RevoluteJoint). With an
+/// empty revolute table this is exactly that overload, bit for bit.
+///
+/// @param contacts The step's solid contacts, see @ref SolveContacts.
+/// @param contact_scratch Working memory, two entries per contact.
+/// @param joints The distance joint table.
+/// @param revolute_joints The revolute joint table; free slots are skipped.
+/// Each joint's `impulse`, `lower_impulse` and `upper_impulse` hold the warm
+/// start, and the step's totals on return.
+/// @param bodies The body table the joints' indices refer to.
+/// @param joint_scratch Working memory, one entry per distance joint.
+/// @param revolute_scratch Working memory, one entry per revolute joint.
+/// @param settings Time step, passes and tolerances.
+/// @pre `contact_scratch.size() >= 2 * contacts.size()`,
+/// `joint_scratch.size() >= joints.size()` and
+/// `revolute_scratch.size() >= revolute_joints.size()`.
+void SolveConstraints(
+    std::span<Contact> contacts,
+    std::span<internal::ContactPointScratch> contact_scratch,
+    std::span<DistanceJoint> joints, std::span<RevoluteJoint> revolute_joints,
+    std::span<Body> bodies, std::span<internal::JointScratch> joint_scratch,
+    std::span<internal::RevoluteJointScratch> revolute_scratch,
+    const ContactSolverSettings& settings);
 
 }  // namespace neko
 

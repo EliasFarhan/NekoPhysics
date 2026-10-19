@@ -106,6 +106,9 @@ constexpr bool IsFreeOrientedBox(const OrientedBoxCollider& box) {
 constexpr bool IsFreeJoint(const DistanceJoint& joint) {
   return joint.type == DistanceJointType::kNone;
 }
+constexpr bool IsFreeRevoluteJoint(const RevoluteJoint& joint) {
+  return !joint.is_used;
+}
 
 // A box in the world for the narrowphase: center, unit axes (its local x and y
 // in world space) and half size along them. An AabbCollider is the same with
@@ -768,6 +771,24 @@ std::uint32_t GenerateChecksum(const DistanceJoint& joint) {
   return checksum.Get();
 }
 
+std::uint32_t GenerateChecksum(const RevoluteJoint& joint) {
+  Checksum checksum;
+  checksum.Add(joint.body_a);
+  checksum.Add(joint.body_b);
+  checksum.Add(joint.local_anchor_a);
+  checksum.Add(joint.local_anchor_b);
+  checksum.Add(joint.reference_angle.value());
+  checksum.Add(joint.lower_angle.value());
+  checksum.Add(joint.upper_angle.value());
+  checksum.Add(joint.impulse);
+  checksum.Add(joint.lower_impulse);
+  checksum.Add(joint.upper_impulse);
+  checksum.Add(joint.enable_limit);
+  checksum.Add(joint.collide_connected);
+  checksum.Add(joint.is_used);
+  return checksum.Get();
+}
+
 std::uint32_t GenerateChecksum(const CircleCollider& collider) {
   Checksum checksum;
   checksum.Add(collider.radius);
@@ -838,11 +859,16 @@ PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config)
           MakeList<DistanceJoint>(ConfigAllocator(config), config.max_joints)),
       joint_scratch_(MakeList<internal::JointScratch>(ConfigAllocator(config),
                                                       config.max_joints)),
+      revolute_joints_(MakeList<RevoluteJoint>(ConfigAllocator(config),
+                                               config.max_revolute_joints)),
+      revolute_scratch_(MakeList<internal::RevoluteJointScratch>(
+          ConfigAllocator(config), config.max_revolute_joints)),
       body_joint_filter_(
           MakeList<std::uint8_t>(ConfigAllocator(config), config.max_bodies)) {
   assert(config.max_bodies <= std::numeric_limits<Index>::max() &&
          config.max_colliders <= std::numeric_limits<Index>::max() &&
-         config.max_joints <= std::numeric_limits<Index>::max());
+         config.max_joints <= std::numeric_limits<Index>::max() &&
+         config.max_revolute_joints <= std::numeric_limits<Index>::max());
   // Fixed size from here on: SortNewTouchingPairs indexes these two directly
   // instead of push_back-ing every step
   touching_pair_bucket_count_.resize(config.max_colliders);
@@ -851,6 +877,7 @@ PhysicsWorld::PhysicsWorld(const PhysicsWorldConfig& config)
   contact_scratch_.resize(2 * config.max_touching_pairs);
   body_unit_inertia_.resize(config.max_bodies);
   joint_scratch_.resize(config.max_joints);
+  revolute_scratch_.resize(config.max_revolute_joints);
   body_joint_filter_.resize(config.max_bodies);
 }
 
@@ -869,6 +896,11 @@ void PhysicsWorld::RemoveBody(BodyIndex index) {
     if (joint.type != DistanceJointType::kNone &&
         (joint.body_a == index || joint.body_b == index)) {
       joint = DistanceJoint{};
+    }
+  }
+  for (auto& joint : revolute_joints_) {
+    if (joint.is_used && (joint.body_a == index || joint.body_b == index)) {
+      joint = RevoluteJoint{};
     }
   }
   for (const auto& collider : colliders_) {
@@ -1166,7 +1198,8 @@ NEKO_HOT void PhysicsWorld::ResolveNarrowphase() {
     WarmStartContacts();
   }
   SolveConstraints(contacts_, {contact_scratch_.data(), 2 * contacts_.size()},
-                   joints_, bodies_, joint_scratch_,
+                   joints_, revolute_joints_, bodies_, joint_scratch_,
+                   revolute_scratch_,
                    {.dt = config_.dt,
                     .velocity_iterations = config_.velocity_iterations,
                     .baumgarte = config_.baumgarte,
@@ -1290,6 +1323,13 @@ void PhysicsWorld::Teleport(BodyIndex index, Vec2f position, Radian angle) {
     if (joint.type != DistanceJointType::kNone &&
         (joint.body_a == index || joint.body_b == index)) {
       joint.impulse = Scalar{0};
+    }
+  }
+  for (RevoluteJoint& joint : revolute_joints_) {
+    if (joint.is_used && (joint.body_a == index || joint.body_b == index)) {
+      joint.impulse = Vec2f::Zero();
+      joint.lower_impulse = Scalar{0};
+      joint.upper_impulse = Scalar{0};
     }
   }
 }
@@ -1591,6 +1631,67 @@ Scalar PhysicsWorld::JointDistance(JointIndex index) const {
   return (anchors[1] - anchors[0]).Length();
 }
 
+void PhysicsWorld::SetJointBodies(JointIndex index, BodyIndex body_a,
+                                  BodyIndex body_b) {
+  DistanceJoint& joint = joints_[index.index()];
+  joint.body_a = body_a;
+  joint.body_b = body_b;
+  // Last step's impulse belonged to the old bodies
+  joint.impulse = Scalar{0};
+}
+
+RevoluteJointIndex PhysicsWorld::AddRevoluteJoint(BodyIndex body_a,
+                                                  BodyIndex body_b,
+                                                  Vec2f world_anchor) {
+  const auto slot = AcquireSlot(revolute_joints_, config_.max_revolute_joints,
+                                IsFreeRevoluteJoint);
+  if (!slot.has_value()) {
+    ++pending_overflow_.revolute_joints;
+    return kInvalidRevoluteJointIndex;
+  }
+  const Body& a = bodies_[body_a.index()];
+  const Body& b = bodies_[body_b.index()];
+  RevoluteJoint& joint = revolute_joints_[*slot];
+  joint.body_a = body_a;
+  joint.body_b = body_b;
+  joint.local_anchor_a = a.rotation.InverseRotate(world_anchor - a.position);
+  joint.local_anchor_b = b.rotation.InverseRotate(world_anchor - b.position);
+  joint.reference_angle = WrapAngle(b.rotation.angle() - a.rotation.angle());
+  joint.is_used = true;
+  return RevoluteJointIndex{*slot};
+}
+
+void PhysicsWorld::RemoveRevoluteJoint(RevoluteJointIndex index) {
+  revolute_joints_[index.index()] = RevoluteJoint{};
+}
+
+std::array<Vec2f, 2> PhysicsWorld::RevoluteJointAnchors(
+    RevoluteJointIndex index) const {
+  const RevoluteJoint& joint = revolute_joints_[index.index()];
+  const Body& body_a = bodies_[joint.body_a.index()];
+  const Body& body_b = bodies_[joint.body_b.index()];
+  return {body_a.position + body_a.rotation.Rotate(joint.local_anchor_a),
+          body_b.position + body_b.rotation.Rotate(joint.local_anchor_b)};
+}
+
+Radian PhysicsWorld::RevoluteJointAngle(RevoluteJointIndex index) const {
+  const RevoluteJoint& joint = revolute_joints_[index.index()];
+  return WrapAngle(bodies_[joint.body_b.index()].rotation.angle() -
+                   bodies_[joint.body_a.index()].rotation.angle() -
+                   joint.reference_angle);
+}
+
+void PhysicsWorld::SetRevoluteJointBodies(RevoluteJointIndex index,
+                                          BodyIndex body_a, BodyIndex body_b) {
+  RevoluteJoint& joint = revolute_joints_[index.index()];
+  joint.body_a = body_a;
+  joint.body_b = body_b;
+  // Last step's impulses belonged to the old bodies
+  joint.impulse = Vec2f::Zero();
+  joint.lower_impulse = Scalar{0};
+  joint.upper_impulse = Scalar{0};
+}
+
 void PhysicsWorld::ApplySpringForces() {
   for (const DistanceJoint& joint : joints_) {
     if (joint.type != DistanceJointType::kSpring) {
@@ -1644,6 +1745,17 @@ bool PhysicsWorld::UpdateJointFilter() {
       body_joint_filter_[joint.body_b.index()] = 1;
     }
   }
+  for (const RevoluteJoint& joint : revolute_joints_) {
+    if (joint.is_used && !joint.collide_connected) {
+      if (!has_filter) {
+        std::fill(body_joint_filter_.begin(), body_joint_filter_.end(),
+                  std::uint8_t{0});
+        has_filter = true;
+      }
+      body_joint_filter_[joint.body_a.index()] = 1;
+      body_joint_filter_[joint.body_b.index()] = 1;
+    }
+  }
   return has_filter;
 }
 
@@ -1655,6 +1767,13 @@ bool PhysicsWorld::AreJointFiltered(BodyIndex body1, BodyIndex body2) const {
   }
   for (const DistanceJoint& joint : joints_) {
     if (joint.type != DistanceJointType::kNone && !joint.collide_connected &&
+        ((joint.body_a == body1 && joint.body_b == body2) ||
+         (joint.body_a == body2 && joint.body_b == body1))) {
+      return true;
+    }
+  }
+  for (const RevoluteJoint& joint : revolute_joints_) {
+    if (joint.is_used && !joint.collide_connected &&
         ((joint.body_a == body1 && joint.body_b == body2) ||
          (joint.body_a == body2 && joint.body_b == body1))) {
       return true;
@@ -2130,6 +2249,7 @@ void PhysicsWorld::Clear() {
   kinematic_targets_.clear();
   contact_cache_.clear();
   joints_.clear();
+  revolute_joints_.clear();
   step_overflow_ = {};
   pending_overflow_ = {};
 }
@@ -2432,6 +2552,7 @@ void PhysicsWorld::CopyFrom(const PhysicsWorld& physics_world) {
   // Warm starting reads it next step: part of the simulation state
   contact_cache_ = physics_world.contact_cache_;
   joints_ = physics_world.joints_;
+  revolute_joints_ = physics_world.revolute_joints_;
   // Which pairs pass through one-way colliders: part of the simulation state
   passing_pairs_ = physics_world.passing_pairs_;
   // Targets set before the snapshot: the next step must reach them
@@ -2485,6 +2606,10 @@ std::uint32_t PhysicsWorld::GenerateChecksum() const {
     checksum.Add(target.body);
     checksum.Add(target.position);
     checksum.Add(target.angle.value());
+  }
+  // Empty in worlds without revolute joints, which keep their old checksums
+  for (const auto& joint : revolute_joints_) {
+    checksum.Add(neko::GenerateChecksum(joint));
   }
   return checksum.Get();
 }

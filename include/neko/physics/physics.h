@@ -59,7 +59,9 @@
 ///   but don't make bodies spin yet: the contact impulse goes through the
 ///   center of mass.
 /// - @ref DistanceJoint links two bodies: a rod, a rope or a spring (see
-///   @ref PhysicsWorld::AddDistanceJoint).
+///   @ref PhysicsWorld::AddDistanceJoint). @ref RevoluteJoint pins them
+///   together at a point, a hinge with optional angle limits (see
+///   @ref PhysicsWorld::AddRevoluteJoint).
 /// - @ref ContactListener is the interface your game implements to receive
 ///   trigger and collision enter/exit events.
 /// - @ref Collider::category and @ref Collider::mask choose which colliders
@@ -604,9 +606,10 @@ struct TouchingPair {
 ///
 /// @ref PhysicsWorld::Step resets the counters when it starts, then adds what
 /// that step drops. Calls made between two steps that hit a limit
-/// (@ref PhysicsWorld::AddDistanceJoint, @ref PhysicsWorld::DropThrough) are
-/// added to the next step's counters. The counters are diagnostics: not
-/// copied by @ref PhysicsWorld::CopyFrom nor hashed.
+/// (@ref PhysicsWorld::AddDistanceJoint, @ref PhysicsWorld::AddRevoluteJoint,
+/// @ref PhysicsWorld::DropThrough) are added to the next step's counters.
+/// The counters are diagnostics: not copied by @ref PhysicsWorld::CopyFrom
+/// nor hashed.
 ///
 /// @code
 /// world.Step();
@@ -637,6 +640,9 @@ struct StepOverflow {
   /// @ref PhysicsWorld::AddDistanceJoint calls refused past
   /// @ref PhysicsWorldConfig::max_joints.
   std::uint32_t joints = 0;
+  /// @ref PhysicsWorld::AddRevoluteJoint calls refused past
+  /// @ref PhysicsWorldConfig::max_revolute_joints.
+  std::uint32_t revolute_joints = 0;
   /// Trigger crossings of a bullet (see @ref Body::is_bullet) dropped past
   /// @ref PhysicsWorldConfig::max_bullet_trigger_hits: no enter event for
   /// them.
@@ -648,7 +654,7 @@ struct StepOverflow {
   [[nodiscard]] constexpr bool IsAnyCounted() const noexcept {
     return broadphase_colliders != 0 || broadphase_pairs != 0 ||
            touching_pairs != 0 || contacts != 0 || passing_pairs != 0 ||
-           joints != 0 || bullet_trigger_hits != 0;
+           joints != 0 || revolute_joints != 0 || bullet_trigger_hits != 0;
   }
   /// Compares every counter.
   constexpr bool operator==(const StepOverflow& rhs) const noexcept = default;
@@ -704,6 +710,13 @@ struct PhysicsWorldConfig {
   /// without joints. Refused additions are counted in
   /// @ref StepOverflow::joints.
   std::size_t max_joints = 64;
+  /// Maximum number of revolute joints alive at once (see
+  /// @ref RevoluteJoint), in their own table next to the distance joints.
+  ///
+  /// A revolute joint and its solver data take about 150 bytes with Fixed16;
+  /// 0 for a world without hinges. Refused additions are counted in
+  /// @ref StepOverflow::revolute_joints.
+  std::size_t max_revolute_joints = 16;
   /// Maximum number of passing pairs (see @ref Collider::is_one_way), 4 bytes
   /// each.
   ///
@@ -737,15 +750,17 @@ struct PhysicsWorldConfig {
   ///
   /// The world keeps the impulses of every touching solid pair in a contact
   /// cache, matched by @ref ContactPoint::id, and each joint keeps its own in
-  /// @ref DistanceJoint::impulse. Both are simulation state:
+  /// @ref DistanceJoint::impulse (@ref RevoluteJoint::impulse and the limit
+  /// impulses for a hinge). Both are simulation state:
   /// @ref PhysicsWorld::CopyFrom copies it and
   /// @ref PhysicsWorld::GenerateChecksum hashes it, so rollback replays stay
   /// exact.
   bool warm_starting = true;
-  /// Frequency of the length correction of rigid and rope joints, in Hz, see
+  /// Frequency of the length correction of rigid and rope joints (and of the
+  /// point and limit corrections of revolute joints), in Hz, see
   /// @ref ContactSolverSettings::joint_hertz. The default is 15.
   Scalar joint_hertz{15};
-  /// Damping ratio of the length correction of rigid and rope joints, see
+  /// Damping ratio of the joint corrections (distance and revolute), see
   /// @ref ContactSolverSettings::joint_damping_ratio. The default is 2.
   Scalar joint_damping_ratio{2};
   /// @ref Allocator for all tables; `nullptr` means @ref DefaultAllocator.
@@ -771,8 +786,8 @@ struct PhysicsWorldConfig {
 ///   colliders whose bounding boxes overlap, to avoid testing every collider
 ///   against every other one.
 /// - **Narrowphase**: the exact shape test of each candidate pair, the
-///   solver for the solid pairs and the rigid and rope joints
-///   (@ref SolveConstraints), and the enter/exit events.
+///   solver for the solid pairs, the rigid and rope joints and the revolute
+///   joints (@ref SolveConstraints), and the enter/exit events.
 /// - **Positions**: dynamic and kinematic bodies move and turn at their
 ///   (corrected) velocities, and kinematic bodies with a target (see
 ///   @ref SetKinematicTarget) are put exactly on it.
@@ -820,8 +835,8 @@ class PhysicsWorld {
   /// @return The new body's index, or @ref kInvalidBodyIndex when
   /// `max_bodies` bodies are in use.
   BodyIndex AddBody();
-  /// Removes the body, all its colliders and all its joints, freeing their
-  /// slots.
+  /// Removes the body, all its colliders and all its joints (distance and
+  /// revolute), freeing their slots.
   ///
   /// @param index @ref Body to remove.
   void RemoveBody(BodyIndex index);
@@ -1088,6 +1103,108 @@ class PhysicsWorld {
   /// @param index A valid joint index.
   /// @return The distance between the anchors.
   [[nodiscard]] Scalar JointDistance(JointIndex index) const;
+  /// Moves a distance joint to two other bodies, at runtime: a chain hooked
+  /// onto whatever trapped a player, a rope cut from one body and tied to
+  /// another.
+  ///
+  /// Keeps the joint's type, anchors (in the new bodies' frames), length and
+  /// spring constants, and resets its accumulated impulse
+  /// (@ref DistanceJoint::impulse): last step's pull belonged to the old
+  /// bodies and would kick the new ones at the next warm start. Set the
+  /// anchors and the length afterwards if the new bodies need others.
+  ///
+  /// The collision filter follows the joint (see
+  /// @ref DistanceJoint::collide_connected): at the next @ref Step the old
+  /// pair may collide again and gets its enter events, the new pair stops
+  /// colliding and gets its exit events.
+  ///
+  /// @param index A valid distance joint index.
+  /// @param body_a New first body.
+  /// @param body_b New second body, different from `body_a`.
+  void SetJointBodies(JointIndex index, BodyIndex body_a, BodyIndex body_b);
+
+  /// Adds a revolute joint (a hinge) that pins two bodies together at a
+  /// world point.
+  ///
+  /// Each body gets the point as an anchor in its own frame, so the anchors
+  /// are on top of each other now and the joint keeps them there. The
+  /// reference angle is the bodies' current relative angle (the joint angle
+  /// is 0 now, see @ref RevoluteJointAngle). No limits, no collision
+  /// between the two bodies: set @ref RevoluteJoint::enable_limit,
+  /// @ref RevoluteJoint::lower_angle, @ref RevoluteJoint::upper_angle or
+  /// @ref RevoluteJoint::collide_connected through @ref revolute_joint
+  /// afterwards. Reuses the first free slot.
+  ///
+  /// @code
+  /// // A seesaw: a plank turning about a static axle, 45 degrees each way
+  /// const neko::RevoluteJointIndex hinge =
+  ///     world.AddRevoluteJoint(axle, plank, world.body(axle).position);
+  /// world.revolute_joint(hinge).enable_limit = true;
+  /// world.revolute_joint(hinge).lower_angle =
+  ///     neko::Radian{neko::Degree{neko::Scalar{-45}}};
+  /// world.revolute_joint(hinge).upper_angle =
+  ///     neko::Radian{neko::Degree{neko::Scalar{45}}};
+  /// @endcode
+  ///
+  /// @param body_a First body.
+  /// @param body_b Second body, different from `body_a`.
+  /// @param world_anchor The pin, in world coordinates (meters).
+  /// @return The new joint's index, or @ref kInvalidRevoluteJointIndex when
+  /// `max_revolute_joints` revolute joints are in use.
+  RevoluteJointIndex AddRevoluteJoint(BodyIndex body_a, BodyIndex body_b,
+                                      Vec2f world_anchor);
+  /// Removes a revolute joint, freeing its slot.
+  ///
+  /// @param index @ref RevoluteJoint to remove.
+  void RemoveRevoluteJoint(RevoluteJointIndex index);
+  /// Returns the revolute joint at `index`.
+  ///
+  /// @param index A valid revolute joint index.
+  /// @return The joint, which can be edited in place.
+  [[nodiscard]] RevoluteJoint& revolute_joint(RevoluteJointIndex index) {
+    return revolute_joints_[index.index()];
+  }
+  /// Returns the revolute joint at `index` (read-only).
+  ///
+  /// @param index A valid revolute joint index.
+  /// @return The joint.
+  [[nodiscard]] const RevoluteJoint& revolute_joint(
+      RevoluteJointIndex index) const {
+    return revolute_joints_[index.index()];
+  }
+  /// Returns the world-space positions of a revolute joint's two anchors.
+  ///
+  /// They are on top of each other up to the joint's softness: their
+  /// distance is how far the pin gives under load.
+  ///
+  /// @param index A valid revolute joint index.
+  /// @return Anchor A then anchor B, in meters.
+  [[nodiscard]] std::array<Vec2f, 2> RevoluteJointAnchors(
+      RevoluteJointIndex index) const;
+  /// Returns the joint angle of a revolute joint: body B's angle relative to
+  /// body A, minus the reference angle.
+  ///
+  /// `WrapAngle(angle_b - angle_a - reference_angle)`, between -pi and pi,
+  /// the angle the limits compare with @ref RevoluteJoint::lower_angle and
+  /// @ref RevoluteJoint::upper_angle. Counterclockwise is positive (y-up).
+  ///
+  /// @param index A valid revolute joint index.
+  /// @return The joint angle, in radians.
+  [[nodiscard]] Radian RevoluteJointAngle(RevoluteJointIndex index) const;
+  /// Moves a revolute joint to two other bodies, at runtime.
+  ///
+  /// Keeps the anchors (in the new bodies' frames), the reference angle,
+  /// the limits and the flags, and resets the accumulated impulses
+  /// (@ref RevoluteJoint::impulse and the limit impulses). The collision
+  /// filter follows the joint, as for @ref SetJointBodies. Set the anchors
+  /// and the reference angle afterwards if the new bodies aren't pinned at
+  /// the same places.
+  ///
+  /// @param index A valid revolute joint index.
+  /// @param body_a New first body.
+  /// @param body_b New second body, different from `body_a`.
+  void SetRevoluteJointBodies(RevoluteJointIndex index, BodyIndex body_a,
+                              BodyIndex body_b);
 
   /// Finds the colliders that overlap a circle: an explosion radius, an
   /// area of effect, "is anything here?".
@@ -1386,7 +1503,8 @@ class PhysicsWorld {
   ///   a contact of the old place (see @ref PhysicsWorldConfig::warm_starting);
   /// - its passing pairs (see @ref passing_pairs);
   /// - its pending @ref SetKinematicTarget (call that after the teleport);
-  /// - the accumulated impulse of its joints (@ref DistanceJoint::impulse).
+  /// - the accumulated impulses of its joints (@ref DistanceJoint::impulse,
+  ///   and @ref RevoluteJoint::impulse with the limit impulses).
   ///
   /// The touching pairs stay until the next @ref Step, which finds the pairs
   /// at the new place: pairs of the old place get their exit events, pairs
@@ -1419,10 +1537,10 @@ class PhysicsWorld {
   /// This is how rollback netcode saves and restores the world: keep a
   /// snapshot world, `snapshot.CopyFrom(world)` to save and
   /// `world.CopyFrom(snapshot)` to roll back, then resimulate. Copies bodies,
-  /// colliders, shapes, joints, touching pairs (so enter/exit events stay
-  /// consistent after a rollback), the contact cache, the passing pairs and
-  /// the pending kinematic targets, not the listener, the BSH nor the @ref
-  /// StepOverflow counters.
+  /// colliders, shapes, joints of both kinds, touching pairs (so enter/exit
+  /// events stay consistent after a rollback), the contact cache, the passing
+  /// pairs and the pending kinematic targets, not the listener, the BSH nor the
+  /// @ref StepOverflow counters.
   ///
   /// @param physics_world World to copy from.
   /// @note Doesn't allocate when both worlds were built with the same
@@ -1432,8 +1550,9 @@ class PhysicsWorld {
   ///
   /// Peers of a networked game exchange checksums of the same frame: a
   /// mismatch means their simulations diverged (a desync). Covers bodies,
-  /// colliders, shapes, touching pairs, the contact cache, joints, passing
-  /// pairs and pending kinematic targets, but not @ref Collider::user_id nor
+  /// colliders, shapes, touching pairs, the contact cache, joints of both
+  /// kinds, passing pairs and pending kinematic targets, but not @ref
+  /// Collider::user_id nor
   /// @ref step_overflow.
   ///
   /// @return FNV-1a hash of the world state.
@@ -1470,8 +1589,8 @@ class PhysicsWorld {
   void CacheContactImpulses();
   // Adds the Hooke and damping forces of the springs to their bodies
   void ApplySpringForces();
-  // Marks the bodies of joints that filter their collisions, returns whether
-  // there is any
+  // Marks the bodies of joints (distance and revolute) that filter their
+  // collisions, returns whether there is any
   [[nodiscard]] bool UpdateJointFilter();
   // Whether a joint without collide_connected links the two bodies
   [[nodiscard]] bool AreJointFiltered(BodyIndex body1, BodyIndex body2) const;
@@ -1557,6 +1676,10 @@ class PhysicsWorld {
   // working memory
   ArrayList<DistanceJoint> joints_;
   ArrayList<internal::JointScratch> joint_scratch_;
+  // Revolute joints, in their own table (simulation state, copied and
+  // hashed), and their solver working memory
+  ArrayList<RevoluteJoint> revolute_joints_;
+  ArrayList<internal::RevoluteJointScratch> revolute_scratch_;
   // Scratch, one entry per body: 1 when it belongs to a joint that filters
   // its collisions
   ArrayList<std::uint8_t> body_joint_filter_;

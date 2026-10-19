@@ -174,6 +174,209 @@ NEKO_HOT void SolveJointPass(std::span<DistanceJoint> joints,
     }
   }
 }
+
+// Applies -impulse at anchor A and +impulse at anchor B, plus the angular
+// impulse of the limits (+axial on B, -axial on A)
+NEKO_HOT void ApplyRevoluteImpulse(const internal::RevoluteJointScratch& joint,
+                                   Vec2f impulse, Scalar axial) {
+  Body& body_a = *joint.body_a;
+  Body& body_b = *joint.body_b;
+  body_a.velocity -= impulse * joint.inverse_mass_a;
+  body_a.angular_velocity -=
+      (Vec2f::Cross(joint.r_a, impulse) + axial) * joint.inverse_inertia_a;
+  body_b.velocity += impulse * joint.inverse_mass_b;
+  body_b.angular_velocity +=
+      (Vec2f::Cross(joint.r_b, impulse) + axial) * joint.inverse_inertia_b;
+}
+
+void ResetImpulses(RevoluteJoint& joint) {
+  joint.impulse = Vec2f::Zero();
+  joint.lower_impulse = Scalar{0};
+  joint.upper_impulse = Scalar{0};
+}
+
+// Target and soft step of one limit
+struct LimitTarget {
+  Scalar bias{};
+  Scalar mass_scale{1};
+  Scalar impulse_scale{};
+};
+
+// The limit target for a distance C to the limit (positive while the limit
+// is not reached). Before the limit the angle may close up to it within the
+// step, rigidly (speculative, like a slack rope); past it the soft step pulls
+// it back.
+LimitTarget PrepareLimit(Scalar distance, const Softness& softness,
+                         Scalar inverse_dt) {
+  if (distance > Scalar{0}) {
+    return {distance * inverse_dt, Scalar{1}, Scalar{0}};
+  }
+  return {softness.bias_rate * distance, softness.mass_scale,
+          softness.impulse_scale};
+}
+
+// Lever arms, inverse effective mass matrix, separation and limit targets of
+// each revolute joint. The 2x2 matrix is normalized by its largest diagonal
+// entry before the inversion, so its determinant keeps its precision in
+// Fixed16 even for heavy bodies (inverse masses of a few 1/100).
+void PrepareRevoluteJoints(std::span<RevoluteJoint> joints,
+                           std::span<Body> bodies,
+                           std::span<internal::RevoluteJointScratch> scratch,
+                           const ContactSolverSettings& settings) {
+  assert(scratch.size() >= joints.size());
+  const Softness softness = ComputeSoftness(
+      settings.joint_hertz, settings.joint_damping_ratio, settings.dt);
+  const Scalar inverse_dt = Scalar{1} / settings.dt;
+  for (std::size_t j = 0; j < joints.size(); ++j) {
+    RevoluteJoint& joint = joints[j];
+    internal::RevoluteJointScratch& data = scratch[j];
+    data = {};
+    if (!joint.is_used) {
+      continue;
+    }
+    Body& body_a = bodies[joint.body_a.index()];
+    Body& body_b = bodies[joint.body_b.index()];
+    if (!body_a.is_active || !body_b.is_active) {
+      ResetImpulses(joint);
+      continue;
+    }
+    data.inverse_mass_a = InverseMass(body_a);
+    data.inverse_mass_b = InverseMass(body_b);
+    data.inverse_inertia_a = InverseInertia(body_a);
+    data.inverse_inertia_b = InverseInertia(body_b);
+    data.r_a = body_a.rotation.Rotate(joint.local_anchor_a);
+    data.r_b = body_b.rotation.Rotate(joint.local_anchor_b);
+    const Vec2f r_a = data.r_a;
+    const Vec2f r_b = data.r_b;
+    const Scalar i_a = data.inverse_inertia_a;
+    const Scalar i_b = data.inverse_inertia_b;
+    const Scalar mass_sum = data.inverse_mass_a + data.inverse_mass_b;
+    const Scalar k_xx =
+        mass_sum + i_a * r_a.y() * r_a.y() + i_b * r_b.y() * r_b.y();
+    const Scalar k_xy = -i_a * r_a.x() * r_a.y() - i_b * r_b.x() * r_b.y();
+    const Scalar k_yy =
+        mass_sum + i_a * r_a.x() * r_a.x() + i_b * r_b.x() * r_b.x();
+    const Scalar scale = Max(k_xx, k_yy);
+    if (scale <= Scalar{0}) {
+      // Neither body can move
+      ResetImpulses(joint);
+      continue;
+    }
+    const Scalar n_xx = k_xx / scale;
+    const Scalar n_xy = k_xy / scale;
+    const Scalar n_yy = k_yy / scale;
+    const Scalar determinant = n_xx * n_yy - n_xy * n_xy;
+    if (determinant <= Scalar{0}) {
+      // Free in one direction only (a body that turns but has no mass): no
+      // 2x2 inverse
+      ResetImpulses(joint);
+      continue;
+    }
+    const Scalar inverse_determinant = Scalar{1} / (determinant * scale);
+    data.mass_xx = n_yy * inverse_determinant;
+    data.mass_xy = -n_xy * inverse_determinant;
+    data.mass_yy = n_xx * inverse_determinant;
+    data.body_a = &body_a;
+    data.body_b = &body_b;
+    const Vec2f separation = (body_b.position + r_b) - (body_a.position + r_a);
+    data.bias = separation * softness.bias_rate;
+    data.mass_scale = softness.mass_scale;
+    data.impulse_scale = softness.impulse_scale;
+
+    const Scalar axial_inverse_mass = i_a + i_b;
+    data.has_limit = joint.enable_limit && axial_inverse_mass > Scalar{0};
+    if (data.has_limit) {
+      data.axial_mass = Scalar{1} / axial_inverse_mass;
+      const Scalar angle =
+          WrapAngle(body_b.rotation.angle() - body_a.rotation.angle() -
+                    joint.reference_angle)
+              .value();
+      const LimitTarget lower =
+          PrepareLimit(angle - joint.lower_angle.value(), softness, inverse_dt);
+      const LimitTarget upper =
+          PrepareLimit(joint.upper_angle.value() - angle, softness, inverse_dt);
+      data.lower_bias = lower.bias;
+      data.lower_mass_scale = lower.mass_scale;
+      data.lower_impulse_scale = lower.impulse_scale;
+      data.upper_bias = upper.bias;
+      data.upper_mass_scale = upper.mass_scale;
+      data.upper_impulse_scale = upper.impulse_scale;
+    } else {
+      joint.lower_impulse = Scalar{0};
+      joint.upper_impulse = Scalar{0};
+    }
+    if (!settings.warm_starting) {
+      ResetImpulses(joint);
+    }
+  }
+}
+
+void WarmStartRevoluteJoints(
+    std::span<const RevoluteJoint> joints,
+    std::span<const internal::RevoluteJointScratch> scratch) {
+  for (std::size_t j = 0; j < joints.size(); ++j) {
+    const internal::RevoluteJointScratch& data = scratch[j];
+    if (data.body_a == nullptr) {
+      continue;
+    }
+    const RevoluteJoint& joint = joints[j];
+    ApplyRevoluteImpulse(data, joint.impulse,
+                         joint.lower_impulse - joint.upper_impulse);
+  }
+}
+
+// One limit: the accumulated angular impulse stays at or above 0, so a pass
+// can release an earlier push but never pull. relative_speed is the speed at
+// which the angle moves away from the limit.
+NEKO_HOT Scalar SolveLimit(Scalar relative_speed, Scalar axial_mass,
+                           Scalar bias, Scalar mass_scale, Scalar impulse_scale,
+                           Scalar* accumulated) {
+  const Scalar change = -axial_mass * mass_scale * (relative_speed + bias) -
+                        impulse_scale * *accumulated;
+  const Scalar total = Max(*accumulated + change, Scalar{0});
+  const Scalar impulse = total - *accumulated;
+  *accumulated = total;
+  return impulse;
+}
+
+NEKO_HOT void SolveRevolutePass(
+    std::span<RevoluteJoint> joints,
+    std::span<const internal::RevoluteJointScratch> scratch) {
+  for (std::size_t j = 0; j < joints.size(); ++j) {
+    const internal::RevoluteJointScratch& data = scratch[j];
+    if (data.body_a == nullptr) {
+      continue;
+    }
+    RevoluteJoint& joint = joints[j];
+    if (data.has_limit) {
+      // Lower limit: turns B up from it relative to A
+      const Scalar lower = SolveLimit(
+          data.body_b->angular_velocity - data.body_a->angular_velocity,
+          data.axial_mass, data.lower_bias, data.lower_mass_scale,
+          data.lower_impulse_scale, &joint.lower_impulse);
+      if (lower != Scalar{0}) {
+        ApplyRevoluteImpulse(data, Vec2f::Zero(), lower);
+      }
+      // Upper limit: the mirror image, turns B down from it
+      const Scalar upper = SolveLimit(
+          data.body_a->angular_velocity - data.body_b->angular_velocity,
+          data.axial_mass, data.upper_bias, data.upper_mass_scale,
+          data.upper_impulse_scale, &joint.upper_impulse);
+      if (upper != Scalar{0}) {
+        ApplyRevoluteImpulse(data, Vec2f::Zero(), -upper);
+      }
+    }
+    // The point: P = -mass_scale K^-1 (Cdot + bias) - impulse_scale impulse
+    const Vec2f rhs = PointVelocity(*data.body_b, data.r_b) -
+                      PointVelocity(*data.body_a, data.r_a) + data.bias;
+    const Vec2f solved{data.mass_xx * rhs.x() + data.mass_xy * rhs.y(),
+                       data.mass_xy * rhs.x() + data.mass_yy * rhs.y()};
+    const Vec2f impulse =
+        solved * (-data.mass_scale) - joint.impulse * data.impulse_scale;
+    joint.impulse += impulse;
+    ApplyRevoluteImpulse(data, impulse, Scalar{0});
+  }
+}
 }  // namespace
 
 NEKO_HOT void SolveConstraints(
@@ -182,23 +385,44 @@ NEKO_HOT void SolveConstraints(
     std::span<DistanceJoint> joints, std::span<Body> bodies,
     std::span<internal::JointScratch> joint_scratch,
     const ContactSolverSettings& settings) {
+  SolveConstraints(contacts, contact_scratch, joints, {}, bodies, joint_scratch,
+                   {}, settings);
+}
+
+NEKO_HOT void SolveConstraints(
+    std::span<Contact> contacts,
+    std::span<internal::ContactPointScratch> contact_scratch,
+    std::span<DistanceJoint> joints, std::span<RevoluteJoint> revolute_joints,
+    std::span<Body> bodies, std::span<internal::JointScratch> joint_scratch,
+    std::span<internal::RevoluteJointScratch> revolute_scratch,
+    const ContactSolverSettings& settings) {
   // The contact targets use the velocities before any impulse, joints' or
   // contacts': prepare them first, then warm start both
   internal::PrepareContacts(contacts, contact_scratch, settings);
   // Without joints this is SolveContacts: no joint call in the passes
   const bool has_joints = !joints.empty();
+  const bool has_revolute_joints = !revolute_joints.empty();
   if (has_joints) {
     PrepareJoints(joints, bodies, joint_scratch, settings);
+  }
+  if (has_revolute_joints) {
+    PrepareRevoluteJoints(revolute_joints, bodies, revolute_scratch, settings);
   }
   if (settings.warm_starting) {
     if (has_joints) {
       WarmStartJoints(joints, joint_scratch);
+    }
+    if (has_revolute_joints) {
+      WarmStartRevoluteJoints(revolute_joints, revolute_scratch);
     }
     internal::WarmStartContacts(contacts, contact_scratch);
   }
   for (int pass = 0; pass < settings.velocity_iterations; ++pass) {
     if (has_joints) {
       SolveJointPass(joints, joint_scratch);
+    }
+    if (has_revolute_joints) {
+      SolveRevolutePass(revolute_joints, revolute_scratch);
     }
     internal::SolveContactPass(contacts, contact_scratch);
   }

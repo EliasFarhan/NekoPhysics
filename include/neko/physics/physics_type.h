@@ -163,6 +163,43 @@ static_assert(std::is_trivially_copyable_v<JointIndex>);
 /// It is a default-constructed @ref JointIndex.
 constexpr auto kInvalidJointIndex = JointIndex{};
 
+/// Strongly typed index of a @ref RevoluteJoint in a @ref PhysicsWorld.
+///
+/// Revolute joints have their own table, so their indices are a type of
+/// their own: the compiler rejects a @ref JointIndex (a distance joint)
+/// where a revolute joint is expected. A default-constructed index is
+/// invalid (see @ref kInvalidRevoluteJointIndex).
+class RevoluteJointIndex {
+ public:
+  /// Constructs an invalid index, equal to @ref kInvalidRevoluteJointIndex.
+  constexpr RevoluteJointIndex() noexcept = default;
+  /// Wraps a raw slot number.
+  ///
+  /// @param index_value Slot of the joint in the world's revolute joint
+  /// table.
+  explicit constexpr RevoluteJointIndex(Index index_value) noexcept
+      : index_(index_value) {}
+
+  /// Returns the raw slot number.
+  [[nodiscard]] constexpr Index index() const noexcept { return index_; }
+
+  /// Compares two indices for equality.
+  constexpr bool operator==(const RevoluteJointIndex& rhs) const noexcept =
+      default;
+
+ private:
+  Index index_ = std::numeric_limits<Index>::max();
+};
+
+static_assert(sizeof(RevoluteJointIndex) == sizeof(Index));
+static_assert(std::is_trivially_copyable_v<RevoluteJointIndex>);
+
+/// Invalid revolute joint index, returned by
+/// @ref PhysicsWorld::AddRevoluteJoint when the world is full.
+///
+/// It is a default-constructed @ref RevoluteJointIndex.
+constexpr auto kInvalidRevoluteJointIndex = RevoluteJointIndex{};
+
 /// Unordered pair of colliders, stored with `c1 < c2` so that it can be
 /// compared and sorted.
 ///
