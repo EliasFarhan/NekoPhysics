@@ -28,6 +28,9 @@ constexpr Vec2f kTicTacHalfSize{Ratio(3, 5), Ratio(3, 20)};
 constexpr Scalar kTicTacLow{5};
 constexpr Scalar kTicTacHigh = Ratio(32, 5);
 constexpr Scalar kTicTacStartX{2};
+// Splash's wrap: at 19.2 m left and right of the middle of the level, past
+// the 12.8 m view, so the platform is off screen two thirds of its cycle
+constexpr Scalar kTicTacWrapHalfWidth = Ratio(96, 5);
 
 // The crate (or player) resting on the top of a platform centered on
 // `center` with half height `half_height`
@@ -100,6 +103,8 @@ void MovingPlatformSample::Begin(const SampleContext& context) {
   left_ = context.world_bounds.min_bound().x();
   right_ = context.world_bounds.max_bound().x();
   const Vec2f bounds_center = context.world_bounds.GetCenter();
+  tictac_left_ = bounds_center.x() - kTicTacWrapHalfWidth;
+  tictac_right_ = bounds_center.x() + kTicTacWrapHalfWidth;
   const Scalar half_width = context.world_bounds.GetHalfSize().x();
   period_steps_ = parameters_[kPeriod].value * kStepsPerSecond;
   ground_ = Aabbf::FromCenter({bounds_center.x(), kGroundTop / Scalar{2}},
@@ -155,11 +160,11 @@ void MovingPlatformSample::Begin(const SampleContext& context) {
 void MovingPlatformSample::WrapTicTac() {
   const BodyIndex platform = world_.collider(tictac_).body_index;
   const Vec2f from = world_.body(platform).position;
-  if (from.x() - kTicTacHalfSize.x() <= right_) {
+  if (from.x() - kTicTacHalfSize.x() <= tictac_right_) {
     return;
   }
-  // Back to the left edge, at a new seeded height
-  const Vec2f to{left_ - kTicTacHalfSize.x(),
+  // Back to the left wrap line, at a new seeded height
+  const Vec2f to{tictac_left_ - kTicTacHalfSize.x(),
                  rng_.Range(kTicTacLow, kTicTacHigh)};
   const Vec2f offset = to - from;
   // The riders first, while the touching pairs still describe the old place:

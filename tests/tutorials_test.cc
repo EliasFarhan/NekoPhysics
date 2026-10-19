@@ -3533,22 +3533,22 @@ TEST(MovingPlatformTutorial, RiderCarryKeepsThePlayer) {
   }
 }
 
-// The TicTac platform wraps three times in 30 s, each time to a seeded
-// height in its band, carrying its crate: the pair stays touching, so no
-// exit event
+// The TicTac platform wraps three times in 65 s (19.2 m each side of the
+// view's middle, a 24.75 s cycle), each time to a seeded height in its band,
+// carrying its crate: the pair stays touching, so no exit event
 TEST(MovingPlatformTutorial, TicTacWrapsWithItsCrate) {
   MovingPlatformSample sample;
   BeginWith(sample, {});
   int wraps = 0;
-  for (int step = 0; step < 1800; ++step) {
+  for (int step = 0; step < 3900; ++step) {
     sample.FixedUpdate();
     if (sample.wraps() != wraps) {
       wraps = sample.wraps();
       const float y = ToFloat(sample.position(sample.tictac()).y());
       EXPECT_GE(y, 5.0f);
       EXPECT_LE(y, 6.4f);
-      // At the left edge, moved by one step since the wrap
-      EXPECT_LT(ToFloat(sample.position(sample.tictac()).x()), 0.0f);
+      // At the left wrap line, moved by one step since the wrap
+      EXPECT_LT(ToFloat(sample.position(sample.tictac()).x()), -12.7f);
     }
   }
   EXPECT_EQ(sample.wraps(), 3);

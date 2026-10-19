@@ -59,12 +59,13 @@ void DriveLagging(PhysicsWorld& world, BodyIndex platform, Vec2f target,
 // player, which falls).
 //
 // Top, the TicTac platform: it crosses the screen to the right at 1.6 m/s
-// (SetKinematicTarget with a constant step) and, past the right edge, wraps
-// to the left edge at a new height from the seeded generator with
+// (SetKinematicTarget with a constant step) and, 19.2 m right of the middle
+// of the view (Splash's value: the level is wider than the view), wraps to
+// 19.2 m left of it at a new height from the seeded generator with
 // PhysicsWorld::Teleport. The crate riding it is teleported by the same
 // offset, found through the touching pairs: the pair stays touching, so no
 // exit or enter event, and Teleport drops the cached contact impulses of
-// both. (Splash wraps at +-19.2 m; here at the edges of the 12.8 m view.)
+// both. It is off screen two thirds of its 24.75 s cycle.
 //
 // Readouts: the lift's distance to its path (0), the lagging platform's
 // distance to its path, how far the lift's crate slipped on it since the
@@ -178,6 +179,9 @@ class MovingPlatformSample final : public Sample {
   Aabbf ground_{};
   Scalar left_{};
   Scalar right_{};
+  // Where the TicTac platform wraps, 19.2 m each side of the middle
+  Scalar tictac_left_{};
+  Scalar tictac_right_{};
   ColliderIndex lift_ = kInvalidColliderIndex;
   ColliderIndex lift_crate_ = kInvalidColliderIndex;
   ColliderIndex lag_ = kInvalidColliderIndex;
