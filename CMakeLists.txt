@@ -16,7 +16,7 @@ if(ENABLE_PROFILING)
     list(APPEND VCPKG_MANIFEST_FEATURES "profiling")
 endif (ENABLE_PROFILING)
 
-set(NEKO_SCALAR "FIXED16" CACHE STRING "Type of neko::Scalar: FIXED16 (16.16 fixed point), FLOAT or SIXIT (x86 deterministic float)")
+set(NEKO_SCALAR "FIXED16" CACHE STRING "Type of neko::Scalar: FIXED16 (16.16 fixed point), FLOAT or SIXIT (sixit deterministic float: x86, x64, RISC-V, arm64 with GCC or clang)")
 set_property(CACHE NEKO_SCALAR PROPERTY STRINGS FIXED16 FLOAT SIXIT)
 if(NOT NEKO_SCALAR MATCHES "^(FIXED16|FLOAT|SIXIT)$")
     message(FATAL_ERROR "NEKO_SCALAR must be FIXED16, FLOAT or SIXIT (got '${NEKO_SCALAR}')")
@@ -54,6 +54,13 @@ if(ENABLE_PROFILING)
     target_compile_definitions(NekoPhysics PRIVATE TRACY_ENABLE)
 endif()
 target_compile_definitions(NekoPhysics PUBLIC NEKO_SCALAR_${NEKO_SCALAR})
+if(NOT MSVC)
+    # No fused multiply-add: clang contracts a * b + c by default on arm64 (and
+    # GCC/clang on x64 with -march=...+fma), so a float build would give other
+    # bits there. PUBLIC because the headers inline the Vec2 math into the
+    # including files. MSVC doesn't contract by default (/fp:precise)
+    target_compile_options(NekoPhysics PUBLIC -ffp-contract=off)
+endif()
 message(STATUS "NekoPhysics: neko::Scalar is ${NEKO_SCALAR}")
 neko_set_project_warnings(NekoPhysics)
 if (MSVC)

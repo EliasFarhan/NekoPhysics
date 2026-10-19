@@ -17,6 +17,8 @@ Contributors: Sherry Ignatchenko, Serhii Iliukhin
 #define sixit_dmath_math_operations_acos_h_included
 
 #include "__utils.h"
+// NekoPhysics patch: functions called below, included here (two-phase lookup)
+#include "sqrt.h"
 
 namespace sixit::dmath::mathf
 {

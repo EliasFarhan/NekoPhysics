@@ -33,8 +33,8 @@ namespace neko {
 /// Specialized for `float` and every @ref Fixed (the math functions `Sqrt`,
 /// `Sin`, `Cos`, `Asin` and `Atan2` exist for @ref Fixed16 only). Using it with
 /// another type does not compile, on purpose. The traits are modeled on sixit's
-/// `fp_traits`; the sixit float (`NEKO_SCALAR=SIXIT`) has no specialization yet
-/// (see `const.h`).
+/// `fp_traits`; the sixit float (`NEKO_SCALAR=SIXIT`) has its specialization in
+/// `neko/math/sixit_float.h`.
 ///
 /// @tparam T The number type.
 /// @see @ref Scalar
@@ -358,7 +358,7 @@ struct ScalarTraits<Fixed<T, Exp, MulT>> {
 
 namespace internal {
 // True when ScalarTraits<T> exists and says fixed point, false for any other
-// type, including those without traits (double, int, the sixit float): generic
+// type, including those without traits (double, int): generic
 // code such as Vec2<double>::Length() keeps compiling
 template <typename T>
 inline constexpr bool kIsFixedPointScalar = [] {

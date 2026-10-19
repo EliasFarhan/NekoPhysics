@@ -130,6 +130,8 @@ Contributors: Sherry Ignatchenko, Serhii Iliukhin
 #define sixit_dmath_math_operations___rem_pio2_large_h_included
 
 #include "__utils.h"
+// NekoPhysics patch: floor is called below, include it here (two-phase lookup)
+#include "floor.h"
 
 namespace sixit::dmath::mathf
 {

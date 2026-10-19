@@ -29,10 +29,22 @@
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "NEKO_SCALAR": "FLOAT" }
     },
     {
+      "name": "debug-sixit",
+      "displayName": "Debug, sixit deterministic float Scalar (samples + tests)",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "NEKO_SCALAR": "SIXIT" }
+    },
+    {
       "name": "release",
       "displayName": "Release (samples + tests)",
       "inherits": "base",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "release-sixit",
+      "displayName": "Release, sixit deterministic float Scalar (samples + tests)",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "NEKO_SCALAR": "SIXIT" }
     },
     {
       "name": "relwithdebinfo",
@@ -58,7 +70,9 @@
   "buildPresets": [
     { "name": "debug", "configurePreset": "debug" },
     { "name": "debug-float", "configurePreset": "debug-float" },
+    { "name": "debug-sixit", "configurePreset": "debug-sixit" },
     { "name": "release", "configurePreset": "release" },
+    { "name": "release-sixit", "configurePreset": "release-sixit" },
     { "name": "relwithdebinfo", "configurePreset": "relwithdebinfo" },
     { "name": "nds", "configurePreset": "nds" }
   ],
@@ -74,8 +88,18 @@
       "output": { "outputOnFailure": true }
     },
     {
+      "name": "debug-sixit",
+      "configurePreset": "debug-sixit",
+      "output": { "outputOnFailure": true }
+    },
+    {
       "name": "release",
       "configurePreset": "release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "release-sixit",
+      "configurePreset": "release-sixit",
       "output": { "outputOnFailure": true }
     },
     {

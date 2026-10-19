@@ -18,6 +18,9 @@ Contributors: Sherry Ignatchenko, Serhii Iliukhin
 #define sixit_dmath_mathf_atan2_h_included
 
 #include "__utils.h"
+// NekoPhysics patch: functions called below, included here (two-phase lookup)
+#include "abs.h"
+#include "atan.h"
 
 namespace sixit::dmath::mathf
 {

@@ -75,103 +75,143 @@ class ieee_float_inline_asm
     }
 
   public:
-    [[nodiscard]] float to_float() const
+    // NekoPhysics patch: in constant evaluation the operators below compute
+    // with plain float. Each +, -, *, / is one IEEE single precision operation
+    // rounded to nearest, the same bits as addss/mulss/fadd/fmul at run time,
+    // so Scalar constants can be constexpr. Run time keeps the inline asm.
+    static constexpr float constexpr_value(sixit::cpual::asm_float_t v)
     {
+#if defined(SIXIT_COMPILER_MSVC)
+        return v.m128_f32[0];
+#else
+        return v;
+#endif
+    }
+
+    [[nodiscard]] constexpr float to_float() const
+    {
+        if (std::is_constant_evaluated())
+            return constexpr_value(data);
         return sixit::cpual::ieee_asm_to_float(data);
     }
 
-    explicit operator int() const
+    explicit constexpr operator int() const
     {
         return (int) to_float();
     }
-    explicit operator float() const
+    explicit constexpr operator float() const
     {
         return to_float();
     }
 
     constexpr ieee_float_inline_asm() noexcept = default;
-    ieee_float_inline_asm(const ieee_float_inline_asm& other) noexcept = default;
-    ieee_float_inline_asm(ieee_float_inline_asm&& other) noexcept = default;
-    ieee_float_inline_asm& operator=(const ieee_float_inline_asm& other) noexcept = default;
+    constexpr ieee_float_inline_asm(const ieee_float_inline_asm& other) noexcept = default;
+    constexpr ieee_float_inline_asm(ieee_float_inline_asm&& other) noexcept = default;
+    constexpr ieee_float_inline_asm& operator=(const ieee_float_inline_asm& other) noexcept = default;
 
     constexpr ieee_float_inline_asm(float f) : data(sixit::cpual::ieee_asm_from_float(f)){};
 
-    ieee_float_inline_asm operator+(ieee_float_inline_asm other) const
+    // NekoPhysics patch: exact conversion from an integer (cvtsi2ss / scvtf,
+    // rounded to nearest like the constant evaluation), so Scalar{3} and
+    // Scalar{n} need no float literal and no narrowing int to float conversion.
+    template <typename Int>
+        requires(std::is_integral_v<Int> && !std::is_same_v<Int, bool>)
+    constexpr explicit ieee_float_inline_asm(Int i) : ieee_float_inline_asm(static_cast<float>(i))
     {
+    }
+
+    constexpr ieee_float_inline_asm operator+(ieee_float_inline_asm other) const
+    {
+        if (std::is_constant_evaluated())
+            return ieee_float_inline_asm(constexpr_value(data) + constexpr_value(other.data));
         return sixit::cpual::ieee_add_float(data, other.data);
     }
 
-    ieee_float_inline_asm& operator+=(ieee_float_inline_asm other)
+    constexpr ieee_float_inline_asm& operator+=(ieee_float_inline_asm other)
     {
-        data = sixit::cpual::ieee_add_float(data, other.data);
+        *this = *this + other;
         return *this;
     }
 
-    ieee_float_inline_asm operator-(ieee_float_inline_asm other) const
+    constexpr ieee_float_inline_asm operator-(ieee_float_inline_asm other) const
     {
+        if (std::is_constant_evaluated())
+            return ieee_float_inline_asm(constexpr_value(data) - constexpr_value(other.data));
         return sixit::cpual::ieee_subtract_float(data, other.data);
     }
 
-    ieee_float_inline_asm& operator-=(ieee_float_inline_asm other)
+    constexpr ieee_float_inline_asm& operator-=(ieee_float_inline_asm other)
     {
-        data = sixit::cpual::ieee_subtract_float(data, other.data);
+        *this = *this - other;
         return *this;
     }
 
-    ieee_float_inline_asm operator*(ieee_float_inline_asm other) const
+    constexpr ieee_float_inline_asm operator*(ieee_float_inline_asm other) const
     {
+        if (std::is_constant_evaluated())
+            return ieee_float_inline_asm(constexpr_value(data) * constexpr_value(other.data));
         return sixit::cpual::ieee_multiply_float(data, other.data);
     }
 
-    ieee_float_inline_asm& operator*=(ieee_float_inline_asm other)
+    constexpr ieee_float_inline_asm& operator*=(ieee_float_inline_asm other)
     {
-        data = sixit::cpual::ieee_multiply_float(data, other.data);
+        *this = *this * other;
         return *this;
     }
 
-    ieee_float_inline_asm operator/(ieee_float_inline_asm other) const
+    constexpr ieee_float_inline_asm operator/(ieee_float_inline_asm other) const
     {
+        if (std::is_constant_evaluated())
+            return ieee_float_inline_asm(constexpr_value(data) / constexpr_value(other.data));
         return sixit::cpual::ieee_divide_float(data, other.data);
     }
 
-    ieee_float_inline_asm& operator/=(ieee_float_inline_asm other)
+    constexpr ieee_float_inline_asm& operator/=(ieee_float_inline_asm other)
     {
-        data = sixit::cpual::ieee_divide_float(data, other.data);
+        *this = *this / other;
         return *this;
     }
 
-    bool operator<(ieee_float_inline_asm other) const
+    constexpr bool operator<(ieee_float_inline_asm other) const
     {
+        if (std::is_constant_evaluated())
+            return constexpr_value(data) < constexpr_value(other.data);
         return sixit::cpual::ieee_cmp_lt_float(data, other.data);
     }
 
-    bool operator<=(ieee_float_inline_asm other) const
+    constexpr bool operator<=(ieee_float_inline_asm other) const
     {
+        if (std::is_constant_evaluated())
+            return constexpr_value(data) <= constexpr_value(other.data);
         return sixit::cpual::ieee_cmp_le_float(data, other.data);
     }
 
-    bool operator==(ieee_float_inline_asm other) const
+    constexpr bool operator==(ieee_float_inline_asm other) const
     {
+        if (std::is_constant_evaluated())
+            return constexpr_value(data) == constexpr_value(other.data);
         return sixit::cpual::ieee_cmp_eq_float(data, other.data);
     }
 
-    bool operator>(ieee_float_inline_asm other) const
+    constexpr bool operator>(ieee_float_inline_asm other) const
     {
         return other < *this;
     }
 
-    bool operator>=(ieee_float_inline_asm other) const
+    constexpr bool operator>=(ieee_float_inline_asm other) const
     {
         return other <= *this;
     }
 
-    bool operator!=(ieee_float_inline_asm other) const
+    constexpr bool operator!=(ieee_float_inline_asm other) const
     {
         return !(*this == other);
     }
 
-    ieee_float_inline_asm operator-() const
+    constexpr ieee_float_inline_asm operator-() const
     {
+        if (std::is_constant_evaluated())
+            return ieee_float_inline_asm(-constexpr_value(data));
         return ieee_float_inline_asm(sixit::cpual::ieee_neg_float(data));
     }
 
