@@ -91,6 +91,11 @@
 #include "tutorials/14_moving_platform/solutions/rider_carry_sample.h"
 #include "tutorials/14_moving_platform/solutions/teleport_warm_start_sample.h"
 #include "tutorials/14_moving_platform/solutions/wrap_events_sample.h"
+#include "tutorials/15_fast_projectile/fast_projectile_sample.h"
+#include "tutorials/15_fast_projectile/solutions/one_way_bullet_sample.h"
+#include "tutorials/15_fast_projectile/solutions/speed_threshold_sample.h"
+#include "tutorials/15_fast_projectile/solutions/substeps_vs_ccd_sample.h"
+#include "tutorials/15_fast_projectile/solutions/trigger_hits_sample.h"
 
 namespace {
 
@@ -116,6 +121,7 @@ using neko::tutorial::ErrorTableSample;
 using neko::tutorial::ExplicitEulerSample;
 using neko::tutorial::ExplosionSample;
 using neko::tutorial::FastestSpinSample;
+using neko::tutorial::FastProjectileSample;
 using neko::tutorial::FrictionSample;
 using neko::tutorial::GhostTimerSample;
 using neko::tutorial::HalfStepSample;
@@ -137,6 +143,7 @@ using neko::tutorial::NarrowPillarSample;
 using neko::tutorial::OffCenterImpactSample;
 using neko::tutorial::OneHitSample;
 using neko::tutorial::OneStepByHandSample;
+using neko::tutorial::OneWayBulletSample;
 using neko::tutorial::OneWaySample;
 using neko::tutorial::OutOfRangeSample;
 using neko::tutorial::PassesSample;
@@ -153,6 +160,7 @@ using neko::tutorial::RotatedBoxSample;
 using neko::tutorial::RotationSample;
 using neko::tutorial::SingleForceSample;
 using neko::tutorial::SoftVsExplicitSample;
+using neko::tutorial::SpeedThresholdSample;
 using neko::tutorial::SpringSample;
 using neko::tutorial::StabilityLimitSample;
 using neko::tutorial::StackedOneWaySample;
@@ -160,10 +168,12 @@ using neko::tutorial::StackingSample;
 using neko::tutorial::StepRateSample;
 using neko::tutorial::StoppingDistanceSample;
 using neko::tutorial::SubstepsSample;
+using neko::tutorial::SubstepsVsCcdSample;
 using neko::tutorial::TeleportWarmStartSample;
 using neko::tutorial::TensionSample;
 using neko::tutorial::TerminalVelocitySample;
 using neko::tutorial::TightBoundsSample;
+using neko::tutorial::TriggerHitsSample;
 using neko::tutorial::TunnelingSample;
 using neko::tutorial::TwoAabbsSample;
 using neko::tutorial::TwoBoxesByHandSample;
@@ -3653,6 +3663,171 @@ TEST(MovingPlatformSolutions, TeleportWarmStartClearsTheCache) {
   EXPECT_GT(by_hand, 3.0f * teleported);
   EXPECT_LT(run(0, 8), 0.002f);
   EXPECT_LT(run(1, 8), 0.002f);
+}
+
+// Chapter 15: the bullet lane never misses the wall, at any speed; the
+// plain lane never misses below (r + t / 2) / dt = 12 m/s and misses some
+// firings (where the steps fall) at 30, 50 and 80 m/s
+TEST(FastProjectileTutorial, BulletNeverMissesTheWall) {
+  for (const int speed : {10, 30, 50, 80, 100}) {
+    FastProjectileSample sample;
+    BeginWith(sample, {{FastProjectileSample::kSpeed, speed}});
+    RunSteps(sample, 20 * FastProjectileSample::kFirePeriod);
+    const int counted = sample.firings() - 1;
+    EXPECT_EQ(counted, 19);
+    EXPECT_EQ(sample.hits(FastProjectileSample::kBulletLane), counted) << speed;
+    EXPECT_EQ(sample.misses(FastProjectileSample::kBulletLane), 0) << speed;
+    const int plain_misses = sample.misses(FastProjectileSample::kPlainLane);
+    if (speed <= 10) {
+      EXPECT_EQ(plain_misses, 0) << speed;
+    } else {
+      EXPECT_GT(plain_misses, 0) << speed;
+    }
+    sample.End();
+  }
+}
+
+// The bullet stops against the wall's near side, half the slop into it
+TEST(FastProjectileTutorial, BulletRestsOnTheNearSide) {
+  FastProjectileSample sample;
+  BeginWith(sample, {});
+  RunSteps(sample, FastProjectileSample::kFirePeriod - 1);
+  const float near_side = ToFloat(sample.wall_x()) - 0.1f - 0.1f;
+  EXPECT_NEAR(
+      ToFloat(sample.shot_position(FastProjectileSample::kBulletLane).x()),
+      near_side + 0.0025f, 0.002f);
+  sample.End();
+}
+
+// The bullet water shot hits the walking player at least as often as the
+// plain one, and clearly more at 80 m/s
+TEST(FastProjectileTutorial, WaterBulletHitsMore) {
+  for (const int speed : {30, 50, 80}) {
+    FastProjectileSample sample;
+    BeginWith(sample, {{FastProjectileSample::kSpeed, speed}});
+    RunSteps(sample, 30 * FastProjectileSample::kFirePeriod);
+    const int bullet = sample.hits(FastProjectileSample::kWaterBulletLane);
+    const int plain = sample.hits(FastProjectileSample::kWaterPlainLane);
+    EXPECT_GE(bullet, plain) << speed;
+    EXPECT_GT(bullet, 5) << speed;
+    if (speed == 80) {
+      EXPECT_GT(bullet, plain + 3);
+    }
+    sample.End();
+  }
+}
+
+TEST(FastProjectileTutorial, SameParametersSameRun) {
+  std::vector<neko::SampleRegistry::Entry> samples;
+  samples.push_back(
+      {"15 Fast projectiles", std::make_unique<FastProjectileSample>()});
+  neko::SampleRegistry registry{std::move(samples)};
+  const neko::SampleContext context{neko::sample_config::kWorldBounds};
+  const auto run = [&registry] {
+    for (int step = 0; step < 600; ++step) {
+      registry.FixedUpdate();
+    }
+    return registry.current()->GenerateChecksum();
+  };
+  registry.Select(0, context);
+  const std::uint32_t first = run();
+  registry.SetParameter(FastProjectileSample::kSpeed, 80);
+  const std::uint32_t changed = run();
+  registry.SetParameter(FastProjectileSample::kSpeed, 50);
+  const std::uint32_t restored = run();
+  EXPECT_NE(first, changed);
+  EXPECT_EQ(first, restored);
+}
+
+// Exercise "speed threshold": no lane misses up to (r + t / 2) / dt, and the
+// first miss comes within the lane spacing above it (a factor 8 / 7), for
+// three wall thicknesses; the rule of thumb (2 r + t) / dt is far above
+TEST(FastProjectileSolutions, SpeedThresholdIsRPlusHalfTheWall) {
+  for (const int wall : {10, 20, 40}) {
+    SpeedThresholdSample sample;
+    BeginWith(sample, {{SpeedThresholdSample::kWall, wall}});
+    int steps = 0;
+    while (!sample.is_done() && steps < 5000) {
+      sample.FixedUpdate();
+      ++steps;
+    }
+    ASSERT_TRUE(sample.is_done());
+    ASSERT_TRUE(sample.first_miss_speed().has_value());
+    const float safe = ToFloat(sample.safe_speed());
+    const auto first = static_cast<float>(*sample.first_miss_speed());
+    EXPECT_GT(first, safe) << wall;
+    EXPECT_LE(first, safe * 8.0f / 7.0f + 1.0f) << wall;
+    EXPECT_LT(first, ToFloat(sample.size_speed())) << wall;
+    for (int speed = SpeedThresholdSample::kFirstSpeed;
+         static_cast<float>(speed) <= safe; ++speed) {
+      EXPECT_EQ(sample.misses_at(speed), 0) << wall << " " << speed;
+    }
+    sample.End();
+  }
+}
+
+// Exercise "substeps vs CCD": with the substeps the formula asks for the
+// substepped shot never misses, with one it misses; the bullet never does
+TEST(FastProjectileSolutions, SubstepsNeedVdtOverRPlusHalfTheWall) {
+  for (const int speed : {40, 80}) {
+    SubstepsVsCcdSample probe;
+    BeginWith(probe, {{SubstepsVsCcdSample::kSpeed, speed}});
+    const int needed = probe.needed_substeps();
+    probe.End();
+    EXPECT_EQ(needed, speed == 40 ? 4 : 7);
+    for (const int substeps : {1, needed}) {
+      SubstepsVsCcdSample sample;
+      BeginWith(sample, {{SubstepsVsCcdSample::kSpeed, speed},
+                         {SubstepsVsCcdSample::kSubsteps, substeps}});
+      RunSteps(sample, 20 * SubstepsVsCcdSample::kFirePeriod);
+      EXPECT_EQ(sample.hits(1), 19) << speed << " " << substeps;
+      EXPECT_EQ(sample.misses(1), 0) << speed << " " << substeps;
+      if (substeps == needed) {
+        EXPECT_EQ(sample.misses(0), 0) << speed;
+      } else {
+        EXPECT_GT(sample.misses(0), 0) << speed;
+      }
+      sample.End();
+    }
+  }
+}
+
+// Exercise "trigger hits": the bullet collects the five coins in path order
+// (not index order), several in one step when the step is longer than their
+// spacing, and leaves each with an exit; the plain shot misses some
+TEST(FastProjectileSolutions, TriggerHitsInPathOrder) {
+  for (const int speed : {10, 50, 80, 100}) {
+    TriggerHitsSample sample;
+    BeginWith(sample, {{TriggerHitsSample::kSpeed, speed}});
+    RunSteps(sample, TriggerHitsSample::kMeasuredSteps);
+    EXPECT_EQ(sample.coins(0), 5) << speed;
+    EXPECT_TRUE(sample.in_path_order()) << speed;
+    EXPECT_EQ(sample.bullet_exits(), 5) << speed;
+    if (speed >= 80) {
+      EXPECT_GE(sample.most_in_one_step(), 2) << speed;
+      EXPECT_LT(sample.coins(1), 5) << speed;
+    }
+    sample.End();
+  }
+}
+
+// Exercise "one-way bullet": both shots go up through the platform; the
+// bullet lands on it every time, the plain shot not always at 50 and 80 m/s
+TEST(FastProjectileSolutions, OneWayBulletLandsEveryTime) {
+  for (const int speed : {20, 50, 80}) {
+    OneWayBulletSample sample;
+    BeginWith(sample, {{OneWayBulletSample::kSpeed, speed}});
+    RunSteps(sample, 15 * OneWayBulletSample::kFirePeriod);
+    const int firings = sample.firings();
+    EXPECT_EQ(firings, 14);
+    EXPECT_EQ(sample.went_up(0), firings) << speed;
+    EXPECT_EQ(sample.went_up(1), firings) << speed;
+    EXPECT_EQ(sample.landed(0), firings) << speed;
+    if (speed >= 50) {
+      EXPECT_LT(sample.landed(1), firings) << speed;
+    }
+    sample.End();
+  }
 }
 
 }  // namespace
