@@ -1110,8 +1110,11 @@ class PhysicsWorld {
   /// Keeps the joint's type, anchors (in the new bodies' frames), length and
   /// spring constants, and resets its accumulated impulse
   /// (@ref DistanceJoint::impulse): last step's pull belonged to the old
-  /// bodies and would kick the new ones at the next warm start. Set the
-  /// anchors and the length afterwards if the new bodies need others.
+  /// bodies, and the next warm start would start from that wrong guess (the
+  /// velocity passes then remove most of it). Set the anchors and the length
+  /// afterwards if the new bodies need others: a rope that keeps the old
+  /// length pulls the new body in at the next step, as hard as the soft step
+  /// allows.
   ///
   /// The collision filter follows the joint (see
   /// @ref DistanceJoint::collide_connected): at the next @ref Step the old
