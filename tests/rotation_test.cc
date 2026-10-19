@@ -22,7 +22,8 @@ using neko::Scalar;
 using neko::Vec2f;
 
 constexpr Scalar Ratio(int num, int den) {
-  return static_cast<Scalar>(num) / static_cast<Scalar>(den);
+  // In 64 bits: Scalar{den} overflows Fixed16 from 32768 up
+  return neko::ScalarTraits<Scalar>::FromRatio(num, den);
 }
 
 Scalar Pi() { return neko::Pi<Scalar>(); }
