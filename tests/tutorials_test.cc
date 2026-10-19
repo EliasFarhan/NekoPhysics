@@ -86,6 +86,11 @@
 #include "tutorials/13_one_way/solutions/drop_through_sample.h"
 #include "tutorials/13_one_way/solutions/ghost_timer_sample.h"
 #include "tutorials/13_one_way/solutions/stacked_one_way_sample.h"
+#include "tutorials/14_moving_platform/moving_platform_sample.h"
+#include "tutorials/14_moving_platform/solutions/lag_measure_sample.h"
+#include "tutorials/14_moving_platform/solutions/rider_carry_sample.h"
+#include "tutorials/14_moving_platform/solutions/teleport_warm_start_sample.h"
+#include "tutorials/14_moving_platform/solutions/wrap_events_sample.h"
 
 namespace {
 
@@ -122,9 +127,11 @@ using neko::tutorial::HoverSample;
 using neko::tutorial::ImpulsePerBoxSample;
 using neko::tutorial::JetpackSample;
 using neko::tutorial::JointOrderSample;
+using neko::tutorial::LagMeasureSample;
 using neko::tutorial::LaserBounceSample;
 using neko::tutorial::LongLaserSample;
 using neko::tutorial::MixedSurfacesSample;
+using neko::tutorial::MovingPlatformSample;
 using neko::tutorial::MovingTargetSample;
 using neko::tutorial::NarrowPillarSample;
 using neko::tutorial::OffCenterImpactSample;
@@ -140,6 +147,7 @@ using neko::tutorial::PointsOverATurnSample;
 using neko::tutorial::PushToStartSample;
 using neko::tutorial::PyramidSample;
 using neko::tutorial::ReachSample;
+using neko::tutorial::RiderCarrySample;
 using neko::tutorial::RollingDiskSample;
 using neko::tutorial::RotatedBoxSample;
 using neko::tutorial::RotationSample;
@@ -152,6 +160,7 @@ using neko::tutorial::StackingSample;
 using neko::tutorial::StepRateSample;
 using neko::tutorial::StoppingDistanceSample;
 using neko::tutorial::SubstepsSample;
+using neko::tutorial::TeleportWarmStartSample;
 using neko::tutorial::TensionSample;
 using neko::tutorial::TerminalVelocitySample;
 using neko::tutorial::TightBoundsSample;
@@ -160,6 +169,7 @@ using neko::tutorial::TwoAabbsSample;
 using neko::tutorial::TwoBoxesByHandSample;
 using neko::tutorial::TwoRampsSample;
 using neko::tutorial::WhereSlackSample;
+using neko::tutorial::WrapEventsSample;
 
 // ScalarTraits picks the conversion (none for float: it would be a useless
 // cast)
@@ -3431,6 +3441,218 @@ TEST(OneWaySolutions, StackedOneWayNeedsRepeatedDrops) {
   EXPECT_EQ(run(0), (std::pair{1, 1}));
   EXPECT_EQ(run(1), (std::pair{1, 1}));
   EXPECT_EQ(run(2), (std::pair{3, 3}));
+}
+
+// Chapter 14: the lift driven by SetKinematicTarget is exactly on its path
+// after every step (no Fixed16 drift), and friction carries its crate
+// without slipping (the lift starts at rest, its acceleration w^2 A = 1.3
+// m/s^2 stays under mu g)
+TEST(MovingPlatformTutorial, LiftFollowsItsPathExactly) {
+  MovingPlatformSample sample;
+  BeginWith(sample, {});
+  for (int step = 0; step < 1800; ++step) {
+    sample.FixedUpdate();
+    ASSERT_EQ(sample.position(sample.lift()), sample.LiftPath(sample.steps()))
+        << sample.steps();
+    ASSERT_LT(std::abs(ToFloat(sample.crate_slip())), 0.001f) << sample.steps();
+  }
+  sample.End();
+}
+
+// The PatrolPlatform script is a first-order lag: once the start is
+// forgotten, it swings 1 / sqrt(1 + (w tau)^2) of the amplitude (69 % for
+// T = 6 s, tau = 1 s) and is up to w tau / sqrt(1 + (w tau)^2) of the
+// amplitude away from its path
+TEST(MovingPlatformTutorial, LaggingPlatformRunsBehind) {
+  MovingPlatformSample sample;
+  BeginWith(sample, {});
+  RunSteps(sample, 720);
+  const float center = ToFloat(sample.LagPath(90).x());
+  float swing = 0.0f;
+  float error = 0.0f;
+  for (int step = 0; step < 360; ++step) {
+    sample.FixedUpdate();
+    const auto position = sample.position(sample.lag());
+    swing = std::max(swing, std::abs(ToFloat(position.x()) - center));
+    error = std::max(
+        error, ToFloat((position - sample.LagPath(sample.steps())).Length()));
+  }
+  const float w_tau = 2.0f * 3.14159265f / 6.0f;
+  const float norm = std::sqrt(1.0f + w_tau * w_tau);
+  EXPECT_NEAR(swing / 1.2f, 1.0f / norm, 0.006f);
+  EXPECT_NEAR(error / 1.2f, w_tau / norm, 0.02f);
+  sample.End();
+}
+
+// The game-side carry keeps the frictionless player on its platform (up to
+// the first step, before the pair exists: A (1 - cos(2 pi / 360)) = 0.24
+// mm); without it the platform slides away and the player falls
+TEST(MovingPlatformTutorial, RiderCarryKeepsThePlayer) {
+  for (const int carry : {1, 0}) {
+    MovingPlatformSample sample;
+    BeginWith(sample, {{MovingPlatformSample::kRiderCarry, carry}});
+    float max_offset = 0.0f;
+    for (int step = 0; step < 1800; ++step) {
+      sample.FixedUpdate();
+      max_offset =
+          std::max(max_offset, std::abs(ToFloat(sample.rider_offset())));
+    }
+    const float player_y = ToFloat(sample.position(sample.player()).y());
+    if (carry == 1) {
+      EXPECT_LT(max_offset, 0.0003f);
+      EXPECT_NEAR(player_y, 3.85f, 0.005f);
+    } else {
+      EXPECT_GT(max_offset, 2.0f);
+      EXPECT_LT(player_y, 1.0f);
+    }
+    sample.End();
+  }
+}
+
+// The TicTac platform wraps three times in 30 s, each time to a seeded
+// height in its band, carrying its crate: the pair stays touching, so no
+// exit event
+TEST(MovingPlatformTutorial, TicTacWrapsWithItsCrate) {
+  MovingPlatformSample sample;
+  BeginWith(sample, {});
+  int wraps = 0;
+  for (int step = 0; step < 1800; ++step) {
+    sample.FixedUpdate();
+    if (sample.wraps() != wraps) {
+      wraps = sample.wraps();
+      const float y = ToFloat(sample.position(sample.tictac()).y());
+      EXPECT_GE(y, 5.0f);
+      EXPECT_LE(y, 6.4f);
+      // At the left edge, moved by one step since the wrap
+      EXPECT_LT(ToFloat(sample.position(sample.tictac()).x()), 0.0f);
+    }
+  }
+  EXPECT_EQ(sample.wraps(), 3);
+  EXPECT_EQ(sample.tictac_exits(), 0);
+  EXPECT_TRUE(neko::tutorial::IsTouching(
+      sample.world(), {sample.tictac(), sample.tictac_crate()}));
+  sample.End();
+}
+
+TEST(MovingPlatformTutorial, SameParametersSameRun) {
+  std::vector<neko::SampleRegistry::Entry> samples;
+  samples.push_back(
+      {"14 Moving platforms", std::make_unique<MovingPlatformSample>()});
+  neko::SampleRegistry registry{std::move(samples)};
+  const neko::SampleContext context{neko::sample_config::kWorldBounds};
+  const auto run = [&registry] {
+    for (int step = 0; step < 600; ++step) {
+      registry.FixedUpdate();
+    }
+    return registry.current()->GenerateChecksum();
+  };
+  registry.Select(0, context);
+  const std::uint32_t first = run();
+  registry.SetParameter(MovingPlatformSample::kLagTau, 20);
+  const std::uint32_t changed = run();
+  registry.SetParameter(MovingPlatformSample::kLagTau, 10);
+  const std::uint32_t restored = run();
+  EXPECT_NE(first, changed);
+  EXPECT_EQ(first, restored);
+}
+
+// Exercise "lag measure": the measured amplitude ratio and phase of the
+// PatrolPlatform script are those of the continuous first-order lag, up to
+// the discrete step (amplitude within 1.2 points, phase within one step of
+// 360 / (60 T) degrees plus half a degree); the SetKinematicTarget platform
+// has no error at all
+TEST(MovingPlatformSolutions, LagMeasureMatchesTheFirstOrderLag) {
+  for (const int period : {2, 6, 12}) {
+    for (const int tau : {2, 10, 30}) {
+      LagMeasureSample sample;
+      BeginWith(sample, {{LagMeasureSample::kPeriod, period},
+                         {LagMeasureSample::kLagTau, tau}});
+      RunSteps(sample, sample.measure_end_step());
+      ASSERT_TRUE(sample.is_measured());
+      EXPECT_NEAR(ToFloat(sample.measured_ratio()),
+                  ToFloat(sample.predicted_ratio()), 0.012f)
+          << period << " " << tau;
+      EXPECT_NEAR(ToFloat(sample.measured_phase_degrees()),
+                  ToFloat(sample.predicted_phase_degrees()),
+                  360.0f / static_cast<float>(sample.period_steps()) + 0.5f)
+          << period << " " << tau;
+      EXPECT_EQ(ToFloat(sample.max_target_error()), 0.0f);
+      sample.End();
+    }
+  }
+}
+
+// Exercise "rider carry": the game-side carry holds the frictionless player
+// whatever the acceleration (its only error is the first step, before the
+// pair exists: A (1 - cos(2 pi / (60 T)))); friction holds while w^2 A <
+// mu g (4.9 m/s^2) and slips past it; without either the player falls
+TEST(MovingPlatformSolutions, RiderCarryBeatsFriction) {
+  for (const int period : {2, 3, 4, 10}) {
+    RiderCarrySample sample;
+    BeginWith(sample, {{RiderCarrySample::kPeriod, period}});
+    RunSteps(sample, RiderCarrySample::kMeasuredSteps);
+    const float first_step =
+        1.2f * (1.0f - std::cos(2.0f * 3.14159265f /
+                                (60.0f * static_cast<float>(period))));
+    EXPECT_FALSE(sample.is_on_platform(0)) << period;
+    EXPECT_TRUE(sample.is_on_platform(1)) << period;
+    EXPECT_NEAR(ToFloat(sample.max_offset(1)), first_step, 1e-4f) << period;
+    const float acceleration = ToFloat(sample.peak_acceleration());
+    if (acceleration < 4.9f) {
+      EXPECT_TRUE(sample.is_on_platform(2)) << period;
+      EXPECT_LT(ToFloat(sample.max_offset(2)), 0.001f) << period;
+    } else {
+      EXPECT_GT(ToFloat(sample.max_offset(2)), 0.005f) << period;
+    }
+    sample.End();
+  }
+}
+
+// Exercise "wrap events": teleporting the platform alone leaves the crate
+// behind, one exit event at the step after the wrap; teleporting its riders
+// by the same offset keeps the pair touching, so no event at all
+TEST(MovingPlatformSolutions, WrapEventsDependOnTheRiders) {
+  for (const int speed : {5, 24, 28}) {
+    for (const int mode : {0, 1}) {
+      WrapEventsSample sample;
+      BeginWith(sample, {{WrapEventsSample::kMode, mode},
+                         {WrapEventsSample::kSpeed, speed}});
+      RunSteps(sample, WrapEventsSample::kMeasuredSteps);
+      EXPECT_GE(sample.wraps(), 1) << speed;
+      EXPECT_EQ(sample.enters(), 1) << speed << " " << mode;
+      if (mode == 0) {
+        EXPECT_EQ(sample.exits(), 1) << speed;
+        EXPECT_EQ(sample.first_exit_step(), sample.first_wrap_step()) << speed;
+        EXPECT_FALSE(sample.is_crate_on_platform()) << speed;
+      } else {
+        EXPECT_EQ(sample.exits(), 0) << speed;
+        EXPECT_TRUE(sample.is_crate_on_platform()) << speed;
+      }
+      sample.End();
+    }
+  }
+}
+
+// Exercise "teleport warm start": moved by hand, the bottom box of the
+// stack keeps the ground impulses of its old place and the next steps give
+// it a spin; Teleport starts it from zero. With 8 solver passes the solver
+// absorbs the stale impulses either way
+TEST(MovingPlatformSolutions, TeleportWarmStartClearsTheCache) {
+  const auto run = [](int mode, int iterations) {
+    TeleportWarmStartSample sample;
+    BeginWith(sample, {{TeleportWarmStartSample::kMode, mode},
+                       {TeleportWarmStartSample::kIterations, iterations}});
+    RunSteps(sample, TeleportWarmStartSample::kMeasuredSteps);
+    const float spin = ToFloat(sample.max_spin());
+    sample.End();
+    return spin;
+  };
+  const float teleported = run(0, 2);
+  const float by_hand = run(1, 2);
+  EXPECT_LT(teleported, 0.05f);
+  EXPECT_GT(by_hand, 3.0f * teleported);
+  EXPECT_LT(run(0, 8), 0.002f);
+  EXPECT_LT(run(1, 8), 0.002f);
 }
 
 }  // namespace
