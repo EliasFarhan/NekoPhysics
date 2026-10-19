@@ -282,7 +282,7 @@ TEST(Angle, AsinAndAtan2ReturnRadians) {
 
 // The float tolerance is checked against the exact angle of the float input
 TEST(FloatTraits, AngleToleranceHolds) {
-  const double tolerance = FloatTraits::AngleTolerance();
+  const auto tolerance = static_cast<double>(FloatTraits::AngleTolerance());
   double worst = 0.0;
   for (int i = -20000; i <= 20000; ++i) {
     const float x = static_cast<float>(i) / 20000.0f;
