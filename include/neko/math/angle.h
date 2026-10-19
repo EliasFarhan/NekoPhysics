@@ -206,8 +206,10 @@ inline Scalar Tan(Radian angle) { return Tan(angle.value()); }
 ///
 /// Forwards to @ref ScalarTraits: with @ref Fixed16 an integer-only version
 /// that gives the same bits on every machine (at most one step, 1 / 65536 rad,
-/// from the exact arcsine), with `float` `std::asin`, whose last bits can
-/// differ between compilers and CPUs. Values beyond 1 or -1 are clamped, so a
+/// from the exact arcsine), with the sixit float (`NEKO_SCALAR=SIXIT`) sixit's
+/// `mathf::asin`, also the same bits everywhere (within 2e-7 rad), with
+/// `float` `std::asin`, whose last bits can differ between compilers and CPUs.
+/// Values beyond 1 or -1 are clamped, so a
 /// sine rounded just past 1 gives pi / 2 instead of an error.
 ///
 /// @code
@@ -226,8 +228,9 @@ inline Radian Asin(Scalar value) {
 ///
 /// Note the order, y first, like `std::atan2`. Forwards to @ref ScalarTraits:
 /// integer-only and deterministic with @ref Fixed16 (at most one step from the
-/// exact angle), `std::atan2` with `float`. The zero vector gives 0, and a
-/// vector along -x gives pi.
+/// exact angle), sixit's `mathf::atan2` with the sixit float (deterministic,
+/// within 3e-7 rad), `std::atan2` with `float`. The zero vector gives 0, and a
+/// vector along -x gives pi (-pi for the floats when y is -0).
 ///
 /// @code
 /// const neko::Vec2f to_target = target - turret;

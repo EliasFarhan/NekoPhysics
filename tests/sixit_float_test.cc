@@ -1,8 +1,11 @@
 // The sixit deterministic float (NEKO_SCALAR=SIXIT): its ScalarTraits, and
 // constant evaluation giving the same bits as the run-time instructions
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <iostream>
 #include <type_traits>
 
 #include <gtest/gtest.h>
@@ -17,6 +20,10 @@ namespace {
 
 using Sixit = sixit::dmath::ieee_float_inline_asm;
 using Traits = neko::ScalarTraits<Sixit>;
+
+// Recorded on Linux clang 22 and GCC 16 (x64); see
+// InverseTrigBitsAreTheSameEverywhere
+constexpr std::uint32_t kSixitMathHash = 0x0FD77370u;
 
 static_assert(std::is_same_v<neko::Scalar, Sixit>);
 static_assert(Traits::kIsDeterministic);
@@ -127,6 +134,90 @@ TEST(SixitFloat, Functions) {
             Traits::Tolerance());
   EXPECT_EQ(Traits::ToFloat(kQuarter), 0.25f);
   EXPECT_EQ(Traits::kDisplayName, "sixit");
+}
+
+// Error against the exact angle of the sixit input, computed in double
+TEST(SixitFloat, InverseTrigWithinTheAngleTolerance) {
+  const auto tolerance =
+      static_cast<double>(Traits::ToFloat(Traits::AngleTolerance()));
+  double worst_asin = 0.0;
+  for (int i = -20000; i <= 20000; ++i) {
+    const Sixit x = Traits::FromRatio(i, 20000);
+    const double exact = std::asin(static_cast<double>(Traits::ToFloat(x)));
+    worst_asin = std::max(
+        worst_asin,
+        std::abs(static_cast<double>(Traits::ToFloat(Traits::Asin(x))) -
+                 exact));
+  }
+  double worst_atan2 = 0.0;
+  for (int iy = -100; iy <= 100; ++iy) {
+    for (int ix = -100; ix <= 100; ++ix) {
+      const Sixit y = Traits::FromRatio(iy, 7);
+      const Sixit x = Traits::FromRatio(ix, 7);
+      const double exact = std::atan2(static_cast<double>(Traits::ToFloat(y)),
+                                      static_cast<double>(Traits::ToFloat(x)));
+      worst_atan2 = std::max(
+          worst_atan2,
+          std::abs(static_cast<double>(Traits::ToFloat(Traits::Atan2(y, x))) -
+                   exact));
+    }
+  }
+  std::cout << "sixit worst error: asin " << worst_asin << " rad, atan2 "
+            << worst_atan2 << " rad\n";
+  EXPECT_LE(worst_asin, tolerance);
+  EXPECT_LE(worst_atan2, tolerance);
+}
+
+TEST(SixitFloat, InverseTrigEdgeCases) {
+  const Sixit half_pi = Traits::Asin(Sixit{1});
+  EXPECT_LT(Traits::Abs(half_pi - kHalfPi), Traits::AngleTolerance());
+  // Clamped: no NaN just past 1
+  EXPECT_EQ(Traits::Asin(Traits::FromRatio(10001, 10000)), half_pi);
+  EXPECT_EQ(Traits::Asin(Sixit{-2}), -half_pi);
+  EXPECT_EQ(Traits::Asin(Sixit{0}), Sixit{0});
+  // Odd
+  for (int i = 1; i <= 1000; ++i) {
+    const Sixit x = Traits::FromRatio(i, 1000);
+    EXPECT_EQ(Traits::Asin(-x), -Traits::Asin(x)) << i;
+  }
+  EXPECT_EQ(Traits::ToBits(Traits::Atan2(Sixit{0}, Sixit{0})), 0u);
+  const Sixit pi = Traits::Atan2(Sixit{0}, Sixit{-1});
+  EXPECT_LT(Traits::Abs(pi - neko::Pi<Sixit>()), Traits::AngleTolerance());
+  // Like std::atan2, the sign of a zero y counts
+  EXPECT_EQ(Traits::Atan2(-Sixit{0}, Sixit{-1}), -pi);
+  EXPECT_LT(Traits::Abs(Traits::Atan2(Sixit{1}, Sixit{1}) -
+                        neko::Pi<Sixit>() / Sixit{4}),
+            Traits::AngleTolerance());
+  EXPECT_LT(Traits::Abs(Traits::Atan2(Sixit{-2}, Sixit{-2}) +
+                        Sixit{3} * neko::Pi<Sixit>() / Sixit{4}),
+            Traits::AngleTolerance());
+}
+
+// FNV-1a of the bits of every result: the same number on every platform
+// (Windows MSVC, Linux clang and GCC, NX, macOS arm64) or SIXIT isn't
+// cross-platform exact
+TEST(SixitFloat, InverseTrigBitsAreTheSameEverywhere) {
+  std::uint32_t hash = 2166136261u;
+  const auto mix = [&hash](Sixit value) {
+    const std::uint32_t bits = Traits::ToBits(value);
+    for (int shift = 0; shift < 32; shift += 8) {
+      hash = (hash ^ ((bits >> shift) & 0xFFu)) * 16777619u;
+    }
+  };
+  for (int i = -20000; i <= 20000; ++i) {
+    const Sixit x = Traits::FromRatio(i, 20000);
+    mix(Traits::Asin(x));
+    mix(Traits::Sin(x * Sixit{7}));
+    mix(Traits::Cos(x * Sixit{7}));
+    mix(Traits::Sqrt(Traits::Abs(x) * Sixit{100}));
+  }
+  for (int iy = -100; iy <= 100; ++iy) {
+    for (int ix = -100; ix <= 100; ++ix) {
+      mix(Traits::Atan2(Traits::FromRatio(iy, 7), Traits::FromRatio(ix, 7)));
+    }
+  }
+  std::cout << "sixit math hash " << std::hex << hash << std::dec << "\n";
+  EXPECT_EQ(hash, kSixitMathHash);
 }
 
 }  // namespace
