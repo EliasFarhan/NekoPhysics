@@ -113,6 +113,10 @@ void FastProjectileSample::Begin(const SampleContext& context) {
   listener_.sample = this;
   world_.SetContactListener(&listener_);
   FireAll();
+  // No step line from the previous run before the first step
+  for (std::size_t lane = 0; lane < kLaneCount; ++lane) {
+    previous_[lane] = shot_position(lane);
+  }
   UpdateReadouts();
 }
 
