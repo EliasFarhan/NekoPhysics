@@ -638,6 +638,82 @@ TEST(Bullet, RollbackReplaysSweeps) {
   EXPECT_EQ(listener.Count(RecordingListener::Kind::kTriggerExit), 1);
   EXPECT_EQ(listener.Count(RecordingListener::Kind::kCollisionEnter), 1);
 }
+
+// A body of half size `half` (circle radius or square box) landed on 50
+// static 1 m tiles from 0.5 m above at 8 m/s, left `settle` steps, then sent
+// sideways at 30 m/s for 40 steps, frictionless: its positions
+std::vector<Vec2f> SlideAcrossSeams(ShapeType shape, Scalar half, int settle,
+                                    bool is_bullet) {
+  neko::PhysicsWorld world{{.max_bodies = 64,
+                            .max_colliders = 64,
+                            .max_touching_pairs = 64,
+                            .max_broadphase_pairs = 128,
+                            .max_joints = 0}};
+  for (int tile = 0; tile < 50; ++tile) {
+    AddShape(world, neko::BodyType::kStatic, ShapeType::kAabb,
+             {static_cast<Scalar>(tile) + Ratio(1, 2), -Ratio(1, 2)},
+             {Ratio(1, 2), Ratio(1, 2)});
+  }
+  const Shape body = AddShape(world, neko::BodyType::kDynamic, shape,
+                              {Ratio(1, 2), half + Ratio(1, 2)}, {half, half});
+  world.collider(body.collider).friction = Scalar{0};
+  world.body(body.body).velocity = {Scalar{0}, -Scalar{8}};
+  // Until it reaches the floor, then the settle steps: the solver leaves it
+  // 2.8 cm deep 3 steps after the landing, at the slop (5 mm) after 60
+  for (int step = 0; step < 100 && world.body(body.body).position.y() > half;
+       ++step) {
+    world.Step();
+  }
+  Steps(world, settle);
+  world.body(body.body).velocity = {Scalar{30}, Scalar{0}};
+  world.body(body.body).is_bullet = is_bullet;
+  std::vector<Vec2f> positions;
+  for (int step = 0; step < 40; ++step) {
+    world.Step();
+    positions.push_back(world.body(body.body).position);
+  }
+  return positions;
+}
+
+// A bullet sliding on a tiled floor crosses every seam exactly like the
+// same body without the flag (bit-identical positions), whatever its size
+// and however deep the solver left it, as long as its middle is above the
+// floor's top: small shots (1 and 2 cm) at the slop and bodies that just
+// landed. Boxes slide all the way on both scalars, circles in FLOAT (in
+// FIXED16 a plain circle can be thrown up by a tile corner too, without the
+// flag as with it)
+TEST(Bullet, CrossesSeamsLikeAPlainBody) {
+  struct Case {
+    int half_mm;
+    int settle;
+  };
+  const std::array<Case, 10> cases = {{{10, 20},
+                                       {10, 60},
+                                       {20, 20},
+                                       {20, 60},
+                                       {50, 3},
+                                       {50, 20},
+                                       {50, 60},
+                                       {100, 3},
+                                       {100, 20},
+                                       {100, 60}}};
+  for (const ShapeType shape : {ShapeType::kCircle, ShapeType::kAabb}) {
+    for (const Case& c : cases) {
+      const Scalar half = Ratio(c.half_mm, 1000);
+      const auto bullet = SlideAcrossSeams(shape, half, c.settle, true);
+      const auto plain = SlideAcrossSeams(shape, half, c.settle, false);
+      for (std::size_t step = 0; step < bullet.size(); ++step) {
+        ASSERT_EQ(bullet[step], plain[step])
+            << c.half_mm << " mm, settle " << c.settle << ", step " << step;
+      }
+      if (shape == ShapeType::kAabb ||
+          !neko::ScalarTraits<Scalar>::kIsFixedPoint) {
+        EXPECT_GT(ToFloat(bullet.back().x()), 20.4f)
+            << c.half_mm << " mm, settle " << c.settle;
+      }
+    }
+  }
+}
 }  // namespace
 
 int main(int argc, char** argv) {

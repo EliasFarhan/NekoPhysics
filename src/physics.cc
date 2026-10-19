@@ -672,21 +672,19 @@ std::optional<SweepHit> SweepShapes(const SweptShape& moving, Vec2f delta,
   return SweepBoxBox(moving.box, delta, target.box);
 }
 
-// The core of a bullet's shape: shrunk on every side by a margin of an
-// eighth of its smallest size, at least slop but at most a quarter of that
-// size. A bullet resting on a floor sinks up to about the slop into it, so
-// its core stays clear of the next tile at a seam.
-SweptShape CoreOf(const SweptShape& shape, Scalar slop) {
-  const Scalar extent =
-      shape.is_circle ? shape.radius
-                      : Min(shape.box.half_size.x(), shape.box.half_size.y());
-  const Scalar margin =
-      Min(Max(DivideBy<4>(extent), slop), DivideBy<2>(extent));
+// The core of a bullet's shape: shrunk on every side by its smallest half
+// size, so a circle's core is its center and a box's is the segment along
+// its middle (a point for a square). A bullet sliding on a floor rests a
+// little into it; as long as its middle stays above the floor's top, its
+// core stays clear of the next tile at a seam, whatever the size of the
+// bullet and however deep the solver left it.
+SweptShape CoreOf(const SweptShape& shape) {
   SweptShape core = shape;
   if (shape.is_circle) {
-    core.radius = shape.radius - margin;
+    core.radius = Scalar{0};
   } else {
-    core.box.half_size = shape.box.half_size - Vec2f{margin, margin};
+    const Scalar extent = Min(shape.box.half_size.x(), shape.box.half_size.y());
+    core.box.half_size = shape.box.half_size - Vec2f{extent, extent};
   }
   return core;
 }
@@ -1885,9 +1883,6 @@ void PhysicsWorld::SolveBullets() {
   // finds the contact (touching counts) without pushing it out
   const Scalar depth =
       Max(DivideBy<2>(config_.penetration_slop), Scalar{1} / Scalar{1024});
-  const auto core_of = [this](const SweptShape& shape) {
-    return CoreOf(shape, config_.penetration_slop);
-  };
   // A collider's shape with its body at position, turned by rotation
   const auto swept_shape = [this](const Collider& collider, Vec2f position,
                                   const Rotation& rotation) {
@@ -2003,16 +1998,18 @@ void PhysicsWorld::SolveBullets() {
         [&](const Collider& moving, const Collider& other,
             const SweptShape& moving_start, Vec2f delta,
             const SweptShape& target) {
-          // Only an obstacle the core of the shape (shrunk by margin) meets
+          // Only an obstacle the core of the shape (its middle) meets
           // counts: a bullet sliding on a floor rests a little into it and
           // grazes the next tile's corner at a seam, which must not stop it
-          const SweptShape core = core_of(moving_start);
+          const SweptShape core = CoreOf(moving_start);
           const auto core_hit = SweepShapes(core, delta, target);
           if (!core_hit.has_value() || core_hit->fraction == Scalar{0}) {
             return;
           }
           // The impact is where the whole shape touches (it overlaps
-          // already at the start: it stays there)
+          // already at the start: it stays there). The core lies inside the
+          // shape, so a core hit with no whole-shape hit can only come from
+          // rounding: the bullet is held at its start for this step
           const auto touch = SweepShapes(moving_start, delta, target);
           const SweepHit hit = touch.has_value() && touch->fraction > Scalar{0}
                                    ? *touch

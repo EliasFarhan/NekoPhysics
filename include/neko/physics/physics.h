@@ -283,13 +283,17 @@ struct Body {
   ///   colliders of static and kinematic bodies, one-way ones included (they
   ///   block only a bullet that comes from their solid side, the rule of
   ///   @ref Collider::is_one_way). Only an obstacle that the bullet's core
-  ///   meets stops it: its shape shrunk on every side by an eighth of its
-  ///   smallest size (at least @ref PhysicsWorldConfig::penetration_slop, at
-  ///   most a quarter of that size). A bullet sliding on a floor rests a
-  ///   little into it and touches the corner of the next tile at every seam;
-  ///   its core passes above, so it keeps sliding, and an obstacle that only
-  ///   grazes it by less than the margin is left to the next step's
-  ///   contacts. At the earliest time of impact (equal times: the lower
+  ///   meets stops it: its shape shrunk on every side by its smallest half
+  ///   size (the center of a circle, the middle segment of a box), in the
+  ///   spirit of Box2D v3.1's centroid test. A bullet sliding on a floor
+  ///   rests a little into it (a few millimeters, a few centimeters just
+  ///   after a landing) and touches the corner of the next tile at every
+  ///   seam; its core passes above as long as its middle stays above the
+  ///   floor's top, so it slides exactly like the same body without the
+  ///   flag. The price: an obstacle that grazes the bullet by less than its
+  ///   smallest half size is left to the next step's contacts, so a fast
+  ///   bullet can clip the corner of a thin ledge by up to that much. At the
+  ///   earliest time of impact (equal times: the lower
   ///   collider index) the body is moved back to where its whole shape
   ///   touches, then half of @ref PhysicsWorldConfig::penetration_slop into
   ///   the shape (at least 1/1024 m), so the next step's contact finds the
@@ -306,7 +310,9 @@ struct Body {
   ///
   /// The sweep follows the motion of both bodies over the step (the other
   /// body moves from where it was to where it is now), so a bullet also hits
-  /// a kinematic platform or a player that moves. It ignores what the bullet
+  /// a kinematic platform or a player that moves (whether to sweep at all
+  /// depends on the bullet's own motion, see below: a slow bullet hit by a
+  /// fast platform is not swept). It ignores what the bullet
   /// already overlaps at the start of the step (the step's contacts handle
   /// it), and it is skipped when the bullet moves less than a quarter of its
   /// smallest size in the step: steps that short overlap anything on the way
