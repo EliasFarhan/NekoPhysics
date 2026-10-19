@@ -21,16 +21,21 @@ Contributors: Sherry Ignatchenko, Dmytro Ivanchykhin, Victor Istomin, Vladyslav 
 #include <xmmintrin.h>
 namespace sixit::cpual
 {
-using asm_float_t = ::__m128;
+// NekoPhysics patch: the value is stored as a plain float (4 bytes, like the
+// clang/GCC branch) rather than an __m128 (16 bytes, 12 of them unspecified).
+// Each operation loads its operands into the low lane, runs one scalar SSE
+// instruction (addss, subss, mulss, divss, ucomiss) and stores the low lane
+// back, so the bits are the same as before and as the inline asm elsewhere.
+using asm_float_t = float;
 
 inline asm_float_t ieee_add_float(asm_float_t a, asm_float_t b)
 {
-    return _mm_add_ss(a, b);
+    return _mm_cvtss_f32(_mm_add_ss(_mm_set_ss(a), _mm_set_ss(b)));
 }
 
 inline asm_float_t ieee_subtract_float(asm_float_t a, asm_float_t b)
 {
-    return _mm_sub_ss(a, b);
+    return _mm_cvtss_f32(_mm_sub_ss(_mm_set_ss(a), _mm_set_ss(b)));
 }
 
 inline asm_float_t ieee_multiply_float(asm_float_t a, asm_float_t b)
@@ -38,8 +43,8 @@ inline asm_float_t ieee_multiply_float(asm_float_t a, asm_float_t b)
     // A hack related to '/fp:fast' or '/fp:contract' options below:
     // The compliler may fuse `x += a * b` into a single fmadd instruction, affecting determinism.
     // Workaround: make multiplication result made observable by broadcasting it into unused part of XMM register
-    __m128 result = _mm_mul_ss(a, b);
-    return _mm_movelh_ps(result, result);
+    __m128 result = _mm_mul_ss(_mm_set_ss(a), _mm_set_ss(b));
+    return _mm_cvtss_f32(_mm_movelh_ps(result, result));
 }
 
 inline asm_float_t ieee_divide_float(asm_float_t a, asm_float_t b)
@@ -47,8 +52,8 @@ inline asm_float_t ieee_divide_float(asm_float_t a, asm_float_t b)
     // A hack related to '/fp:fast' or '/fp:contract' options below:
     // The compliler may fuse `x += a * b` into a single fmadd instruction, affecting determinism.
     // Workaround: make multiplication result made observable by broadcasting it into unused part of XMM register
-    __m128 result = _mm_div_ss(a, b);
-    return _mm_movelh_ps(result, result);
+    __m128 result = _mm_div_ss(_mm_set_ss(a), _mm_set_ss(b));
+    return _mm_cvtss_f32(_mm_movelh_ps(result, result));
 }
 
 /**
@@ -56,7 +61,7 @@ inline asm_float_t ieee_divide_float(asm_float_t a, asm_float_t b)
  */
 inline bool ieee_cmp_lt_float(asm_float_t a, asm_float_t b)
 {
-    return _mm_ucomilt_ss(a, b) != 0;
+    return _mm_ucomilt_ss(_mm_set_ss(a), _mm_set_ss(b)) != 0;
 }
 
 /**
@@ -64,7 +69,7 @@ inline bool ieee_cmp_lt_float(asm_float_t a, asm_float_t b)
  */
 inline bool ieee_cmp_le_float(asm_float_t a, asm_float_t b)
 {
-    return _mm_ucomile_ss(a, b) != 0;
+    return _mm_ucomile_ss(_mm_set_ss(a), _mm_set_ss(b)) != 0;
 }
 
 /**
@@ -72,7 +77,7 @@ inline bool ieee_cmp_le_float(asm_float_t a, asm_float_t b)
  */
 inline bool ieee_cmp_eq_float(asm_float_t a, asm_float_t b)
 {
-    return _mm_ucomieq_ss(a, b) != 0;
+    return _mm_ucomieq_ss(_mm_set_ss(a), _mm_set_ss(b)) != 0;
 }
 
 /**
@@ -80,26 +85,17 @@ inline bool ieee_cmp_eq_float(asm_float_t a, asm_float_t b)
  */
 inline asm_float_t ieee_neg_float(asm_float_t a)
 {
-    static const __m128 sign_bit = _mm_set_ss(-0.f);
-    return _mm_xor_ps(a, sign_bit);
+    const __m128 sign_bit = _mm_set_ss(-0.f);
+    return _mm_cvtss_f32(_mm_xor_ps(_mm_set_ss(a), sign_bit));
 }
 
 inline float ieee_asm_to_float(asm_float_t intermediate)
 {
-    return _mm_cvtss_f32(intermediate);
+    return intermediate;
 }
 constexpr inline asm_float_t ieee_asm_from_float(float f)
 {
-    if (std::is_constant_evaluated())
-    {
-        __m128 value = {};
-        value.m128_f32[0] = f;
-        return value;
-    }
-    else
-    {
-        return _mm_load_ss(&f);
-    }
+    return f;
 }
 }
 #elif defined(SIXIT_COMPILER_ANY_CLANG_OR_GCC)

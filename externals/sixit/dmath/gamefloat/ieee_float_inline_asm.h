@@ -79,13 +79,11 @@ class ieee_float_inline_asm
     // with plain float. Each +, -, *, / is one IEEE single precision operation
     // rounded to nearest, the same bits as addss/mulss/fadd/fmul at run time,
     // so Scalar constants can be constexpr. Run time keeps the inline asm.
+    // asm_float_t is a plain float on every compiler (MSVC included, see
+    // sixit/core/cpual/ieeefloat_inline_asm.h).
     static constexpr float constexpr_value(sixit::cpual::asm_float_t v)
     {
-#if defined(SIXIT_COMPILER_MSVC)
-        return v.m128_f32[0];
-#else
         return v;
-#endif
     }
 
     [[nodiscard]] constexpr float to_float() const
@@ -241,6 +239,12 @@ class ieee_float_inline_asm
     friend struct sixit::units::dimensional_scalar_rw_alias_helper<sixit::dmath::ieee_float_inline_asm>;
     friend struct sixit::rw::member_type_alias<sixit::dmath::ieee_float_inline_asm>;
 };
+
+#if defined(SIXIT_COMPILER_MSVC)
+// NekoPhysics patch: a value is 4 bytes on MSVC too, so structs holding them
+// have the same layout (and byte-level checksums) as on clang and GCC.
+static_assert(sizeof(ieee_float_inline_asm) == 4);
+#endif
 
 template <>
 struct fp_traits<ieee_float_inline_asm>
