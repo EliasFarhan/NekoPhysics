@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <utility>
 
+#include "neko/math/scalar_traits.h"
 #include "neko/physics/physics.h"
 
 namespace neko::scenes {
@@ -94,8 +95,7 @@ inline std::uint32_t TrajectoryChecksum(const PhysicsWorld& world,
                                         Index body_count) {
   std::uint32_t hash = 2166136261u;
   const auto add = [&hash](Scalar value) {
-    static_assert(sizeof(Scalar) == sizeof(std::uint32_t));
-    const auto word = std::bit_cast<std::uint32_t>(value);
+    const auto word = ToBitsWord(value);
     for (int shift = 0; shift < 32; shift += 8) {
       hash ^= (word >> shift) & 0xFFu;
       hash *= 16777619u;

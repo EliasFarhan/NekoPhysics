@@ -42,10 +42,7 @@ class DrawChecksum {
       hash_ *= 16777619u;
     }
   }
-  void Add(neko::Scalar value) {
-    static_assert(sizeof(neko::Scalar) == sizeof(std::uint32_t));
-    Add(std::bit_cast<std::uint32_t>(value));
-  }
+  void Add(neko::Scalar value) { Add(neko::ToBitsWord(value)); }
   void Add(neko::Vec2f value) {
     Add(value.x());
     Add(value.y());
@@ -77,11 +74,16 @@ SampleRun RunSample(neko::SampleRegistry& registry, std::size_t index) {
   const neko::SampleContext context{neko::sample_config::kWorldBounds};
   SampleRun run;
   registry.Select(index, context);
-  run.initial_checksum = registry.current()->GenerateChecksum();
+  const neko::Sample* sample = registry.current();
+  if (sample == nullptr) {
+    ADD_FAILURE() << "no sample " << index;
+    return run;
+  }
+  run.initial_checksum = sample->GenerateChecksum();
   for (int step = 0; step < kSampleSteps; ++step) {
     registry.FixedUpdate();
   }
-  run.final_checksum = registry.current()->GenerateChecksum();
+  run.final_checksum = sample->GenerateChecksum();
   neko::DrawList draw_list;
   registry.Draw(draw_list);
   DrawChecksum draw_checksum;
@@ -272,7 +274,8 @@ struct LaunchRegistry {
     for (int step = 0; step < 10; ++step) {
       registry->FixedUpdate();
     }
-    return registry->current()->GenerateChecksum();
+    const neko::Sample* current = registry->current();
+    return current == nullptr ? 0u : current->GenerateChecksum();
   }
   LaunchSample* sample = nullptr;
   std::unique_ptr<neko::SampleRegistry> registry;

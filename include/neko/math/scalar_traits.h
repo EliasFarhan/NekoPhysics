@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <limits>
 #include <string_view>
+#include <type_traits>
 
 #include "neko/math/fixed.h"
 #include "neko/math/fixed_trig.h"
@@ -355,6 +356,27 @@ struct ScalarTraits<Fixed<T, Exp, MulT>> {
     return static_cast<float>(value);
   }
 };
+
+/// Raw bits of a 32-bit @p value as an unsigned word, for checksums: the
+/// @ref ScalarTraits::ToBits pattern, reinterpreted as `std::uint32_t` when
+/// the traits use a signed type (@ref Fixed16).
+///
+/// Hash this, not the object bytes: the sixit float is a 16-byte `__m128`
+/// with MSVC, whose upper lanes are not part of the value.
+///
+/// @tparam T A 32-bit number type with @ref ScalarTraits.
+/// @param value The value.
+/// @return Its bits.
+template <typename T>
+[[nodiscard]] constexpr std::uint32_t ToBitsWord(T value) noexcept {
+  using Bits = typename ScalarTraits<T>::Bits;
+  static_assert(sizeof(Bits) == sizeof(std::uint32_t));
+  if constexpr (std::is_same_v<Bits, std::uint32_t>) {
+    return ScalarTraits<T>::ToBits(value);
+  } else {
+    return std::bit_cast<std::uint32_t>(ScalarTraits<T>::ToBits(value));
+  }
+}
 
 namespace internal {
 // True when ScalarTraits<T> exists and says fixed point, false for any other

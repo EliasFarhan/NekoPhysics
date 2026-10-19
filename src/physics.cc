@@ -12,6 +12,7 @@
 #include "neko/core/platform.h"
 #include "neko/core/profile.h"
 #include "neko/core/step_profile.h"
+#include "neko/math/scalar_traits.h"
 #include "neko/math/vec2.h"
 #include "neko/physics/contact_solver.h"
 
@@ -28,8 +29,9 @@ class Checksum {
     }
   }
   void Add(Scalar value) noexcept {
-    static_assert(sizeof(Scalar) == sizeof(std::uint32_t));
-    Add(std::bit_cast<std::uint32_t>(value));
+    // Through the traits, not the object bytes: with MSVC the sixit float is
+    // a 16-byte __m128 whose upper lanes aren't part of the value
+    Add(ToBitsWord(value));
   }
   void Add(Vec2f value) noexcept {
     Add(value.x());
