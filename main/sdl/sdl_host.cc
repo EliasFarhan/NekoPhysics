@@ -16,6 +16,7 @@
 
 #include <array>
 #include <cstdio>
+#include <string_view>
 
 namespace {
 
@@ -25,10 +26,13 @@ namespace {
 constexpr float kMaxFrameTime = 0.25f;
 
 void DrawSampleMenu(neko::SampleRegistry& registry,
-                    const neko::SampleContext& context) {
+                    const neko::SampleContext& context,
+                    const neko::SdlHostOptions& options,
+                    ImGuiTextFilter& filter) {
   // Wide enough for the parameter sliders and their labels
   ImGui::SetNextWindowSize(ImVec2{360.0f, 0.0f}, ImGuiCond_FirstUseEver);
   ImGui::Begin("Sample Manager");
+  filter.Draw("Search");
   const auto current = registry.current_index();
   if (ImGui::BeginCombo("Samples", current == neko::SampleRegistry::kNone
                                        ? "None"
@@ -36,15 +40,43 @@ void DrawSampleMenu(neko::SampleRegistry& registry,
     if (ImGui::Selectable("None", current == neko::SampleRegistry::kNone)) {
       registry.Select(neko::SampleRegistry::kNone, context);
     }
-    for (std::size_t index = 0; index < registry.size(); index++) {
-      if (ImGui::Selectable(registry.name(index), current == index)) {
-        registry.Select(index, context);
+    const bool grouped = options.groups.size() == registry.size();
+    for (std::size_t index = 0; index < registry.size();) {
+      const std::size_t first = index;
+      std::size_t end = index + 1;
+      if (grouped) {
+        while (end < registry.size() &&
+               std::string_view{options.groups[end]} == options.groups[first])
+          ++end;
       }
+      bool matches = false;
+      for (std::size_t i = first; i < end; ++i) {
+        matches = matches || filter.PassFilter(registry.name(i)) ||
+                  (grouped && filter.IsActive() &&
+                   filter.PassFilter(options.groups[i]));
+      }
+      if (matches && (!grouped || ImGui::TreeNode(options.groups[first]))) {
+        for (std::size_t i = first; i < end; ++i) {
+          if (!filter.PassFilter(registry.name(i)) &&
+              !(grouped && filter.IsActive() &&
+                filter.PassFilter(options.groups[i])))
+            continue;
+          ImGui::PushID(static_cast<int>(i));
+          if (ImGui::Selectable(registry.name(i),
+                                registry.current_index() == i)) {
+            registry.Select(i, context);
+          }
+          ImGui::PopID();
+        }
+        if (grouped) ImGui::TreePop();
+      }
+      index = end;
     }
     ImGui::EndCombo();
   }
-  if (current != neko::SampleRegistry::kNone && ImGui::Button("Restart")) {
-    registry.Select(current, context);
+  if (registry.current_index() != neko::SampleRegistry::kNone &&
+      ImGui::Button("Restart")) {
+    registry.Select(registry.current_index(), context);
   }
   // One slider per parameter, over the step count: the sample restarts when a
   // value changes
@@ -82,7 +114,8 @@ void DrawSampleMenu(neko::SampleRegistry& registry,
 
 }  // namespace
 
-int neko::RunSdlHost(SampleRegistry& registry, const char* title) {
+int neko::RunSdlHost(SampleRegistry& registry, const char* title,
+                     const SdlHostOptions& options) {
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
     std::printf("error initializing SDL: %s\n", SDL_GetError());
     return 1;
@@ -102,7 +135,8 @@ int neko::RunSdlHost(SampleRegistry& registry, const char* title) {
 
   {
     const neko::SampleContext context{neko::sample_config::kWorldBounds};
-    registry.Select(0, context);
+    registry.Select(options.initial_index, context);
+    ImGuiTextFilter filter;
     neko::DrawList draw_list;
     draw_list.Reserve(neko::sample_config::kMaxDrawCircles,
                       neko::sample_config::kMaxDrawBoxes,
@@ -137,7 +171,7 @@ int neko::RunSdlHost(SampleRegistry& registry, const char* title) {
       ImGui_ImplSDLRenderer3_NewFrame();
       ImGui_ImplSDL3_NewFrame();
       ImGui::NewFrame();
-      DrawSampleMenu(registry, context);
+      DrawSampleMenu(registry, context, options, filter);
 
       SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
       SDL_RenderClear(renderer);

@@ -1,10 +1,10 @@
 # Tutorial chapters of the NekoPhysics articles (GPR_SAE_Slides/nekophysics/). Each chapter folder NN_<slug>/ holds a
 # platform-neutral Sample (<slug>_sample.h/.cc, in NekoPhysicsTutorials, tested by tests/tutorials_test.cc) and a
-# main.cc running it on the PC SDL host as course_NN_<slug>. Exercise solutions are NN_<slug>/solutions/<name>_sample.h/.cc
+# main.cc optionally running it on the PC SDL host as course_NN_<slug>. Exercise solutions are NN_<slug>/solutions/<name>_sample.h/.cc
 # (in NekoPhysicsTutorials, also tested) and <name>_main.cc, the program course_NN_<slug>_<name>.
 file(GLOB TUTORIAL_SAMPLE_FILES CONFIGURE_DEPENDS */*_sample.cc */*_sample.h */solutions/*_sample.cc
      */solutions/*_sample.h)
-add_library(NekoPhysicsTutorials STATIC ${TUTORIAL_SAMPLE_FILES})
+add_library(NekoPhysicsTutorials STATIC ${TUTORIAL_SAMPLE_FILES} tutorial_catalog.cc tutorial_catalog.h)
 target_include_directories(NekoPhysicsTutorials PUBLIC ${PROJECT_SOURCE_DIR})
 target_link_libraries(NekoPhysicsTutorials PUBLIC NekoPhysicsSamples)
 neko_set_project_warnings(NekoPhysicsTutorials)
@@ -27,7 +27,15 @@ function(neko_add_tutorial_solution chapter name)
     set_target_properties(course_${chapter}_${name} PROPERTIES FOLDER Tutorials/Solutions/)
 endfunction()
 
+option(NEKO_BUILD_INDIVIDUAL_TUTORIALS "Build individual chapter and solution launchers" OFF)
 if(USE_SAMPLES)
+    add_executable(Tutorials main.cc)
+    target_link_libraries(Tutorials PRIVATE NekoPhysicsTutorials NekoPhysicsSdlHost)
+    neko_set_project_warnings(Tutorials)
+    set_target_properties(Tutorials PROPERTIES FOLDER Tutorials/)
+endif()
+
+if(USE_SAMPLES AND NEKO_BUILD_INDIVIDUAL_TUTORIALS)
     neko_add_tutorial(00_bounce)
     neko_add_tutorial_solution(00_bounce explicit_euler)
     neko_add_tutorial_solution(00_bounce bounces_to_rest)

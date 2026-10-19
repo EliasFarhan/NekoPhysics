@@ -51,8 +51,8 @@ void ErrorTableSample::Begin(const SampleContext& context) {
         exact;
     asin_max_error_ = std::fmax(asin_max_error_, std::abs(error) * kMicro);
     const auto bucket =
-        static_cast<std::size_t>(static_cast<std::int64_t>(raw + kOne) *
-                                 (kBucketCount - 1) / (2 * kOne));
+        static_cast<std::size_t>(raw + kOne) * (kBucketCount - 1) /
+        (2 * kOne);
     const int hundredths = Rounded(error / kStep * 100.0);
     if (std::abs(hundredths) > std::abs(buckets_[bucket])) {
       buckets_[bucket] = hundredths;

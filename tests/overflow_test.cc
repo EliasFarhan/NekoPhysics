@@ -147,7 +147,7 @@ TEST(StepOverflow, DropThroughPassingPairs) {
   for (int i = 0; i < 2; ++i) {
     const BodyIndex platform = world.AddBody();
     world.body(platform).type = neko::BodyType::kStatic;
-    world.body(platform).position = {Scalar{0}, Scalar{-0.5f * i}};
+    world.body(platform).position = {Scalar{0}, Scalar{-0.5f} * Scalar{i}};
     const ColliderIndex collider = world.AddAabbCollider(platform);
     world.collider(collider).is_trigger = false;
     world.collider(collider).is_one_way = true;

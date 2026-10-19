@@ -2,9 +2,12 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <initializer_list>
 #include <memory>
 #include <optional>
+#include <set>
+#include <string>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -96,6 +99,7 @@
 #include "tutorials/15_fast_projectile/solutions/speed_threshold_sample.h"
 #include "tutorials/15_fast_projectile/solutions/substeps_vs_ccd_sample.h"
 #include "tutorials/15_fast_projectile/solutions/trigger_hits_sample.h"
+#include "tutorials/tutorial_catalog.h"
 
 namespace {
 
@@ -3831,6 +3835,70 @@ TEST(FastProjectileSolutions, OneWayBulletLandsEveryTime) {
 }
 
 }  // namespace
+
+TEST(TutorialCatalog, CoversEverySourceAndHasUniqueIds) {
+  const auto catalog = neko::tutorial::TutorialCatalog();
+  ASSERT_EQ(catalog.size(), 80u);
+  std::set<std::string> ids;
+  std::size_t demos = 0;
+  for (const auto& entry : catalog) {
+    EXPECT_TRUE(ids.insert(entry.id).second) << entry.id;
+    EXPECT_NE(neko::tutorial::FindTutorial(entry.id),
+              neko::SampleRegistry::kNone);
+    demos += entry.is_demo ? 1u : 0u;
+  }
+  EXPECT_EQ(demos, 16u);
+  EXPECT_EQ(neko::tutorial::FindTutorial("unknown"),
+            neko::SampleRegistry::kNone);
+  const auto root =
+      std::filesystem::path{__FILE__}.parent_path().parent_path() / "tutorials";
+  for (const auto& chapter : std::filesystem::directory_iterator(root)) {
+    if (!chapter.is_directory() ||
+        !std::filesystem::exists(chapter.path() / "main.cc"))
+      continue;
+    const auto chapter_id = chapter.path().filename().string();
+    EXPECT_TRUE(ids.contains(chapter_id + "/demo"));
+    for (const auto& solution :
+         std::filesystem::directory_iterator(chapter.path() / "solutions")) {
+      const auto filename = solution.path().filename().string();
+      if (filename.ends_with("_main.cc")) {
+        EXPECT_TRUE(ids.contains(chapter_id + "/" +
+                                 filename.substr(0, filename.size() - 8)));
+      }
+    }
+  }
+}
+
+TEST(TutorialCatalog, SwitchingRestartsEveryEntryAndPreservesParameters) {
+  std::vector<neko::SampleRegistry::Entry> entries;
+  for (const auto& entry : neko::tutorial::TutorialCatalog()) {
+    entries.push_back({entry.name, entry.create()});
+  }
+  neko::SampleRegistry registry{std::move(entries)};
+  const neko::SampleContext context{neko::sample_config::kWorldBounds};
+  for (std::size_t i = 0; i < registry.size(); ++i) {
+    SCOPED_TRACE(registry.name(i));
+    registry.Select(i, context);
+    if (!registry.parameters().empty()) {
+      const auto parameter = registry.parameters()[0];
+      registry.SetParameter(
+          0, parameter.value == parameter.min ? parameter.max : parameter.min);
+    }
+    const auto parameters = registry.parameters();
+    const int value = parameters.empty() ? 0 : parameters[0].value;
+    const auto initial = registry.current()->GenerateChecksum();
+    for (int step = 0; step < 10; ++step) registry.FixedUpdate();
+    neko::DrawList draw;
+    registry.Draw(draw);
+    registry.Select((i + 1) % registry.size(), context);
+    registry.FixedUpdate();
+    registry.Select(i, context);
+    EXPECT_EQ(registry.current()->GenerateChecksum(), initial);
+    if (!registry.parameters().empty()) {
+      EXPECT_EQ(registry.parameters()[0].value, value);
+    }
+  }
+}
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

@@ -365,7 +365,7 @@ Scalar DivideBy(Scalar value) {
   using Traits = ScalarTraits<Scalar>;
   if constexpr (Traits::kIsFixedPoint) {
     return Traits::FromBits(
-        static_cast<Traits::Bits>(Traits::ToBits(value) / N));
+        Traits::ToBits(value) / N);
   } else {
     return value / Scalar{N};
   }
@@ -2167,8 +2167,8 @@ void PhysicsWorld::SolveBullets() {
     }
 
     // Trigger pairs: every crossing up to the impact, not already touching
-    const auto by_pair = [](const TouchingPair& a, const TouchingPair& b) {
-      return a.pair < b.pair;
+    const auto by_pair = [](const TouchingPair& pair1, const TouchingPair& pair2) {
+      return pair1.pair < pair2.pair;
     };
     bullet_trigger_hits_.clear();
     for_each_candidate(
@@ -2198,15 +2198,15 @@ void PhysicsWorld::SolveBullets() {
               {hit.fraction, moving.collider_index, other.collider_index});
         });
     // In the order of the crossings (insertion sort: few entries)
-    const auto is_before = [](const BulletTriggerHit& a,
-                              const BulletTriggerHit& b) {
-      if (a.fraction != b.fraction) {
-        return a.fraction < b.fraction;
+    const auto is_before = [](const BulletTriggerHit& first,
+                              const BulletTriggerHit& second) {
+      if (first.fraction != second.fraction) {
+        return first.fraction < second.fraction;
       }
-      if (a.other != b.other) {
-        return a.other < b.other;
+      if (first.other != second.other) {
+        return first.other < second.other;
       }
-      return a.bullet < b.bullet;
+      return first.bullet < second.bullet;
     };
     for (auto it = bullet_trigger_hits_.begin();
          it != bullet_trigger_hits_.end(); ++it) {
