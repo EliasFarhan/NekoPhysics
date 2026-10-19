@@ -38,7 +38,7 @@ comments in the headers.
 
 ## Tutorial browser
 
-Build and launch all 16 chapter demos and 64 exercise solutions in one desktop
+Build and launch all 17 chapter demos and 68 exercise solutions in one desktop
 executable:
 
 ```sh
