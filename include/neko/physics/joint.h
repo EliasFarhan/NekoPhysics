@@ -40,10 +40,10 @@ enum class DistanceJointType : std::uint8_t {
 /// spin, which turns a body into the point mass of a textbook pendulum.
 ///
 /// **Rigid and rope joints** are constraints, solved with impulses by the
-/// same passes as the contacts (see @ref SolveConstraints). With `u` the unit
-/// vector from anchor A to anchor B, `rA` and `rB` the anchors' offsets from
-/// the bodies' centers in the world, the solver wants the speed at which the
-/// anchors separate along `u`,
+/// same passes as the contacts (see @ref ContactSolverSettings). With `u` the
+/// unit vector from anchor A to anchor B, `rA` and `rB` the anchors' offsets
+/// from the bodies' centers in the world, the solver wants the speed at which
+/// the anchors separate along `u`,
 ///
 /// @code
 /// Cdot = Dot(vB + wB x rB - vA - wA x rA, u)
@@ -327,64 +327,37 @@ struct RevoluteJointScratch {
 };
 }  // namespace internal
 
-/// Solves the contacts and the rigid and rope joints of a step together, in
-/// the same passes.
-///
-/// Each pass solves every rigid and rope joint in table order (see
-/// @ref DistanceJoint for the math), then every contact as
-/// @ref SolveContacts does: the contacts come last, so a pass ends with no
-/// body pushed into another. Solving them together is what lets a chain
-/// resting on the ground settle as one system: each pass sees the others'
-/// impulses. Before the passes the contact targets are computed from the
-/// velocities before any impulse, then the joints' and the contacts'
-/// impulses of the last step are applied (warm starting).
-///
-/// Without joints this is exactly @ref SolveContacts, bit for bit.
-///
-/// @param contacts The step's solid contacts, see @ref SolveContacts.
-/// @param contact_scratch Working memory, two entries per contact.
-/// @param joints The joint table; springs and free slots are skipped. Each
-/// joint's `impulse` holds the warm start, and the step's total on return.
-/// @param bodies The body table the joints' indices refer to.
-/// @param joint_scratch Working memory, one entry per joint.
-/// @param settings Time step, passes and tolerances; the joints use
-/// `joint_hertz`, `joint_damping_ratio` and `warm_starting`.
-/// @pre `contact_scratch.size() >= 2 * contacts.size()` and
-/// `joint_scratch.size() >= joints.size()`.
+namespace internal {
+// Solves the contacts and the rigid and rope joints of a step together, in the
+// same passes (order and math on ContactSolverSettings and DistanceJoint).
+// Without joints this is exactly SolveContacts, bit for bit.
+//
+// joints: the joint table; springs and free slots are skipped. Each joint's
+// impulse holds the warm start, and the step's total on return. bodies: the
+// body table the joints' indices refer to. joint_scratch: one entry per
+// joint. Requires contact_scratch.size() >= 2 * contacts.size() and
+// joint_scratch.size() >= joints.size().
 void SolveConstraints(std::span<Contact> contacts,
-                      std::span<internal::ContactPointScratch> contact_scratch,
+                      std::span<ContactPointScratch> contact_scratch,
                       std::span<DistanceJoint> joints, std::span<Body> bodies,
-                      std::span<internal::JointScratch> joint_scratch,
+                      std::span<JointScratch> joint_scratch,
                       const ContactSolverSettings& settings);
 
-/// Solves the contacts, the rigid and rope joints and the revolute joints of
-/// a step together, in the same passes.
-///
-/// As the overload without revolute joints, with the revolute joints solved
-/// after the distance joints and before the contacts in each pass, in table
-/// order (limits first, then the point; see @ref RevoluteJoint). With an
-/// empty revolute table this is exactly that overload, bit for bit.
-///
-/// @param contacts The step's solid contacts, see @ref SolveContacts.
-/// @param contact_scratch Working memory, two entries per contact.
-/// @param joints The distance joint table.
-/// @param revolute_joints The revolute joint table; free slots are skipped.
-/// Each joint's `impulse`, `lower_impulse` and `upper_impulse` hold the warm
-/// start, and the step's totals on return.
-/// @param bodies The body table the joints' indices refer to.
-/// @param joint_scratch Working memory, one entry per distance joint.
-/// @param revolute_scratch Working memory, one entry per revolute joint.
-/// @param settings Time step, passes and tolerances.
-/// @pre `contact_scratch.size() >= 2 * contacts.size()`,
-/// `joint_scratch.size() >= joints.size()` and
-/// `revolute_scratch.size() >= revolute_joints.size()`.
-void SolveConstraints(
-    std::span<Contact> contacts,
-    std::span<internal::ContactPointScratch> contact_scratch,
-    std::span<DistanceJoint> joints, std::span<RevoluteJoint> revolute_joints,
-    std::span<Body> bodies, std::span<internal::JointScratch> joint_scratch,
-    std::span<internal::RevoluteJointScratch> revolute_scratch,
-    const ContactSolverSettings& settings);
+// The same with the revolute joints, solved after the distance joints and
+// before the contacts in each pass, in table order (limits first, then the
+// point). Free slots are skipped; each joint's impulse, lower_impulse and
+// upper_impulse hold the warm start, and the step's totals on return. With an
+// empty revolute table this is exactly the overload above, bit for bit.
+// Requires revolute_scratch.size() >= revolute_joints.size() too.
+void SolveConstraints(std::span<Contact> contacts,
+                      std::span<ContactPointScratch> contact_scratch,
+                      std::span<DistanceJoint> joints,
+                      std::span<RevoluteJoint> revolute_joints,
+                      std::span<Body> bodies,
+                      std::span<JointScratch> joint_scratch,
+                      std::span<RevoluteJointScratch> revolute_scratch,
+                      const ContactSolverSettings& settings);
+}  // namespace internal
 
 }  // namespace neko
 

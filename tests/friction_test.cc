@@ -221,7 +221,8 @@ TEST(Friction, TangentImpulseStaysWithinTheCoulombLimit) {
       ground.world.body(ground_collider.body_index), ground_collider,
       ground.world.body(box), box_collider, &contact));
   std::array<neko::internal::ContactPointScratch, 2> scratch{};
-  neko::SolveContacts({&contact, 1}, scratch, {.dt = ground.world.dt()});
+  neko::internal::SolveContacts({&contact, 1}, scratch,
+                                {.dt = ground.world.dt()});
   for (std::uint8_t i = 0; i < contact.point_count; ++i) {
     EXPECT_LE(
         neko::Abs(contact.points[i].tangent_impulse),

@@ -389,6 +389,7 @@ NEKO_HOT void SolveRevolutePass(
 }
 }  // namespace
 
+namespace internal {
 NEKO_HOT void SolveConstraints(
     std::span<Contact> contacts,
     std::span<internal::ContactPointScratch> contact_scratch,
@@ -437,5 +438,6 @@ NEKO_HOT void SolveConstraints(
     internal::SolveContactPass(contacts, contact_scratch);
   }
 }
+}  // namespace internal
 
 }  // namespace neko

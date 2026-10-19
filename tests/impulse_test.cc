@@ -91,10 +91,10 @@ struct Fixture {
                                     world.body(box_collider.body_index),
                                     box_collider, &contact));
     std::array<neko::internal::ContactPointScratch, 2> scratch{};
-    neko::SolveContacts({&contact, 1}, scratch,
-                        {.dt = world.dt(),
-                         .velocity_iterations = iterations,
-                         .baumgarte = Scalar{0}});
+    neko::internal::SolveContacts({&contact, 1}, scratch,
+                                  {.dt = world.dt(),
+                                   .velocity_iterations = iterations,
+                                   .baumgarte = Scalar{0}});
     return contact;
   }
 

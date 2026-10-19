@@ -364,8 +364,7 @@ template <int N>
 Scalar DivideBy(Scalar value) {
   using Traits = ScalarTraits<Scalar>;
   if constexpr (Traits::kIsFixedPoint) {
-    return Traits::FromBits(
-        Traits::ToBits(value) / N);
+    return Traits::FromBits(Traits::ToBits(value) / N);
   } else {
     return value / Scalar{N};
   }
@@ -1197,17 +1196,17 @@ NEKO_HOT void PhysicsWorld::ResolveNarrowphase() {
   if (config_.warm_starting) {
     WarmStartContacts();
   }
-  SolveConstraints(contacts_, {contact_scratch_.data(), 2 * contacts_.size()},
-                   joints_, revolute_joints_, bodies_, joint_scratch_,
-                   revolute_scratch_,
-                   {.dt = config_.dt,
-                    .velocity_iterations = config_.velocity_iterations,
-                    .baumgarte = config_.baumgarte,
-                    .penetration_slop = config_.penetration_slop,
-                    .restitution_threshold = config_.restitution_threshold,
-                    .warm_starting = config_.warm_starting,
-                    .joint_hertz = config_.joint_hertz,
-                    .joint_damping_ratio = config_.joint_damping_ratio});
+  internal::SolveConstraints(
+      contacts_, {contact_scratch_.data(), 2 * contacts_.size()}, joints_,
+      revolute_joints_, bodies_, joint_scratch_, revolute_scratch_,
+      {.dt = config_.dt,
+       .velocity_iterations = config_.velocity_iterations,
+       .baumgarte = config_.baumgarte,
+       .penetration_slop = config_.penetration_slop,
+       .restitution_threshold = config_.restitution_threshold,
+       .warm_starting = config_.warm_starting,
+       .joint_hertz = config_.joint_hertz,
+       .joint_damping_ratio = config_.joint_damping_ratio});
   if (config_.warm_starting) {
     CacheContactImpulses();
   }
@@ -2167,7 +2166,8 @@ void PhysicsWorld::SolveBullets() {
     }
 
     // Trigger pairs: every crossing up to the impact, not already touching
-    const auto by_pair = [](const TouchingPair& pair1, const TouchingPair& pair2) {
+    const auto by_pair = [](const TouchingPair& pair1,
+                            const TouchingPair& pair2) {
       return pair1.pair < pair2.pair;
     };
     bullet_trigger_hits_.clear();

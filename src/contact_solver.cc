@@ -184,19 +184,19 @@ NEKO_HOT void SolveContactPass(std::span<Contact> contacts,
     }
   }
 }
-}  // namespace internal
 
 void SolveContacts(std::span<Contact> contacts,
-                   std::span<internal::ContactPointScratch> scratch,
+                   std::span<ContactPointScratch> scratch,
                    const ContactSolverSettings& settings) {
-  internal::PrepareContacts(contacts, scratch, settings);
+  PrepareContacts(contacts, scratch, settings);
   // Warm start: apply last step's impulses before the passes, once every
   // target is computed (the targets use the velocities before any impulse)
   if (settings.warm_starting) {
-    internal::WarmStartContacts(contacts, scratch);
+    WarmStartContacts(contacts, scratch);
   }
   for (int pass = 0; pass < settings.velocity_iterations; ++pass) {
-    internal::SolveContactPass(contacts, scratch);
+    SolveContactPass(contacts, scratch);
   }
 }
+}  // namespace internal
 }  // namespace neko

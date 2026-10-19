@@ -73,9 +73,9 @@
 ///   @ref BoundingSurfaceHierarchy (@ref SweepAndPrune by default, or a
 ///   @ref QuadTree), cheaply finds pairs whose bounding boxes overlap. The
 ///   narrowphase (@ref PhysicsWorld::DetectContact) tests the exact shapes of
-///   those pairs only and builds a @ref Contact. @ref SolveContacts then
-///   pushes solid shapes apart with impulses, all the step's contacts
-///   together, in several passes.
+///   those pairs only and builds a @ref Contact. The contact solver (see
+///   @ref ContactSolverSettings) then pushes solid shapes apart with impulses,
+///   all the step's contacts together, in several passes.
 /// - Math types: @ref Vec2f (2D vector of @ref Scalar), @ref Aabbf and
 ///   @ref Circlef.
 ///
@@ -787,7 +787,8 @@ struct PhysicsWorldConfig {
 ///   against every other one.
 /// - **Narrowphase**: the exact shape test of each candidate pair, the
 ///   solver for the solid pairs, the rigid and rope joints and the revolute
-///   joints (@ref SolveConstraints), and the enter/exit events.
+///   joints (all in the same passes, see @ref ContactSolverSettings), and
+///   the enter/exit events.
 /// - **Positions**: dynamic and kinematic bodies move and turn at their
 ///   (corrected) velocities, and kinematic bodies with a target (see
 ///   @ref SetKinematicTarget) are put exactly on it.
@@ -797,7 +798,7 @@ struct PhysicsWorldConfig {
 ///
 /// See @ref Body for the integration formula, @ref ResolveBroadphase and
 /// @ref ResolveNarrowphase for the two collision phases, and
-/// @ref SolveContacts for the contact solver.
+/// @ref ContactSolverSettings for the contact and joint solver.
 ///
 /// Bodies, colliders and shapes live in fixed-size tables and are referred to
 /// by index (@ref BodyIndex, @ref ColliderIndex, @ref ShapeIndex); freed slots

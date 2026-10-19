@@ -53,10 +53,10 @@ struct ContactPoint {
 /// with impulses.
 ///
 /// @ref PhysicsWorld::DetectContact fills it in when two colliders overlap;
-/// @ref SolveContacts then fixes the velocities of all the step's contacts
-/// together. A `Contact` lives only for the step that created it: games
-/// normally never build one, they receive @ref ContactListener events
-/// instead.
+/// The contact solver of @ref PhysicsWorld::Step then fixes the velocities
+/// of all the step's contacts together (see @ref ContactSolverSettings). A
+/// `Contact` lives only for the step that created it: games normally never
+/// build one, they receive @ref ContactListener events instead.
 ///
 /// Conventions: `contact_normal` is a unit vector pointing from `bodies[1]`
 /// towards `bodies[0]`, and `penetration` is how deep the shapes overlap along
@@ -115,7 +115,57 @@ struct Contact {
   [[nodiscard]] Scalar CalculateSeparateVelocity() const;
 };
 
-/// Settings of @ref SolveContacts, taken from the @ref PhysicsWorldConfig.
+/// Settings of the contact and joint solver of @ref PhysicsWorld::Step,
+/// taken from the @ref PhysicsWorldConfig.
+///
+/// The solver solves all the contacts of a step together with accumulated
+/// impulses, along the normals (contacts push) and the tangents (friction).
+///
+/// For each point, the solver wants the bodies' velocities at the point (each
+/// `v + w x r`) to separate at a target speed along the normal: the bounce
+/// `-restitution * vn` for an impact faster than the threshold, or the
+/// Baumgarte push-out of the penetration, whichever is larger (0 when the
+/// shapes just touch). It then runs `velocity_iterations` passes over every
+/// point of every contact, in order:
+///
+/// @code
+/// vn = Dot(v1 + w1 x r1 - v2 - w2 x r2, n)       // current approach speed
+/// k = 1/m1 + 1/m2 + Cross(r1, n)^2 / I1 + Cross(r2, n)^2 / I2
+/// dj = (target - vn) / k                         // impulse to reach target
+/// total = max(normal_impulse + dj, 0)            // contacts never pull
+/// dj = total - normal_impulse;  normal_impulse = total
+/// apply dj * n at the point to body 1, -dj * n to body 2
+/// @endcode
+///
+/// Clamping the accumulated impulse, not each pass's increment, lets a later
+/// pass take back part of an earlier push (when a neighbor already did the
+/// work) without ever pulling the bodies together. Repeating a one-shot
+/// impulse instead would add a new bounce every pass. The passes converge
+/// toward impulses that satisfy every contact at once, which is what lets a
+/// box rest flat on two points and a pile settle.
+///
+/// Friction works the same way along the tangent `t = (n.y, -n.x)`, before
+/// the normal in each pass: the target is no sliding (tangent speed 0), and
+/// the accumulated friction impulse is clamped to
+/// `[-friction * normal_impulse, friction * normal_impulse]`. Inside the
+/// range the surfaces stick (static friction); at the limit they slide and
+/// friction resists with its maximum, `friction` times the push (kinetic
+/// friction). The friction impulse acts at the point, so it also spins the
+/// bodies: a sliding ball starts to roll.
+///
+/// Only @ref BodyType::kDynamic bodies move; static and kinematic bodies have
+/// infinite mass and inertia. A body whose collider in the contact is an
+/// @ref AabbCollider doesn't spin (its shape can't turn): its inertia is
+/// infinite in that contact.
+///
+/// The rigid and rope joints (@ref DistanceJoint) and the revolute joints
+/// (@ref RevoluteJoint) are solved in the same passes: each pass solves every
+/// distance joint in table order, then every revolute joint (limits first,
+/// then the point), then every contact. The contacts come last, so a pass
+/// ends with no body pushed into another, and each constraint sees the
+/// others' impulses: a chain resting on the ground settles as one system.
+/// Without joints the arithmetic is exactly the contacts-only solver's, bit
+/// for bit.
 struct ContactSolverSettings {
   /// Time step, in seconds: turns a penetration into a correction speed.
   Scalar dt{1.0f / 60.0f};
@@ -203,57 +253,21 @@ void SolveContactPass(std::span<Contact> contacts,
                       std::span<const ContactPointScratch> scratch);
 }  // namespace internal
 
-/// Solves all the contacts of a step together with accumulated impulses,
-/// along the normals (contacts push) and the tangents (friction).
-///
-/// For each point, the solver wants the bodies' velocities at the point (each
-/// `v + w x r`) to separate at a target speed along the normal: the bounce
-/// `-restitution * vn` for an impact faster than the threshold, or the
-/// Baumgarte push-out of the penetration, whichever is larger (0 when the
-/// shapes just touch). It then runs `velocity_iterations` passes over every
-/// point of every contact, in order:
-///
-/// @code
-/// vn = Dot(v1 + w1 x r1 - v2 - w2 x r2, n)       // current approach speed
-/// k = 1/m1 + 1/m2 + Cross(r1, n)^2 / I1 + Cross(r2, n)^2 / I2
-/// dj = (target - vn) / k                         // impulse to reach target
-/// total = max(normal_impulse + dj, 0)            // contacts never pull
-/// dj = total - normal_impulse;  normal_impulse = total
-/// apply dj * n at the point to body 1, -dj * n to body 2
-/// @endcode
-///
-/// Clamping the accumulated impulse, not each pass's increment, lets a later
-/// pass take back part of an earlier push (when a neighbor already did the
-/// work) without ever pulling the bodies together. Repeating a one-shot
-/// impulse instead would add a new bounce every pass. The passes converge
-/// toward impulses that satisfy every contact at once, which is what lets a
-/// box rest flat on two points and a pile settle.
-///
-/// Friction works the same way along the tangent `t = (n.y, -n.x)`, before
-/// the normal in each pass: the target is no sliding (tangent speed 0), and
-/// the accumulated friction impulse is clamped to
-/// `[-friction * normal_impulse, friction * normal_impulse]`. Inside the
-/// range the surfaces stick (static friction); at the limit they slide and
-/// friction resists with its maximum, `friction` times the push (kinetic
-/// friction). The friction impulse acts at the point, so it also spins the
-/// bodies: a sliding ball starts to roll.
-///
-/// Only @ref BodyType::kDynamic bodies move; static and kinematic bodies have
-/// infinite mass and inertia. A body whose collider in the contact is an
-/// @ref AabbCollider doesn't spin (its shape can't turn): its inertia is
-/// infinite in that contact.
-///
-/// @param contacts The step's solid contacts, filled by
-/// @ref PhysicsWorld::DetectContact. Their impulses are the warm start (or
-/// are reset to 0 without warm starting) and hold the step's totals when it
-/// returns.
-/// @param scratch Working memory, two entries per contact.
-/// @param settings Time step, passes and tolerances.
-/// @pre `scratch.size() >= 2 * contacts.size()`, and every contact's body and
-/// collider pointers are valid.
+namespace internal {
+// Solves all the contacts of a step together with accumulated impulses, along
+// the normals and the tangents (friction); the algorithm is explained on
+// ContactSolverSettings.
+//
+// contacts: the step's solid contacts, filled by PhysicsWorld::DetectContact.
+// Their impulses are the warm start (or are reset to 0 without warm starting)
+// and hold the step's totals when it returns. scratch: working memory, two
+// entries per contact. settings: time step, passes and tolerances.
+// Requires scratch.size() >= 2 * contacts.size(), and every contact's body
+// and collider pointers valid.
 void SolveContacts(std::span<Contact> contacts,
-                   std::span<internal::ContactPointScratch> scratch,
+                   std::span<ContactPointScratch> scratch,
                    const ContactSolverSettings& settings);
+}  // namespace internal
 }  // namespace neko
 
 #endif  // NEKO_PHYSICS_CONTACT_SOLVER_H_
