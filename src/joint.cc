@@ -331,9 +331,19 @@ void WarmStartRevoluteJoints(
 NEKO_HOT Scalar SolveLimit(Scalar relative_speed, Scalar axial_mass,
                            Scalar bias, Scalar mass_scale, Scalar impulse_scale,
                            Scalar* accumulated) {
-  const Scalar change = -axial_mass * mass_scale * (relative_speed + bias) -
-                        impulse_scale * *accumulated;
-  const Scalar total = Max(*accumulated + change, Scalar{0});
+  const Scalar target = relative_speed + bias;
+  const Scalar mass = axial_mass * mass_scale;
+  // What the limit keeps of its push before this pass's correction
+  const Scalar kept = *accumulated - impulse_scale * *accumulated;
+  Scalar total{};
+  if (target > Scalar{0} && target >= kept / mass) {
+    // Moving away from the limit, or far from it: everything is released.
+    // Decided without mass * target, which passes Fixed16's 32767 for a
+    // heavy body far from its limit (an 8 m, 200 kg plank at 30 degrees).
+    total = Scalar{0};
+  } else {
+    total = Max(kept - mass * target, Scalar{0});
+  }
   const Scalar impulse = total - *accumulated;
   *accumulated = total;
   return impulse;

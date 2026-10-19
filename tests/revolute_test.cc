@@ -281,6 +281,47 @@ TEST(RevoluteJoint, LimitsHoldAtFortyFiveDegreesUnderLoad) {
   }
 }
 
+// A heavy plank keeps its pin and its limit in Fixed16: the 2x2 matrix is
+// normalized before its inversion (unnormalized, its determinant underflows
+// past 200 kg), and the limit's speculative target, its inertia times the
+// angle left over dt, doesn't overflow while the plank is far from the limit
+TEST(RevoluteJoint, HeavyPlankKeepsItsPinAndLimit) {
+  for (const bool has_limit : {false, true}) {
+    neko::PhysicsWorld world{{.gravity = Vec2f{Scalar{0}, -Ratio(981, 100)}}};
+    const BodyIndex pivot = AddStatic(world, Vec2f::Zero());
+    // 300 kg, 8 m long: I = 300 (8^2 + 0.25^2) / 12 = 1602 kg m^2
+    const BodyIndex plank =
+        AddBox(world, Vec2f::Zero(), {Scalar{4}, Ratio(1, 8)}, Ratio(1, 300));
+    const BodyIndex load =
+        AddPoint(world, {Scalar{4}, Scalar{0}}, Ratio(1, 20));
+    const RevoluteJointIndex hinge =
+        world.AddRevoluteJoint(pivot, plank, Vec2f::Zero());
+    world.AddRevoluteJoint(plank, load, {Scalar{4}, Scalar{0}});
+    if (has_limit) {
+      world.revolute_joint(hinge).enable_limit = true;
+      world.revolute_joint(hinge).lower_angle = Degrees(-30);
+      world.revolute_joint(hinge).upper_angle = Degrees(30);
+    }
+    float worst_gap = 0.0f;
+    for (int step = 0; step < 600; ++step) {
+      world.Step();
+      worst_gap = std::max(worst_gap, AnchorGap(world, hinge));
+      if (has_limit) {
+        // Never past the limit by more than the soft step's give
+        EXPECT_GT(ToFloat(world.RevoluteJointAngle(hinge)),
+                  -30.0f * kDegree - 0.02f)
+            << step;
+      }
+    }
+    EXPECT_LT(worst_gap, 0.01f) << has_limit;
+    EXPECT_LT(ToFloat(world.body(plank).position.Length()), 0.01f) << has_limit;
+    if (has_limit) {
+      EXPECT_NEAR(ToFloat(world.RevoluteJointAngle(hinge)), -30.0f * kDegree,
+                  0.5f * kDegree);
+    }
+  }
+}
+
 // Inside its limits a hinge turns freely: no limit impulse
 TEST(RevoluteJoint, LimitsDontActInside) {
   neko::PhysicsWorld world{{.gravity = Vec2f::Zero()}};
