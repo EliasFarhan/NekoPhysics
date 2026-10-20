@@ -2,6 +2,7 @@
 // user id of a collider (slice S2 of the night run of 2026-10-18).
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -362,6 +363,59 @@ TEST(OneWay, RemoveColliderForgetsPassingPairs) {
   ASSERT_EQ(world.passing_pairs().size(), 1u);
   world.RemoveCollider(platform);
   EXPECT_TRUE(world.passing_pairs().empty());
+}
+
+// A collider that reuses the index of a removed one doesn't inherit its solid
+// pair with a one-way platform: placed under the platform and moving up, it
+// passes (review of 2026-10-20, B1)
+TEST(OneWay, ReusedColliderIndexIsDecidedAgain) {
+  neko::PhysicsWorld world{kConfig};
+  const ColliderIndex platform = AddPlatform(world, {});
+  const Box box = AddBox(world, {Scalar{0}, Scalar{kRestHeight}});
+  Steps(world, 30);
+  ASSERT_LT(std::abs(ToFloat(world.body(box.body).velocity.y())), 0.05f);
+  world.RemoveCollider(box.collider);
+  const ColliderIndex reused = world.AddAabbCollider(box.body);
+  ASSERT_EQ(reused, box.collider);
+  world.collider(reused).is_trigger = false;
+  world.aabb(world.collider(reused).shape_index).half_size = {Scalar{kBoxHalf},
+                                                              Scalar{kBoxHalf}};
+  world.body(box.body).position = {Scalar{0}, Scalar{-0.3f}};
+  world.body(box.body).velocity = {Scalar{0}, Scalar{5}};
+  world.Step();
+  EXPECT_TRUE(world.IsPassing({reused, platform}));
+  EXPECT_GT(ToFloat(world.body(box.body).velocity.y()), 4.5f);
+}
+
+// A body teleported into a one-way platform from below is decided again
+// from its new place: moving up, it passes; a body teleported with its
+// platform, resting on it, stays solid (review of 2026-10-20, B2)
+TEST(OneWay, TeleportDecidesThePairAgain) {
+  neko::PhysicsWorld world{kConfig};
+  const ColliderIndex platform = AddPlatform(world, {});
+  const Box box = AddBox(world, {Scalar{0}, Scalar{kRestHeight}});
+  Steps(world, 30);
+  const std::uint32_t before = world.GenerateChecksum();
+  world.Teleport(box.body, {Scalar{0}, Scalar{-0.3f}}, Radian{});
+  world.body(box.body).velocity = {Scalar{0}, Scalar{5}};
+  // The mark is simulation state until the next step
+  EXPECT_TRUE(world.touching_pairs()[0].decide_again);
+  EXPECT_NE(world.GenerateChecksum(), before);
+  world.Step();
+  EXPECT_TRUE(world.IsPassing({box.collider, platform}));
+  EXPECT_GT(ToFloat(world.body(box.body).velocity.y()), 4.5f);
+  EXPECT_TRUE(world.touching_pairs().empty());
+
+  neko::PhysicsWorld rider_world{kConfig};
+  const ColliderIndex ride = AddPlatform(rider_world, {});
+  const Box rider = AddBox(rider_world, {Scalar{0}, Scalar{kRestHeight}});
+  Steps(rider_world, 30);
+  const BodyIndex ride_body = rider_world.collider(ride).body_index;
+  rider_world.Teleport(ride_body, {Scalar{3}, Scalar{0}}, Radian{});
+  rider_world.Teleport(rider.body, {Scalar{3}, Scalar{kRestHeight}}, Radian{});
+  Steps(rider_world, 30);
+  EXPECT_FALSE(rider_world.IsPassing({rider.collider, ride}));
+  EXPECT_NEAR(Height(rider_world, rider.body), kRestHeight, 0.01f);
 }
 
 // Rollback: the passing table is copied and hashed, so a restored world

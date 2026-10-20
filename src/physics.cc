@@ -1232,7 +1232,8 @@ bool PhysicsWorld::IsOneWaySolid(ColliderPair pair, const Contact& contact) {
           return entry.pair < value;
         });
     const bool was_solid = touching != touching_pairs_.end() &&
-                           touching->pair == pair && !touching->is_trigger;
+                           touching->pair == pair && !touching->is_trigger &&
+                           !touching->decide_again;
     is_solid = was_solid ||
                (OneWayAllowsSolid(contact, 0) && OneWayAllowsSolid(contact, 1));
   }
@@ -1244,6 +1245,12 @@ bool PhysicsWorld::IsOneWaySolid(ColliderPair pair, const Contact& contact) {
     }
   }
   return is_solid;
+}
+
+bool PhysicsWorld::IsOneWayPair(const TouchingPair& touching) const {
+  return !touching.is_trigger &&
+         (colliders_[touching.pair.c1().index()].is_one_way ||
+          colliders_[touching.pair.c2().index()].is_one_way);
 }
 
 bool PhysicsWorld::IsPassing(ColliderPair pair) const {
@@ -1317,6 +1324,13 @@ void PhysicsWorld::Teleport(BodyIndex index, Vec2f position, Radian angle) {
     return has_body(entry.pair);
   });
   std::erase_if(passing_pairs_, has_body);
+  // Touching pairs stay (the next step sends the events of the move), but a
+  // pair with a one-way collider is decided again from the new place
+  for (TouchingPair& touching : touching_pairs_) {
+    if (has_body(touching.pair) && IsOneWayPair(touching)) {
+      touching.decide_again = true;
+    }
+  }
   std::erase_if(kinematic_targets_, [index](const KinematicTarget& target) {
     return target.body == index;
   });
@@ -1582,6 +1596,13 @@ void PhysicsWorld::RemoveCollider(ColliderIndex index) {
   std::erase_if(passing_pairs_, [index](const ColliderPair& pair) {
     return pair.Contains(index);
   });
+  // Its touching pairs stay until the next step (which sends their exits),
+  // but a collider reusing the index must not inherit their solid state
+  for (TouchingPair& touching : touching_pairs_) {
+    if (touching.pair.Contains(index) && IsOneWayPair(touching)) {
+      touching.decide_again = true;
+    }
+  }
   auto& collider = colliders_[index.index()];
   switch (collider.type) {
     case ShapeType::kAabb:
@@ -2600,6 +2621,10 @@ std::uint32_t PhysicsWorld::GenerateChecksum() const {
     checksum.Add(touching_pair.pair.c1());
     checksum.Add(touching_pair.pair.c2());
     checksum.Add(touching_pair.is_trigger);
+    // Only between a Teleport or a RemoveCollider and the next step
+    if (touching_pair.decide_again) {
+      checksum.Add(touching_pair.decide_again);
+    }
   }
   for (const auto& entry : contact_cache_) {
     checksum.Add(entry.pair.c1());

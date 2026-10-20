@@ -595,6 +595,14 @@ struct TouchingPair {
   ColliderPair pair{};
   /// `true` when at least one of the two colliders is a trigger.
   bool is_trigger = false;
+  /// `true` for a solid pair with a one-way collider
+  /// (@ref Collider::is_one_way) when @ref PhysicsWorld::Teleport moved one
+  /// of the bodies or @ref PhysicsWorld::RemoveCollider removed one of the
+  /// colliders since the last step: the world no longer counts the pair as
+  /// solid, and the one-way rule decides it again at the next step, as if it
+  /// started touching. Events don't change. Hashed by @ref
+  /// PhysicsWorld::GenerateChecksum only when `true`.
+  bool decide_again = false;
 };
 
 /// How many items a capacity of @ref PhysicsWorldConfig turned away, read
@@ -1602,6 +1610,9 @@ class PhysicsWorld {
   [[nodiscard]] bool UpdateJointFilter();
   // Whether a joint without collide_connected links the two bodies
   [[nodiscard]] bool AreJointFiltered(BodyIndex body1, BodyIndex body2) const;
+  // Whether a touching pair is solid with a one-way collider (the pairs the
+  // one-way rule decides)
+  [[nodiscard]] bool IsOneWayPair(const TouchingPair& touching) const;
   // Whether a query sees the collider: a live shape on an active body, in the
   // filter's mask, and solid unless the filter takes triggers
   [[nodiscard]] bool IsQueried(const Collider& collider,
