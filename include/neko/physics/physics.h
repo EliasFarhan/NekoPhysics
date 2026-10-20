@@ -1567,9 +1567,8 @@ class PhysicsWorld {
   /// Peers of a networked game exchange checksums of the same frame: a
   /// mismatch means their simulations diverged (a desync). Covers bodies,
   /// colliders, shapes, touching pairs, the contact cache, joints of both
-  /// kinds, passing pairs and pending kinematic targets, but not @ref
-  /// Collider::user_id nor
-  /// @ref step_overflow.
+  /// kinds, passing pairs and pending kinematic targets, but not
+  /// @ref Collider::user_id nor @ref step_overflow.
   ///
   /// @return FNV-1a hash of the world state.
   [[nodiscard]] std::uint32_t GenerateChecksum() const;

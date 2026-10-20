@@ -1,9 +1,11 @@
+#include <cstdint>
 #include <cstdlib>
 #include <vector>
 
 #include <gtest/gtest.h>
 
 #include "neko/bsh/quadtree.h"
+#include "neko/math/angle.h"
 #include "neko/physics/physics.h"
 
 namespace {
@@ -240,6 +242,157 @@ TEST(Rollback, StepAndCopyFromDoNotAllocate) {
   }
   EXPECT_GT(listener.events, 0);
   EXPECT_EQ(allocator.allocation_count, allocations_after_setup);
+}
+
+// Phases 4, 5 and 9 of the Splash Online plan (open point O3): one world
+// with a one-way platform crossed and dropped through, a kinematic lift
+// driven by SetKinematicTarget, a bullet teleported to fire through a
+// trigger zone into a wall, and a seesaw on a limited revolute joint with a
+// rope
+namespace {
+constexpr neko::PhysicsWorldConfig kFeatureConfig{.max_bodies = 64,
+                                                  .max_colliders = 64,
+                                                  .max_touching_pairs = 128,
+                                                  .max_broadphase_pairs = 256,
+                                                  .max_joints = 8,
+                                                  .max_passing_pairs = 16};
+
+constexpr Scalar Ratio(int num, int den) {
+  return static_cast<Scalar>(num) / static_cast<Scalar>(den);
+}
+
+neko::ColliderIndex AddBox(neko::PhysicsWorld& world, neko::BodyIndex body,
+                           Vec2f half_size, bool is_trigger = false) {
+  const neko::ColliderIndex index = world.AddAabbCollider(body);
+  world.collider(index).is_trigger = is_trigger;
+  world.collider(index).restitution = Scalar{0};
+  world.aabb(world.collider(index).shape_index).half_size = half_size;
+  return index;
+}
+
+neko::BodyIndex AddStatic(neko::PhysicsWorld& world, Vec2f position) {
+  const neko::BodyIndex body = world.AddBody();
+  world.body(body).type = neko::BodyType::kStatic;
+  world.body(body).inverse_mass = Scalar{0};
+  world.body(body).position = position;
+  return body;
+}
+
+neko::BodyIndex AddCrate(neko::PhysicsWorld& world, Vec2f position) {
+  const neko::BodyIndex body = world.AddBody();
+  world.body(body).position = position;
+  world.body(body).inertia_mode = neko::InertiaMode::kFixedRotation;
+  AddBox(world, body, {Ratio(1, 4), Ratio(1, 4)});
+  return body;
+}
+
+struct Rig {
+  neko::BodyIndex jumper;
+  neko::BodyIndex lift;
+  neko::BodyIndex shot;
+};
+
+Rig BuildEveryFeature(neko::PhysicsWorld& world) {
+  // One-way platform 4 m wide, 0.35 m thick, its top at y = 0
+  const neko::BodyIndex platform = AddStatic(world, {Scalar{0}, -Ratio(7, 40)});
+  world.collider(AddBox(world, platform, {Scalar{2}, Ratio(7, 40)}))
+      .is_one_way = true;
+  const neko::BodyIndex ground = AddStatic(world, {Scalar{0}, -Scalar{3}});
+  AddBox(world, ground, {Scalar{8}, Ratio(1, 2)});
+  // Jumper under the one-way platform
+  const neko::BodyIndex jumper = AddCrate(world, {Scalar{-1}, -Ratio(9, 4)});
+  // Kinematic lift with a crate, driven by SetKinematicTarget
+  const neko::BodyIndex lift = world.AddBody();
+  world.body(lift).type = neko::BodyType::kKinematic;
+  world.body(lift).inverse_mass = Scalar{0};
+  world.body(lift).position = {Scalar{4}, -Scalar{2}};
+  AddBox(world, lift, {Ratio(1, 2), Ratio(1, 10)});
+  AddCrate(world, {Scalar{4}, -Ratio(33, 20)});
+  // Bullet shot crossing a trigger zone into a wall
+  const neko::BodyIndex zone = AddStatic(world, {Scalar{-4}, Scalar{1}});
+  AddBox(world, zone, {Ratio(1, 20), Ratio(1, 2)}, true);
+  const neko::BodyIndex wall = AddStatic(world, {Scalar{-6}, Scalar{1}});
+  AddBox(world, wall, {Ratio(1, 10), Scalar{2}});
+  const neko::BodyIndex shot = world.AddBody();
+  world.body(shot).gravity_scale = Scalar{0};
+  world.body(shot).is_bullet = true;
+  world.body(shot).position = {Scalar{3}, Scalar{1}};
+  const neko::ColliderIndex shot_collider = world.AddCircleCollider(shot);
+  world.collider(shot_collider).is_trigger = false;
+  world.circle(world.collider(shot_collider).shape_index).radius = Ratio(1, 10);
+  // Seesaw: plank on a revolute pivot with limits, rope to a weight
+  const neko::BodyIndex pivot = AddStatic(world, {Scalar{0}, Scalar{3}});
+  const neko::BodyIndex plank = world.AddBody();
+  world.body(plank).position = {Scalar{0}, Scalar{3}};
+  AddBox(world, plank, {Scalar{1}, Ratio(1, 10)});
+  const auto hinge =
+      world.AddRevoluteJoint(pivot, plank, {Scalar{0}, Scalar{3}});
+  world.revolute_joint(hinge).enable_limit = true;
+  world.revolute_joint(hinge).lower_angle = neko::Radian{-Ratio(1, 2)};
+  world.revolute_joint(hinge).upper_angle = neko::Radian{Ratio(1, 2)};
+  const neko::BodyIndex weight = AddCrate(world, {Scalar{1}, Scalar{2}});
+  world.AddDistanceJoint(plank, weight);
+  return {jumper, lift, shot};
+}
+
+void Drive(neko::PhysicsWorld& world, const Rig& rig, int step) {
+  const int phase = step % 120;
+  if (phase == 0) {
+    world.body(rig.jumper).velocity.set_y(Scalar{7});
+  }
+  if (phase == 60) {
+    world.DropThrough(rig.jumper);
+  }
+  if (phase == 10) {
+    world.Teleport(rig.shot, {Scalar{3}, Scalar{1}}, neko::Radian{});
+    world.body(rig.shot).velocity = {-Scalar{60}, Scalar{0}};
+  }
+  const Scalar y = phase < 60 ? Ratio(phase, 60) : Ratio(120 - phase, 60);
+  world.SetKinematicTarget(rig.lift, {Scalar{4}, y - Scalar{2}},
+                           neko::Radian{});
+}
+
+}  // namespace
+
+TEST(Rollback, EveryFeatureReplaysWithoutAllocating) {
+  CountingAllocator allocator;
+  auto config = kFeatureConfig;
+  config.allocator = &allocator;
+  CountingListener listener;
+  neko::PhysicsWorld world{config};
+  neko::PhysicsWorld snapshot{config};
+  world.SetContactListener(&listener);
+  const Rig rig = BuildEveryFeature(world);
+  Drive(world, rig, 0);
+  world.Step();
+  snapshot.CopyFrom(world);
+  const int after_setup = allocator.allocation_count;
+
+  std::vector<std::uint32_t> checksums;
+  bool saw_passing = false;
+  for (int step = 1; step < 480; ++step) {
+    Drive(world, rig, step);
+    world.Step();
+    saw_passing = saw_passing || !world.passing_pairs().empty();
+    checksums.push_back(world.GenerateChecksum());
+    if (step == 200) {
+      snapshot.CopyFrom(world);
+    }
+  }
+  EXPECT_TRUE(saw_passing);
+  EXPECT_GT(listener.events, 4);
+  EXPECT_EQ(allocator.allocation_count, after_setup);
+
+  // Roll back to step 200 (target set before it, mid-flight) and replay
+  world.CopyFrom(snapshot);
+  for (int step = 201; step < 480; ++step) {
+    Drive(world, rig, step);
+    world.Step();
+    ASSERT_EQ(world.GenerateChecksum(),
+              checksums[static_cast<std::size_t>(step - 1)])
+        << "step " << step;
+  }
+  EXPECT_EQ(allocator.allocation_count, after_setup);
 }
 
 int main(int argc, char** argv) {

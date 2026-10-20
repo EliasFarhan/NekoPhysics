@@ -22,8 +22,10 @@ namespace neko {
 /// event of the old kind and the enter event of the new kind in the same step.
 ///
 /// Events are sent at the end of @ref PhysicsWorld::Step, after all contacts
-/// are resolved, sorted by @ref ColliderPair, so every peer of a networked
-/// game sees them in the same order.
+/// are resolved, sorted by @ref ColliderPair; then come the trigger enters of
+/// bullets (@ref Body::is_bullet), bullet after bullet in body order, each
+/// in the order of its crossings. Every peer of a networked game sees them in
+/// the same order.
 ///
 /// @note The listener is not part of the simulation state:
 /// @ref PhysicsWorld::CopyFrom does not copy it, and restoring a rollback
