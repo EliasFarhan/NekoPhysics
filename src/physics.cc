@@ -2038,6 +2038,12 @@ void PhysicsWorld::SolveBullets() {
     return collider.type != ShapeType::kNone && collider.is_enabled &&
            bodies_[collider.body_index.index()].is_active;
   };
+  // Smallest half size of a shape (a circle's radius)
+  const auto extent_of = [](const SweptShape& shape) {
+    return shape.is_circle
+               ? shape.radius
+               : Min(shape.box.half_size.x(), shape.box.half_size.y());
+  };
 
   for (std::size_t b = 0; b < bodies_.size(); ++b) {
     Body& bullet = bodies_[b];
@@ -2052,10 +2058,8 @@ void PhysicsWorld::SolveBullets() {
       if (collider.body_index != bullet_index || !is_live(collider)) {
         continue;
       }
-      const SweptShape shape = swept_shape(collider, Vec2f::Zero(), Rotation{});
-      const Scalar extent = shape.is_circle ? shape.radius
-                                            : Min(shape.box.half_size.x(),
-                                                  shape.box.half_size.y());
+      const Scalar extent =
+          extent_of(swept_shape(collider, Vec2f::Zero(), Rotation{}));
       min_extent = min_extent.has_value() ? Min(*min_extent, extent) : extent;
     }
     const Vec2f displacement = displacement_of(bullet);
@@ -2076,6 +2080,12 @@ void PhysicsWorld::SolveBullets() {
           continue;
         }
         const SweptShape moving_end = swept_shape(moving, end, bullet.rotation);
+        // Each collider by its own size: a thin sensor of the body doesn't
+        // make its large solid box swept, nor the other way around
+        if (CompareLength(displacement, DivideBy<2>(extent_of(moving_end))) <=
+            0) {
+          continue;
+        }
         const Aabbf moving_end_box = Bounds(moving_end);
         for (Collider& other : colliders_) {
           if (other.body_index == bullet_index || !is_live(other) ||
@@ -2177,9 +2187,8 @@ void PhysicsWorld::SolveBullets() {
         [](const Collider& moving, const Collider& other) {
           return moving.is_trigger || other.is_trigger;
         },
-        [&](const Collider& moving, const Collider& other,
-            const SweptShape& moving_start, Vec2f delta,
-            const SweptShape& target) {
+        [&](Collider& moving, Collider& other, const SweptShape& moving_start,
+            Vec2f delta, const SweptShape& target) {
           const auto touch = SweepShapes(moving_start, delta, target);
           if (!touch.has_value() || touch->fraction == Scalar{0}) {
             return;
@@ -2190,6 +2199,14 @@ void PhysicsWorld::SolveBullets() {
                   touching_pairs_.begin(), touching_pairs_.end(),
                   TouchingPair{{moving.collider_index, other.collider_index}},
                   by_pair)) {
+            return;
+          }
+          // Still overlapping where the step ends: the next narrowphase
+          // finds the pair, at the same step as for a body without the
+          // flag. Only a shape crossed entirely is reported here.
+          Contact overlap{};
+          if (DetectContact(bullet, moving, bodies_[other.body_index.index()],
+                            other, &overlap)) {
             return;
           }
           if (bullet_trigger_hits_.size() >= config_.max_bullet_trigger_hits) {

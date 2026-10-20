@@ -403,9 +403,10 @@ TEST(Bullet, TriggerCrossingsInPathOrder) {
   EXPECT_EQ(listener.Count(RecordingListener::Kind::kCollisionEnter), 1);
 }
 
-// A shot that ends a step inside a trigger gets its enter event in that step
-// and no exit at the next
-TEST(Bullet, TriggerEndingInsideStaysTouching) {
+// A shot that ends a step inside a trigger is left to the next step's
+// narrowphase: its enter comes at the next step, as for a plain body, and no
+// exit follows while it stays inside
+TEST(Bullet, TriggerEndingInsideEntersLikeAPlainBody) {
   neko::PhysicsWorld world{{.gravity = Vec2f::Zero(),
                             .max_bodies = 4,
                             .max_colliders = 4,
@@ -418,6 +419,8 @@ TEST(Bullet, TriggerEndingInsideStaysTouching) {
                               {Scalar{4}, {}}, {Scalar{3}, Scalar{1}});
   world.collider(zone.collider).is_trigger = true;
   AddShot(world, ShapeType::kCircle, {}, {Scalar{60}, Scalar{0}}, true);
+  world.Step();
+  EXPECT_TRUE(listener.events.empty());
   world.Step();
   EXPECT_EQ(listener.Count(RecordingListener::Kind::kTriggerEnter), 1);
   Steps(world, 3);
@@ -495,6 +498,64 @@ TEST(Bullet, SlowBulletIsNotSwept) {
     return world.body(shot.body).position;
   };
   EXPECT_EQ(run(true), run(false));
+}
+
+// A player-like body (solid box, thin foot sensor) walking at 3 m/s and then
+// running at 8 m/s over 1 m tiles: its foot sensor is swept (it moves more
+// than a quarter of the sensor's size per step) but every crossing ends
+// overlapping, so positions and events are those of the plain body (review
+// of 2026-10-20: the sensor's enters came one step early)
+TEST(Bullet, WalkingPlayerWithThinSensorMatchesThePlainBody) {
+  struct Event {
+    int step;
+    RecordingListener::Kind kind;
+    ColliderPair pair;
+    bool operator==(const Event&) const = default;
+  };
+  const auto run = [](bool is_bullet) {
+    neko::PhysicsWorld world{{.max_bodies = 16,
+                              .max_colliders = 16,
+                              .max_touching_pairs = 32,
+                              .max_broadphase_pairs = 64,
+                              .max_joints = 0}};
+    RecordingListener listener;
+    world.SetContactListener(&listener);
+    for (int i = 0; i < 12; ++i) {
+      const Shape tile = AddShape(
+          world, neko::BodyType::kStatic, ShapeType::kAabb,
+          {static_cast<Scalar>(i), -Ratio(1, 2)}, {Ratio(1, 2), Ratio(1, 2)});
+      world.collider(tile.collider).friction = Scalar{0};
+    }
+    const Shape player =
+        AddShape(world, neko::BodyType::kDynamic, ShapeType::kAabb,
+                 {Scalar{0}, Ratio(3, 10)}, {Ratio(19, 100), Ratio(3, 10)});
+    world.collider(player.collider).friction = Scalar{0};
+    world.body(player.body).is_bullet = is_bullet;
+    const ColliderIndex foot = world.AddAabbCollider(player.body);
+    world.collider(foot).offset = {Scalar{0}, -Ratio(3, 10)};
+    world.aabb(world.collider(foot).shape_index).half_size = {Ratio(1, 10),
+                                                              Ratio(6, 100)};
+    std::vector<Event> events;
+    std::vector<Vec2f> positions;
+    for (int step = 0; step < 160; ++step) {
+      if (step >= 30) {
+        world.body(player.body)
+            .velocity.set_x(step < 90 ? Scalar{3} : Scalar{8});
+      }
+      listener.events.clear();
+      world.Step();
+      for (const auto& [kind, pair] : listener.events) {
+        events.push_back({step, kind, pair});
+      }
+      positions.push_back(world.body(player.body).position);
+    }
+    return std::pair{events, positions};
+  };
+  const auto plain = run(false);
+  const auto bullet = run(true);
+  EXPECT_GT(plain.first.size(), 10u);
+  EXPECT_EQ(plain.first, bullet.first);
+  EXPECT_EQ(plain.second, bullet.second);
 }
 
 // A bullet sliding at 30 m/s on a floor of 1 m tiles grazes the next tile's
@@ -606,10 +667,9 @@ TEST(Bullet, RollbackReplaysSweeps) {
       AddShape(world, neko::BodyType::kStatic, ShapeType::kAabb,
                {Scalar{0}, Scalar{2}}, {Scalar{1}, Ratio(1, 50)});
   world.collider(zone.collider).is_trigger = true;
-  const Shape shot =
-      AddShot(world, ShapeType::kCircle, {Scalar{0}, Ratio(31, 10)},
-              {Scalar{0}, -Scalar{70}}, true);
-  // The first step crosses the zone (a trigger pair of the bullet)
+  const Shape shot = AddShot(world, ShapeType::kCircle, {Scalar{0}, Scalar{3}},
+                             {Scalar{0}, -Scalar{70}}, true);
+  // The first step crosses the whole zone (a trigger pair of the bullet)
   world.Step();
   ASSERT_EQ(listener.Count(RecordingListener::Kind::kTriggerEnter), 1);
   neko::PhysicsWorld snapshot{kConfig};

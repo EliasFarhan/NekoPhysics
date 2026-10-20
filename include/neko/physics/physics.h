@@ -304,11 +304,13 @@ struct Body {
   ///   impact per bullet per step.
   /// - **Trigger pairs** (the bullet's collider or the other one is a
   ///   trigger) are swept against every collider, dynamic ones too: every
-  ///   collider the path crosses up to the time of impact gets a
+  ///   collider the path crosses entirely up to the time of impact gets a
   ///   @ref ContactListener::OnTriggerEnter at the end of this step, in the
   ///   order of the crossings (equal times: the lower collider index), and
-  ///   an exit at the next step if the shapes no longer overlap. A water shot
-  ///   that flies through a player in one step still hits it.
+  ///   its exit at the next step. A water shot that flies through a player
+  ///   in one step still hits it. A pair that still overlaps where the step
+  ///   ends is left to the next step's narrowphase, so its enter comes at the
+  ///   same step as for the body without the flag.
   ///
   /// The sweep follows the motion of both bodies over the step (the other
   /// body moves from where it was to where it is now), so a bullet also hits
@@ -316,13 +318,15 @@ struct Body {
   /// depends on the bullet's own motion, see below: a slow bullet hit by a
   /// fast platform is not swept). It ignores what the bullet
   /// already overlaps at the start of the step (the step's contacts handle
-  /// it), and it is skipped when the bullet moves less than a quarter of its
-  /// smallest size in the step: steps that short overlap anything on the way
-  /// (Box2D's rule). Solid bullets against solid dynamic bodies are not
-  /// swept: two fast dynamic bodies can still pass through each other. The
-  /// motion of another bullet is taken from its velocity, even when its own
-  /// sweep stopped it earlier in the same step: a trigger bullet crossing a
-  /// bullet that hit a wall in that step sees it a little off.
+  /// it), and each collider of the bullet is skipped when the bullet moves
+  /// less than a quarter of that collider's smallest size in the step: steps
+  /// that short overlap anything on the way (Box2D's rule). A thin sensor on
+  /// the body doesn't make its larger colliders swept. Solid bullets against
+  /// solid dynamic bodies are not swept: two fast dynamic bodies can still pass
+  /// through each other. The motion of another bullet is taken from its
+  /// velocity, even when its own sweep stopped it earlier in the same step: a
+  /// trigger bullet crossing a bullet that hit a wall in that step sees it a
+  /// little off.
   ///
   /// Each bullet costs one scan of the colliders per step, with a bounding
   /// box test before each exact sweep: mark only the few bodies that need
@@ -1409,9 +1413,9 @@ class PhysicsWorld {
   /// Returns the pairs of colliders touching at the end of the last step.
   ///
   /// Use it to poll the current contacts instead of tracking events. It
-  /// also lists the trigger pairs a bullet crossed during the last step (see
-  /// @ref Body::is_bullet), which may no longer overlap: the next step sends
-  /// their exit events.
+  /// also lists the trigger pairs a bullet crossed entirely during the last
+  /// step (see @ref Body::is_bullet), which no longer overlap: the next step
+  /// sends their exit events.
   ///
   /// @return The touching pairs, sorted by @ref ColliderPair.
   [[nodiscard]] const ArrayList<TouchingPair>& touching_pairs() const {
