@@ -212,6 +212,15 @@ struct DistanceJoint {
 /// `collide_connected` is set. Static and kinematic bodies have infinite
 /// mass in joints, so a revolute joint to a static body is a fixed axle.
 ///
+/// **Fixed16 range.** `K` and `iA + iB` hold inverse inertias, which reach
+/// tens of thousands for light bodies (a 0.01 kg disk of radius 0.1 m has
+/// `i = 20000`), past Fixed16's 32767. When a term of `K` (`i r r`) or the
+/// sum `iA + iB` would leave the range, the joint computes it halved as many
+/// times as needed and scales the inverse back, so the limits of two light
+/// links still hold; nothing changes for joints that fit. What halving can't
+/// fix is precision: a light body pinned far from its center (`i |r|` well
+/// past 32767) needs impulses below Fixed16's 1/65536 and its pin drifts.
+///
 /// @note A revolute joint is simulation state: @ref PhysicsWorld::CopyFrom
 /// copies the table and @ref PhysicsWorld::GenerateChecksum hashes it,
 /// including the accumulated impulses that warm start the next step.

@@ -1247,6 +1247,11 @@ bool PhysicsWorld::IsOneWaySolid(ColliderPair pair, const Contact& contact) {
   return is_solid;
 }
 
+bool PhysicsWorld::IsLiveBody(BodyIndex index) const {
+  return index.index() < bodies_.size() &&
+         bodies_[index.index()].type != BodyType::kNone;
+}
+
 bool PhysicsWorld::IsOneWayPair(const TouchingPair& touching) const {
   return !touching.is_trigger &&
          (colliders_[touching.pair.c1().index()].is_one_way ||
@@ -1655,6 +1660,10 @@ Scalar PhysicsWorld::JointDistance(JointIndex index) const {
 
 void PhysicsWorld::SetJointBodies(JointIndex index, BodyIndex body_a,
                                   BodyIndex body_b) {
+  // Two live, different bodies: a joint to a removed body or to a free slot
+  // would act on whatever reuses it
+  assert(index.index() < joints_.size());
+  assert(IsLiveBody(body_a) && IsLiveBody(body_b) && body_a != body_b);
   DistanceJoint& joint = joints_[index.index()];
   joint.body_a = body_a;
   joint.body_b = body_b;
@@ -1705,6 +1714,10 @@ Radian PhysicsWorld::RevoluteJointAngle(RevoluteJointIndex index) const {
 
 void PhysicsWorld::SetRevoluteJointBodies(RevoluteJointIndex index,
                                           BodyIndex body_a, BodyIndex body_b) {
+  // Two live, different bodies: a joint to a removed body or to a free slot
+  // would act on whatever reuses it
+  assert(index.index() < revolute_joints_.size());
+  assert(IsLiveBody(body_a) && IsLiveBody(body_b) && body_a != body_b);
   RevoluteJoint& joint = revolute_joints_[index.index()];
   joint.body_a = body_a;
   joint.body_b = body_b;

@@ -241,6 +241,34 @@ TEST(RevoluteJoint, ZeroLengthPinIsAPoint) {
 // A 10 kg plank 4 m long hinged at its left end to a static pivot falls
 // until the limit stops it at -45 degrees, and rests there; flipped gravity
 // sends it to +45
+// Two light links (0.01 kg, inverse inertia 20000, a chain link of radius
+// 0.1 m) hinged with +-10 degree limits and spun apart: i_a + i_b leaves
+// Fixed16's range, which turned the limit off; the joint now computes it in
+// halves (review of 2026-10-20)
+TEST(RevoluteJoint, LightLinksKeepTheirLimit) {
+  neko::PhysicsWorld world{{.gravity = Vec2f::Zero()}};
+  std::array<BodyIndex, 2> links{};
+  for (std::size_t i = 0; i < links.size(); ++i) {
+    links[i] = AddPoint(world, {Ratio(static_cast<int>(i), 5), Scalar{0}},
+                        Scalar{100});
+    world.body(links[i]).inertia_mode = neko::InertiaMode::kOverride;
+    world.body(links[i]).inverse_inertia = Scalar{20000};
+  }
+  const RevoluteJointIndex hinge =
+      world.AddRevoluteJoint(links[0], links[1], {Ratio(1, 10), Scalar{0}});
+  world.revolute_joint(hinge).enable_limit = true;
+  world.revolute_joint(hinge).lower_angle = Degrees(-10);
+  world.revolute_joint(hinge).upper_angle = Degrees(10);
+  world.body(links[1]).angular_velocity = Scalar{50};
+  float worst = 0.0f;
+  for (int step = 0; step < 60; ++step) {
+    world.Step();
+    worst = std::max(worst, std::abs(ToFloat(world.RevoluteJointAngle(hinge))));
+  }
+  EXPECT_LT(worst, 13.0f * kDegree);
+  EXPECT_LT(AnchorGap(world, hinge), 0.01f);
+}
+
 TEST(RevoluteJoint, LimitsHoldAtFortyFiveDegreesUnderLoad) {
   for (const int sign : {-1, 1}) {
     neko::PhysicsWorld world{

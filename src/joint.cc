@@ -2,9 +2,12 @@
 
 #include <cassert>
 #include <cstddef>
+#include <optional>
 
 #include "neko/core/platform.h"
 #include "neko/math/const.h"
+#include "neko/math/func.h"
+#include "neko/math/scalar_traits.h"
 #include "neko/physics/physics.h"
 
 namespace neko {
@@ -16,6 +19,75 @@ Scalar InverseMass(const Body& body) {
 }
 Scalar InverseInertia(const Body& body) {
   return body.type == BodyType::kDynamic ? body.inverse_inertia : Scalar{0};
+}
+
+// Fixed16 range checks, by comparisons only (no wider type, no float on the
+// DS). Always true for float types.
+// Whether a * b stays in range
+bool ProductFits(Scalar a, Scalar b) {
+  if constexpr (ScalarTraits<Scalar>::kIsFixedPoint) {
+    const Scalar abs_b = Abs(b);
+    return abs_b <= Scalar{1} || Abs(a) <= ScalarTraits<Scalar>::Max() / abs_b;
+  } else {
+    return true;
+  }
+}
+// Whether a + b stays in range, a and b not negative
+bool SumFits(Scalar a, Scalar b) {
+  if constexpr (ScalarTraits<Scalar>::kIsFixedPoint) {
+    return a <= ScalarTraits<Scalar>::Max() - b;
+  } else {
+    return true;
+  }
+}
+
+// value / 2 with the bits of value / Scalar{2} (a raw division for Fixed16)
+Scalar Half(Scalar value) {
+  using Traits = ScalarTraits<Scalar>;
+  if constexpr (Traits::kIsFixedPoint) {
+    return Traits::FromBits(Traits::ToBits(value) / 2);
+  } else {
+    return value / Scalar{2};
+  }
+}
+
+// Most halvings of K before a joint is given up (2^16: an inverse inertia of
+// 32767 at 2^16 m from its anchor)
+constexpr int kMaxHalvings = 16;
+
+// The point constraint's effective mass matrix K (symmetric, k_xx k_xy k_yy)
+struct PointMass {
+  Scalar k_xx;
+  Scalar k_xy;
+  Scalar k_yy;
+};
+
+// K for these inverse masses and inertias, or nothing when a product or a
+// sum would leave the Fixed16 range (light bodies far from their anchor)
+std::optional<PointMass> ComputePointMass(Scalar mass_sum, Scalar i_a,
+                                          Scalar i_b, Vec2f r_a, Vec2f r_b) {
+  // i r1 r2, if it fits
+  const auto term = [](Scalar i, Scalar r1,
+                       Scalar r2) -> std::optional<Scalar> {
+    if (!ProductFits(i, r1) || !ProductFits(i * r1, r2)) {
+      return std::nullopt;
+    }
+    return i * r1 * r2;
+  };
+  const auto xx_a = term(i_a, r_a.y(), r_a.y());
+  const auto xx_b = term(i_b, r_b.y(), r_b.y());
+  const auto yy_a = term(i_a, r_a.x(), r_a.x());
+  const auto yy_b = term(i_b, r_b.x(), r_b.x());
+  const auto xy_a = term(i_a, r_a.x(), r_a.y());
+  const auto xy_b = term(i_b, r_b.x(), r_b.y());
+  if (!xx_a || !xx_b || !yy_a || !yy_b || !xy_a || !xy_b ||
+      !SumFits(mass_sum, *xx_a) || !SumFits(mass_sum + *xx_a, *xx_b) ||
+      !SumFits(mass_sum, *yy_a) || !SumFits(mass_sum + *yy_a, *yy_b) ||
+      !SumFits(Abs(*xy_a), Abs(*xy_b))) {
+    return std::nullopt;
+  }
+  return PointMass{mass_sum + *xx_a + *xx_b, -*xy_a - *xy_b,
+                   mass_sum + *yy_a + *yy_b};
 }
 
 // Velocity of the body's material point at r from its center, v + w x r
@@ -250,12 +322,28 @@ void PrepareRevoluteJoints(std::span<RevoluteJoint> joints,
     const Vec2f r_b = data.r_b;
     const Scalar i_a = data.inverse_inertia_a;
     const Scalar i_b = data.inverse_inertia_b;
-    const Scalar mass_sum = data.inverse_mass_a + data.inverse_mass_b;
-    const Scalar k_xx =
-        mass_sum + i_a * r_a.y() * r_a.y() + i_b * r_b.y() * r_b.y();
-    const Scalar k_xy = -i_a * r_a.x() * r_a.y() - i_b * r_b.x() * r_b.y();
-    const Scalar k_yy =
-        mass_sum + i_a * r_a.x() * r_a.x() + i_b * r_b.x() * r_b.x();
+    // K / 2^halvings: halved until it fits Fixed16 (never for float, and
+    // never for bodies of a few kilograms or more)
+    Scalar mass_sum = data.inverse_mass_a + data.inverse_mass_b;
+    Scalar scaled_i_a = i_a;
+    Scalar scaled_i_b = i_b;
+    int halvings = 0;
+    std::optional<PointMass> k =
+        ComputePointMass(mass_sum, scaled_i_a, scaled_i_b, r_a, r_b);
+    while (!k.has_value() && halvings < kMaxHalvings) {
+      mass_sum = Half(mass_sum);
+      scaled_i_a = Half(scaled_i_a);
+      scaled_i_b = Half(scaled_i_b);
+      ++halvings;
+      k = ComputePointMass(mass_sum, scaled_i_a, scaled_i_b, r_a, r_b);
+    }
+    if (!k.has_value()) {
+      ResetImpulses(joint);
+      continue;
+    }
+    const Scalar k_xx = k->k_xx;
+    const Scalar k_xy = k->k_xy;
+    const Scalar k_yy = k->k_yy;
     const Scalar scale = Max(k_xx, k_yy);
     if (scale <= Scalar{0}) {
       // Neither body can move
@@ -272,7 +360,10 @@ void PrepareRevoluteJoints(std::span<RevoluteJoint> joints,
       ResetImpulses(joint);
       continue;
     }
-    const Scalar inverse_determinant = Scalar{1} / (determinant * scale);
+    Scalar inverse_determinant = Scalar{1} / (determinant * scale);
+    for (int h = 0; h < halvings; ++h) {
+      inverse_determinant = Half(inverse_determinant);
+    }
     data.mass_xx = n_yy * inverse_determinant;
     data.mass_xy = -n_xy * inverse_determinant;
     data.mass_yy = n_xx * inverse_determinant;
@@ -283,10 +374,15 @@ void PrepareRevoluteJoints(std::span<RevoluteJoint> joints,
     data.mass_scale = softness.mass_scale;
     data.impulse_scale = softness.impulse_scale;
 
-    const Scalar axial_inverse_mass = i_a + i_b;
+    // 1 / (i_a + i_b), as 1 / (i_a / 2 + i_b / 2) / 2 when the sum would
+    // leave Fixed16's range (two light links)
+    const bool axial_fits = SumFits(i_a, i_b);
+    const Scalar axial_inverse_mass =
+        axial_fits ? i_a + i_b : Half(i_a) + Half(i_b);
     data.has_limit = joint.enable_limit && axial_inverse_mass > Scalar{0};
     if (data.has_limit) {
-      data.axial_mass = Scalar{1} / axial_inverse_mass;
+      data.axial_mass = axial_fits ? Scalar{1} / axial_inverse_mass
+                                   : Half(Scalar{1} / axial_inverse_mass);
       const Scalar angle =
           WrapAngle(body_b.rotation.angle() - body_a.rotation.angle() -
                     joint.reference_angle)

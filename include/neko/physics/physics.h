@@ -1610,6 +1610,8 @@ class PhysicsWorld {
   [[nodiscard]] bool UpdateJointFilter();
   // Whether a joint without collide_connected links the two bodies
   [[nodiscard]] bool AreJointFiltered(BodyIndex body1, BodyIndex body2) const;
+  // Whether the index names a body in the table (not a free slot)
+  [[nodiscard]] bool IsLiveBody(BodyIndex index) const;
   // Whether a touching pair is solid with a one-way collider (the pairs the
   // one-way rule decides)
   [[nodiscard]] bool IsOneWayPair(const TouchingPair& touching) const;
