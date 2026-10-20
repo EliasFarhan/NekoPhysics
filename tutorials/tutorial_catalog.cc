@@ -87,6 +87,11 @@
 #include "tutorials/16_seesaw/solutions/over_constrained_sample.h"
 #include "tutorials/16_seesaw/solutions/pin_vs_distance_sample.h"
 #include "tutorials/16_seesaw/solutions/retarget_chain_sample.h"
+#include "tutorials/17_same_numbers/same_numbers_sample.h"
+#include "tutorials/17_same_numbers/solutions/fused_update_sample.h"
+#include "tutorials/17_same_numbers/solutions/libm_sin_sample.h"
+#include "tutorials/17_same_numbers/solutions/system_words_sample.h"
+#include "tutorials/17_same_numbers/solutions/ulp_sweep_sample.h"
 
 namespace neko::tutorial {
 namespace {
@@ -95,7 +100,7 @@ std::unique_ptr<Sample> Create() {
   return std::make_unique<T>();
 }
 
-const std::array<TutorialEntry, 85> kTutorials{{
+const std::array<TutorialEntry, 90> kTutorials{{
     {"00_bounce/demo", "00 bounce", "00 Bounce", true, &Create<BounceSample>},
     {"00_bounce/bounces_to_rest", "00 bounce", "00 Bounces to rest", false,
      &Create<BouncesToRestSample>},
@@ -259,6 +264,16 @@ const std::array<TutorialEntry, 85> kTutorials{{
      &Create<PinVsDistanceSample>},
     {"16_seesaw/retarget_chain", "16 seesaw", "16 Retarget chain", false,
      &Create<RetargetChainSample>},
+    {"17_same_numbers/demo", "17 same numbers", "17 Same numbers", true,
+     &Create<SameNumbersSample>},
+    {"17_same_numbers/fused_update", "17 same numbers", "17 Fused update",
+     false, &Create<FusedUpdateSample>},
+    {"17_same_numbers/libm_sin", "17 same numbers", "17 Libm sin", false,
+     &Create<LibmSinSample>},
+    {"17_same_numbers/system_words", "17 same numbers", "17 System words",
+     false, &Create<SystemWordsSample>},
+    {"17_same_numbers/ulp_sweep", "17 same numbers", "17 Ulp sweep", false,
+     &Create<UlpSweepSample>},
 }};
 }  // namespace
 

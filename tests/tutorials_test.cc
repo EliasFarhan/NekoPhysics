@@ -104,6 +104,11 @@
 #include "tutorials/16_seesaw/solutions/over_constrained_sample.h"
 #include "tutorials/16_seesaw/solutions/pin_vs_distance_sample.h"
 #include "tutorials/16_seesaw/solutions/retarget_chain_sample.h"
+#include "tutorials/17_same_numbers/same_numbers_sample.h"
+#include "tutorials/17_same_numbers/solutions/fused_update_sample.h"
+#include "tutorials/17_same_numbers/solutions/libm_sin_sample.h"
+#include "tutorials/17_same_numbers/solutions/system_words_sample.h"
+#include "tutorials/17_same_numbers/solutions/ulp_sweep_sample.h"
 #include "tutorials/tutorial_catalog.h"
 
 namespace {
@@ -4015,9 +4020,123 @@ TEST(SeesawSolutions, RetargetNeedsANewLength) {
 
 }  // namespace
 
+namespace {
+using neko::tutorial::FusedUpdateSample;
+using neko::tutorial::LibmSinSample;
+using neko::tutorial::SameNumbersSample;
+using neko::tutorial::SystemWordsSample;
+using neko::tutorial::UlpSweepSample;
+constexpr int kChapter17Steps = 900;
+}  // namespace
+
+// Chapter 17: with no nudge the two boards stay identical bit for bit
+TEST(SameNumbersTutorial, ZeroNudgeStaysIdentical) {
+  SameNumbersSample sample;
+  BeginWith(sample, {{SameNumbersSample::kNudge, 0}});
+  RunSteps(sample, kChapter17Steps);
+  EXPECT_EQ(sample.board_a().ball_count(), neko::tutorial::Board::kBallCount);
+  EXPECT_FALSE(sample.watch().first_checksum_step().has_value());
+  EXPECT_FALSE(sample.watch().first_visible_step().has_value());
+  EXPECT_EQ(ToFloat(sample.watch().max_gap()), 0.0f);
+  sample.End();
+}
+
+// One unit in the last place on one ball: the checksums differ from the
+// first step, the balls part by a millimeter after a second or so (57 steps
+// FIXED16, 84 FLOAT and SIXIT), end meters apart and land in other bins
+TEST(SameNumbersTutorial, OneUlpBecomesVisible) {
+  SameNumbersSample sample;
+  BeginWith(sample, {{SameNumbersSample::kNudge, 1}});
+  RunSteps(sample, kChapter17Steps);
+  ASSERT_TRUE(sample.watch().first_checksum_step().has_value());
+  EXPECT_EQ(*sample.watch().first_checksum_step(), 0);
+  ASSERT_TRUE(sample.watch().first_visible_step().has_value());
+  EXPECT_GT(*sample.watch().first_visible_step(), 20);
+  EXPECT_LT(*sample.watch().first_visible_step(), 200);
+  EXPECT_GT(ToFloat(sample.watch().max_gap()), 0.5f);
+  EXPECT_GE(sample.watch().bins_differ(), 1);
+  sample.End();
+}
+
+TEST(SameNumbersTutorial, SameParametersSameRun) {
+  std::array<std::uint32_t, 2> checksums{};
+  for (std::uint32_t& checksum : checksums) {
+    SameNumbersSample sample;
+    BeginWith(sample, {{SameNumbersSample::kNudge, 3}});
+    RunSteps(sample, 300);
+    checksum = sample.GenerateChecksum();
+    sample.End();
+  }
+  EXPECT_EQ(checksums[0], checksums[1]);
+}
+
+// Exercise "ulp sweep": every nudge from 1 to 32 units shows within a few
+// seconds, and the largest shows before the smallest
+TEST(SameNumbersSolutions, UlpSweepLargerNudgesShowSooner) {
+  UlpSweepSample sample;
+  BeginWith(sample, {});
+  RunSteps(sample, kChapter17Steps);
+  for (std::size_t i = 0; i < UlpSweepSample::kNudgeCount; ++i) {
+    ASSERT_TRUE(sample.visible_step(i).has_value()) << i;
+    EXPECT_GT(*sample.visible_step(i), 0) << i;
+    EXPECT_LT(*sample.visible_step(i), 200) << i;
+  }
+  EXPECT_LT(*sample.visible_step(UlpSweepSample::kNudgeCount - 1),
+            *sample.visible_step(0));
+  sample.End();
+}
+
+// Exercise "fused update": about one update in a thousand differs in the
+// last bit when fused, and that is enough for a float board to part from
+// its twin; Fixed16 has nothing to fuse
+TEST(SameNumbersSolutions, FusedUpdateRarelyDiffersButDiverges) {
+  FusedUpdateSample sample;
+  BeginWith(sample, {});
+  RunSteps(sample, kChapter17Steps);
+  EXPECT_GT(sample.updates(), 10000);
+  EXPECT_GT(sample.differing_updates(), 0);
+  EXPECT_LT(sample.differing_updates() * 100, sample.updates());
+  if (FusedUpdateSample::fuses()) {
+    ASSERT_TRUE(sample.watch().first_checksum_step().has_value());
+    ASSERT_TRUE(sample.watch().first_visible_step().has_value());
+    EXPECT_LT(*sample.watch().first_visible_step(), 600);
+  } else {
+    EXPECT_FALSE(sample.watch().first_checksum_step().has_value());
+  }
+  sample.End();
+}
+
+// Exercise "libm sin": the numbers depend on the C library; any sinf in use
+// is within a few units in the last place of the reference
+TEST(SameNumbersSolutions, LibmSinIsCloseButNotAlwaysExact) {
+  LibmSinSample sample;
+  BeginWith(sample, {});
+  EXPECT_GE(sample.wrong_count(), 0);
+  EXPECT_LT(sample.wrong_count(), LibmSinSample::kAngleCount / 10);
+  EXPECT_LE(sample.max_ulp_error(), 4);
+  sample.End();
+}
+
+// Exercise "system words": the colliders word differs from step 0, the
+// bodies when the first ball reaches the changed peg, the touching pairs
+// later; the world checksum from step 0
+TEST(SameNumbersSolutions, ColliderWordNamesTheCause) {
+  SystemWordsSample sample;
+  BeginWith(sample, {{SystemWordsSample::kNudge, 1}});
+  RunSteps(sample, kChapter17Steps);
+  ASSERT_TRUE(sample.colliders_step().has_value());
+  ASSERT_TRUE(sample.bodies_step().has_value());
+  ASSERT_TRUE(sample.touching_step().has_value());
+  EXPECT_EQ(*sample.colliders_step(), 0);
+  EXPECT_EQ(sample.world_step(), std::optional<int>{0});
+  EXPECT_GT(*sample.bodies_step(), 0);
+  EXPECT_LT(*sample.bodies_step(), *sample.touching_step());
+  sample.End();
+}
+
 TEST(TutorialCatalog, CoversEverySourceAndHasUniqueIds) {
   const auto catalog = neko::tutorial::TutorialCatalog();
-  ASSERT_EQ(catalog.size(), 85u);
+  ASSERT_EQ(catalog.size(), 90u);
   std::set<std::string> ids;
   std::size_t demos = 0;
   for (const auto& entry : catalog) {
@@ -4026,7 +4145,7 @@ TEST(TutorialCatalog, CoversEverySourceAndHasUniqueIds) {
               neko::SampleRegistry::kNone);
     demos += entry.is_demo ? 1u : 0u;
   }
-  EXPECT_EQ(demos, 17u);
+  EXPECT_EQ(demos, 18u);
   EXPECT_EQ(neko::tutorial::FindTutorial("unknown"),
             neko::SampleRegistry::kNone);
   const auto root =
