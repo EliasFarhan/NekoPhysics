@@ -9,8 +9,8 @@
 namespace neko {
 
 constexpr static Scalar kMaxSpeed = Scalar{4};
-constexpr static Scalar kMaxCircleRadius = Ratio(1, 50);
-constexpr static Scalar kMinCircleRadius = Ratio(1, 100);
+constexpr static Scalar kMaxCircleRadius = Ratio(1, 10);
+constexpr static Scalar kMinCircleRadius = Ratio(1, 20);
 constexpr static ColorId kTriggerColor = sample_color::kGreen;
 constexpr static ColorId kUntriggerColor = sample_color::kRed;
 constexpr static ColorId kQuadTreeColor = sample_color::kGrey;

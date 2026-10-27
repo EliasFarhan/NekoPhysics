@@ -57,7 +57,8 @@ class TriggersSample : public Sample, public ContactListener {
   static constexpr Index kCircleCount = sample_config::kTriggerCount;
   static constexpr std::size_t kMaxPairs = std::size_t{kCircleCount} * 8;
   PhysicsWorld world_{
-      {.dt = kFixedDeltaTime,
+      {.gravity = {Scalar{0}, Scalar{0}},
+       .dt = kFixedDeltaTime,
        .max_bodies = kCircleCount,
        .max_colliders = kCircleCount,
        .max_touching_pairs = kMaxPairs,

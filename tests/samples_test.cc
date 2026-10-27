@@ -114,11 +114,11 @@ struct GoldenSampleChecksums {
 // (M3 stage 2): the collider checksum hashes Collider::friction, so the
 // initial checksums of the samples with colliders change too. And again for
 // warm starting (M3 stage 3): final checksums of the samples with resting
-// contacts.
+// contacts. And 03 Triggers on 2026-10-27: no gravity, bigger circles.
 constexpr std::array<GoldenSampleChecksums, 6> kGoldenSampleChecksums = {{
     {0xd773ba35u, 0x56e9ea97u, 0x79313a0cu},  // 01 Kinematic
     {0xd1972602u, 0x70e2fecau, 0x08e3bb1au},  // 02 Planets
-    {0x8a0e63bcu, 0x20bdfea6u, 0x59c17111u},  // 03 Triggers
+    {0x02324fa2u, 0x4be764c1u, 0xbb04a5d8u},  // 03 Triggers
     {0x3981edbdu, 0xcb1b5a25u, 0x1b6a7e38u},  // 04 Ground
     {0x5de4810cu, 0xfb9ba0c1u, 0x1f0326c5u},  // 05 Collisions
     {0xfd2f6668u, 0x82fcdcd7u, 0xbbf352dbu},  // 06 Move Into
